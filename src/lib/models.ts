@@ -21,6 +21,8 @@ export interface ModelConfig {
   supportsNegativePrompt: boolean;
   /** Reference image configuration — only for image-to-image models */
   referenceImage?: ReferenceImageConfig;
+  /** API param name for size — defaults to "aspect_ratio". GPT Image uses "image_size" with "1024x1024" format */
+  sizeParam?: { name: string; mapping: Record<string, string> };
 }
 
 export const MODELS: ModelConfig[] = [
@@ -138,6 +140,28 @@ export const MODELS: ModelConfig[] = [
     defaultAspectRatio: "1:1",
     supportsNegativePrompt: true,
     referenceImage: { paramName: "image_urls", isArray: true, maxImages: 14 },
+  },
+  {
+    id: "gpt-image-1-5-edit",
+    name: "GPT Image 1.5 (Edit)",
+    endpoint: "fal-ai/gpt-image-1.5/edit",
+    capability: "image-to-image",
+    description: "OpenAI's latest. Multi-reference images, high fidelity editing.",
+    costPerImage: "~$0.13",
+    aspectRatios: ["1:1", "3:4", "4:3", "16:9", "9:16"],
+    defaultAspectRatio: "1:1",
+    supportsNegativePrompt: false,
+    referenceImage: { paramName: "image_urls", isArray: true, maxImages: 10 },
+    sizeParam: {
+      name: "image_size",
+      mapping: {
+        "1:1": "1024x1024",
+        "3:4": "1024x1536",
+        "4:3": "1536x1024",
+        "16:9": "1536x1024",
+        "9:16": "1024x1536",
+      },
+    },
   },
   {
     id: "grok-imagine-edit",

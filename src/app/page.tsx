@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig } from "@/lib/models";
+
+// Route uploads through our proxy (keeps FAL_KEY server-side).
+// fal.storage.upload() sends file bytes directly to fal CDN via presigned URL,
+// only the small initiation request goes through the proxy — no size limit.
+fal.config({ proxyUrl: "/api/fal/proxy" });
 
 interface GenerationResult {
   imageUrl: string;
@@ -70,26 +76,13 @@ export default function Home() {
         const newImage: UploadedImage = { id, preview, url: null, uploading: true };
         setReferenceImages((prev) => [...prev, newImage]);
 
-        // Upload as FormData (no body size limit issues)
-        const formData = new FormData();
-        formData.append("file", file);
-
         try {
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          });
-          const data = await res.json();
-
-          if (!res.ok) {
-            setReferenceImages((prev) => prev.filter((img) => img.id !== id));
-            setError(`Upload failed: ${data.error || res.statusText}`);
-            return;
-          }
+          // Upload directly to fal CDN via presigned URL (no server size limits)
+          const url = await fal.storage.upload(file);
 
           setReferenceImages((prev) =>
             prev.map((img) =>
-              img.id === id ? { ...img, url: data.url, uploading: false } : img
+              img.id === id ? { ...img, url, uploading: false } : img
             )
           );
         } catch (err) {

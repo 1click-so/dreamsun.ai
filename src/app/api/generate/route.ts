@@ -28,9 +28,14 @@ export async function POST(req: NextRequest) {
       prompt,
     };
 
-    // Add aspect ratio for text-to-image models
+    // Add size/aspect ratio — some models use different param names and formats
     if (aspectRatio) {
-      input.aspect_ratio = aspectRatio;
+      if (model.sizeParam) {
+        input[model.sizeParam.name] =
+          model.sizeParam.mapping[aspectRatio] || aspectRatio;
+      } else {
+        input.aspect_ratio = aspectRatio;
+      }
     }
 
     // Add reference images using the model's specific parameter name
@@ -90,17 +95,25 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     console.error("Generation error:", error);
 
-    // fal.ai SDK errors often carry structured details
     let message = "Generation failed";
     let status = 500;
 
     if (error && typeof error === "object") {
       const err = error as Record<string, unknown>;
-      // fal.ai ApiError has status + body with detail
       if (err.status && typeof err.status === "number") status = err.status;
       if (err.body && typeof err.body === "object") {
         const body = err.body as Record<string, unknown>;
-        message = (body.detail as string) || (body.message as string) || message;
+        // detail can be a string OR an array of validation errors
+        if (typeof body.detail === "string") {
+          message = body.detail;
+        } else if (Array.isArray(body.detail)) {
+          // Pydantic validation errors: [{loc, msg, type}, ...]
+          message = body.detail
+            .map((e: Record<string, unknown>) => e.msg || JSON.stringify(e))
+            .join("; ");
+        } else if (typeof body.message === "string") {
+          message = body.message;
+        }
       } else if (err.message && typeof err.message === "string") {
         message = err.message;
       }
