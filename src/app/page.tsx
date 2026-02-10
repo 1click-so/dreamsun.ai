@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { MODELS, type ModelConfig } from "@/lib/models";
 
 interface GenerationResult {
@@ -25,11 +25,24 @@ interface UploadedImage {
 
 let imageIdCounter = 0;
 
+function getInitialModel(): ModelConfig {
+  if (typeof window === "undefined") return MODELS[0];
+  const saved = localStorage.getItem("dreamsun_model");
+  if (saved) {
+    const found = MODELS.find((m) => m.id === saved);
+    if (found) return found;
+  }
+  return MODELS[0];
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
-  const [selectedModel, setSelectedModel] = useState<ModelConfig>(MODELS[0]);
-  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [selectedModel, setSelectedModel] = useState<ModelConfig>(getInitialModel);
+  const [aspectRatio, setAspectRatio] = useState(() => {
+    if (typeof window === "undefined") return "16:9";
+    return localStorage.getItem("dreamsun_ratio") || "16:9";
+  });
   const [referenceImages, setReferenceImages] = useState<UploadedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -157,8 +170,11 @@ export default function Home() {
     const model = MODELS.find((m) => m.id === modelId);
     if (model) {
       setSelectedModel(model);
+      localStorage.setItem("dreamsun_model", model.id);
       if (!model.aspectRatios.includes(aspectRatio)) {
-        setAspectRatio(model.defaultAspectRatio);
+        const newRatio = model.defaultAspectRatio;
+        setAspectRatio(newRatio);
+        localStorage.setItem("dreamsun_ratio", newRatio);
       }
       // Clear reference images when switching models
       if (model.capability !== selectedModel.capability) {
@@ -324,7 +340,10 @@ export default function Home() {
                 {selectedModel.aspectRatios.map((ratio) => (
                   <button
                     key={ratio}
-                    onClick={() => setAspectRatio(ratio)}
+                    onClick={() => {
+                      setAspectRatio(ratio);
+                      localStorage.setItem("dreamsun_ratio", ratio);
+                    }}
                     className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
                       aspectRatio === ratio
                         ? "border-accent bg-accent/10 text-accent"
