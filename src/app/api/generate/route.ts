@@ -87,10 +87,25 @@ export async function POST(req: NextRequest) {
       model: model.name,
       requestId: result.requestId,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Generation error:", error);
-    const message =
-      error instanceof Error ? error.message : "Generation failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    // fal.ai SDK errors often carry structured details
+    let message = "Generation failed";
+    let status = 500;
+
+    if (error && typeof error === "object") {
+      const err = error as Record<string, unknown>;
+      // fal.ai ApiError has status + body with detail
+      if (err.status && typeof err.status === "number") status = err.status;
+      if (err.body && typeof err.body === "object") {
+        const body = err.body as Record<string, unknown>;
+        message = (body.detail as string) || (body.message as string) || message;
+      } else if (err.message && typeof err.message === "string") {
+        message = err.message;
+      }
+    }
+
+    return NextResponse.json({ error: message }, { status });
   }
 }

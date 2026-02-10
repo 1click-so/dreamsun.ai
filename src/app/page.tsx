@@ -70,6 +70,7 @@ export default function Home() {
 
           if (!res.ok) {
             setReferenceImages((prev) => prev.filter((img) => img.id !== id));
+            setError(`Upload failed: ${data.error || res.statusText}`);
             return;
           }
 
@@ -78,8 +79,11 @@ export default function Home() {
               img.id === id ? { ...img, url: data.url, uploading: false } : img
             )
           );
-        } catch {
+        } catch (err) {
           setReferenceImages((prev) => prev.filter((img) => img.id !== id));
+          setError(
+            `Upload failed: ${err instanceof Error ? err.message : "Network error"}`
+          );
         }
       }
 
