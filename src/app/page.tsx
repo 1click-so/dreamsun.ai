@@ -13,13 +13,17 @@ interface GenerationResult {
 }
 
 interface UploadedImage {
-  /** Preview data URL for display */
+  /** Unique ID for stable React keys and matching */
+  id: string;
+  /** Object URL for local preview display */
   preview: string;
   /** fal.media CDN URL after upload */
   url: string | null;
   /** Upload in progress */
   uploading: boolean;
 }
+
+let imageIdCounter = 0;
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
@@ -36,7 +40,7 @@ export default function Home() {
   const maxImages = selectedModel.referenceImage?.maxImages ?? 1;
 
   const handleImageUpload = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
@@ -46,50 +50,37 @@ export default function Home() {
       );
 
       for (const file of filesToProcess) {
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-          const dataUrl = ev.target?.result as string;
+        const id = `img_${++imageIdCounter}`;
+        const preview = URL.createObjectURL(file);
 
-          // Add to state with uploading status
-          const newImage: UploadedImage = {
-            preview: dataUrl,
-            url: null,
-            uploading: true,
-          };
-          setReferenceImages((prev) => [...prev, newImage]);
+        // Show preview immediately with uploading spinner
+        const newImage: UploadedImage = { id, preview, url: null, uploading: true };
+        setReferenceImages((prev) => [...prev, newImage]);
 
-          try {
-            // Upload to fal.storage via our API route
-            const res = await fetch("/api/upload", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ dataUrl }),
-            });
-            const data = await res.json();
+        // Upload as FormData (no body size limit issues)
+        const formData = new FormData();
+        formData.append("file", file);
 
-            if (!res.ok) {
-              // Remove failed upload
-              setReferenceImages((prev) =>
-                prev.filter((img) => img.preview !== dataUrl)
-              );
-              return;
-            }
+        try {
+          const res = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
 
-            // Update with the fal.media URL
-            setReferenceImages((prev) =>
-              prev.map((img) =>
-                img.preview === dataUrl
-                  ? { ...img, url: data.url, uploading: false }
-                  : img
-              )
-            );
-          } catch {
-            setReferenceImages((prev) =>
-              prev.filter((img) => img.preview !== dataUrl)
-            );
+          if (!res.ok) {
+            setReferenceImages((prev) => prev.filter((img) => img.id !== id));
+            return;
           }
-        };
-        reader.readAsDataURL(file);
+
+          setReferenceImages((prev) =>
+            prev.map((img) =>
+              img.id === id ? { ...img, url: data.url, uploading: false } : img
+            )
+          );
+        } catch {
+          setReferenceImages((prev) => prev.filter((img) => img.id !== id));
+        }
       }
 
       // Reset input so same file can be re-selected
@@ -98,8 +89,12 @@ export default function Home() {
     [maxImages, referenceImages.length]
   );
 
-  const removeReferenceImage = useCallback((preview: string) => {
-    setReferenceImages((prev) => prev.filter((img) => img.preview !== preview));
+  const removeReferenceImage = useCallback((id: string) => {
+    setReferenceImages((prev) => {
+      const img = prev.find((i) => i.id === id);
+      if (img) URL.revokeObjectURL(img.preview);
+      return prev.filter((i) => i.id !== id);
+    });
   }, []);
 
   const handleGenerate = async () => {
@@ -233,7 +228,7 @@ export default function Home() {
                   <div className="mb-3 grid grid-cols-3 gap-2">
                     {referenceImages.map((img) => (
                       <div
-                        key={img.preview.slice(-20)}
+                        key={img.id}
                         className="relative overflow-hidden rounded-md border border-border"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -248,7 +243,7 @@ export default function Home() {
                           </div>
                         )}
                         <button
-                          onClick={() => removeReferenceImage(img.preview)}
+                          onClick={() => removeReferenceImage(img.id)}
                           className="absolute right-1 top-1 rounded-full bg-background/80 px-1.5 py-0.5 text-xs text-muted hover:text-foreground"
                         >
                           x
