@@ -1,5 +1,14 @@
 export type ModelCapability = "text-to-image" | "image-to-image" | "both";
 
+export interface ReferenceImageConfig {
+  /** The API parameter name this model expects (e.g. "image_url", "image_urls") */
+  paramName: string;
+  /** Whether the param expects an array of URLs or a single URL */
+  isArray: boolean;
+  /** Max number of reference images accepted */
+  maxImages: number;
+}
+
 export interface ModelConfig {
   id: string;
   name: string;
@@ -10,6 +19,8 @@ export interface ModelConfig {
   aspectRatios: string[];
   defaultAspectRatio: string;
   supportsNegativePrompt: boolean;
+  /** Reference image configuration — only for image-to-image models */
+  referenceImage?: ReferenceImageConfig;
 }
 
 export const MODELS: ModelConfig[] = [
@@ -114,17 +125,19 @@ export const MODELS: ModelConfig[] = [
     aspectRatios: ["16:9", "4:3", "1:1", "3:4", "9:16"],
     defaultAspectRatio: "1:1",
     supportsNegativePrompt: false,
+    referenceImage: { paramName: "image_url", isArray: false, maxImages: 1 },
   },
   {
     id: "nano-banana-pro-edit",
     name: "Nano Banana Pro (Edit)",
     endpoint: "fal-ai/nano-banana-pro/edit",
     capability: "image-to-image",
-    description: "Google's model with image editing. Provide image + instructions.",
+    description: "Google's model with image editing. Up to 14 reference images.",
     costPerImage: "$0.15",
     aspectRatios: ["16:9", "4:3", "1:1", "3:4", "9:16"],
     defaultAspectRatio: "1:1",
     supportsNegativePrompt: true,
+    referenceImage: { paramName: "image_urls", isArray: true, maxImages: 14 },
   },
   {
     id: "grok-imagine-edit",
@@ -136,6 +149,7 @@ export const MODELS: ModelConfig[] = [
     aspectRatios: ["16:9", "4:3", "1:1", "3:4", "9:16"],
     defaultAspectRatio: "1:1",
     supportsNegativePrompt: false,
+    referenceImage: { paramName: "image_url", isArray: false, maxImages: 1 },
   },
 ];
 

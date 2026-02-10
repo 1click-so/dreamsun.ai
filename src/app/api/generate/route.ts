@@ -9,7 +9,7 @@ fal.config({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { modelId, prompt, aspectRatio, referenceImageUrl, negativePrompt } = body;
+    const { modelId, prompt, aspectRatio, referenceImageUrls, negativePrompt } = body;
 
     if (!prompt || !modelId) {
       return NextResponse.json(
@@ -33,9 +33,21 @@ export async function POST(req: NextRequest) {
       input.aspect_ratio = aspectRatio;
     }
 
-    // Add reference image for image-to-image models
-    if (referenceImageUrl && model.capability === "image-to-image") {
-      input.image_url = referenceImageUrl;
+    // Add reference images using the model's specific parameter name
+    if (
+      referenceImageUrls &&
+      Array.isArray(referenceImageUrls) &&
+      referenceImageUrls.length > 0 &&
+      model.referenceImage
+    ) {
+      const { paramName, isArray } = model.referenceImage;
+      if (isArray) {
+        // Model expects an array (e.g. Nano Banana Pro Edit: image_urls)
+        input[paramName] = referenceImageUrls;
+      } else {
+        // Model expects a single URL (e.g. FLUX Kontext: image_url)
+        input[paramName] = referenceImageUrls[0];
+      }
     }
 
     // Add negative prompt if model supports it

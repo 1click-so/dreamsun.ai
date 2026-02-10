@@ -12,35 +12,95 @@ interface GenerationResult {
   requestId: string;
 }
 
+interface UploadedImage {
+  /** Preview data URL for display */
+  preview: string;
+  /** fal.media CDN URL after upload */
+  url: string | null;
+  /** Upload in progress */
+  uploading: boolean;
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelConfig>(MODELS[0]);
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [referenceImage, setReferenceImage] = useState<string | null>(null);
-  const [referencePreview, setReferencePreview] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<UploadedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const maxImages = selectedModel.referenceImage?.maxImages ?? 1;
+
   const handleImageUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
 
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string;
-        setReferencePreview(dataUrl);
-        setReferenceImage(dataUrl);
-      };
-      reader.readAsDataURL(file);
+      const filesToProcess = Array.from(files).slice(
+        0,
+        maxImages - referenceImages.length
+      );
+
+      for (const file of filesToProcess) {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const dataUrl = ev.target?.result as string;
+
+          // Add to state with uploading status
+          const newImage: UploadedImage = {
+            preview: dataUrl,
+            url: null,
+            uploading: true,
+          };
+          setReferenceImages((prev) => [...prev, newImage]);
+
+          try {
+            // Upload to fal.storage via our API route
+            const res = await fetch("/api/upload", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dataUrl }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+              // Remove failed upload
+              setReferenceImages((prev) =>
+                prev.filter((img) => img.preview !== dataUrl)
+              );
+              return;
+            }
+
+            // Update with the fal.media URL
+            setReferenceImages((prev) =>
+              prev.map((img) =>
+                img.preview === dataUrl
+                  ? { ...img, url: data.url, uploading: false }
+                  : img
+              )
+            );
+          } catch {
+            setReferenceImages((prev) =>
+              prev.filter((img) => img.preview !== dataUrl)
+            );
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      // Reset input so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
     },
-    []
+    [maxImages, referenceImages.length]
   );
+
+  const removeReferenceImage = useCallback((preview: string) => {
+    setReferenceImages((prev) => prev.filter((img) => img.preview !== preview));
+  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -55,8 +115,17 @@ export default function Home() {
         aspectRatio,
       };
 
-      if (referenceImage && selectedModel.capability === "image-to-image") {
-        body.referenceImageUrl = referenceImage;
+      if (
+        referenceImages.length > 0 &&
+        selectedModel.capability === "image-to-image"
+      ) {
+        // Send the uploaded fal.media URLs (not base64)
+        const urls = referenceImages
+          .filter((img) => img.url)
+          .map((img) => img.url as string);
+        if (urls.length > 0) {
+          body.referenceImageUrls = urls;
+        }
       }
 
       if (negativePrompt.trim() && selectedModel.supportsNegativePrompt) {
@@ -91,6 +160,10 @@ export default function Home() {
       setSelectedModel(model);
       if (!model.aspectRatios.includes(aspectRatio)) {
         setAspectRatio(model.defaultAspectRatio);
+      }
+      // Clear reference images when switching models
+      if (model.capability !== selectedModel.capability) {
+        setReferenceImages([]);
       }
     }
   };
@@ -148,48 +221,65 @@ export default function Home() {
               </p>
             </section>
 
-            {/* Reference Image (for image-to-image) */}
+            {/* Reference Images (for image-to-image) */}
             {selectedModel.capability === "image-to-image" && (
               <section>
                 <label className="mb-2 block text-sm font-medium text-muted">
-                  Reference Image
+                  Reference Image{maxImages > 1 ? `s (up to ${maxImages})` : ""}
                 </label>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="group flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-surface transition hover:border-accent/50 hover:bg-surface-hover"
-                >
-                  {referencePreview ? (
-                    <div className="relative p-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={referencePreview}
-                        alt="Reference"
-                        className="max-h-[200px] rounded-md object-contain"
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setReferenceImage(null);
-                          setReferencePreview(null);
-                          if (fileInputRef.current)
-                            fileInputRef.current.value = "";
-                        }}
-                        className="absolute right-3 top-3 rounded-full bg-background/80 px-2 py-0.5 text-xs text-muted hover:text-foreground"
+
+                {/* Uploaded images grid */}
+                {referenceImages.length > 0 && (
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    {referenceImages.map((img) => (
+                      <div
+                        key={img.preview.slice(-20)}
+                        className="relative overflow-hidden rounded-md border border-border"
                       >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.preview}
+                          alt="Reference"
+                          className="aspect-square w-full object-cover"
+                        />
+                        {img.uploading && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                          </div>
+                        )}
+                        <button
+                          onClick={() => removeReferenceImage(img.preview)}
+                          className="absolute right-1 top-1 rounded-full bg-background/80 px-1.5 py-0.5 text-xs text-muted hover:text-foreground"
+                        >
+                          x
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload area — show if under max */}
+                {referenceImages.length < maxImages && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="group flex min-h-[100px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-surface transition hover:border-accent/50 hover:bg-surface-hover"
+                  >
                     <div className="text-center text-sm text-muted">
-                      <p className="mb-1">Click to upload reference image</p>
+                      <p className="mb-1">
+                        {referenceImages.length === 0
+                          ? "Click to upload reference image"
+                          : "Add more images"}
+                      </p>
                       <p className="text-xs">PNG, JPG, WebP</p>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
+                  multiple={maxImages > 1}
                   onChange={handleImageUpload}
                   className="hidden"
                 />
@@ -251,7 +341,11 @@ export default function Home() {
             {/* Generate Button */}
             <button
               onClick={handleGenerate}
-              disabled={isGenerating || !prompt.trim()}
+              disabled={
+                isGenerating ||
+                !prompt.trim() ||
+                referenceImages.some((img) => img.uploading)
+              }
               className="w-full rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-black transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? "Generating..." : "Generate"}
