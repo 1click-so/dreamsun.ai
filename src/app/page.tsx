@@ -369,11 +369,6 @@ export default function Home() {
               {isGenerating ? "Generating..." : "Generate"}
             </button>
 
-            {error && (
-              <p className="rounded-md bg-red-500/10 px-4 py-2 text-sm text-red-400">
-                {error}
-              </p>
-            )}
           </div>
 
           {/* Right Column — Output */}
@@ -388,6 +383,15 @@ export default function Home() {
                     <p className="text-sm text-muted">
                       Generating with {selectedModel.name}...
                     </p>
+                  </div>
+                ) : error ? (
+                  <div className="w-full p-4">
+                    <div className="rounded-md border border-red-500/20 bg-red-500/10 px-4 py-3">
+                      <p className="text-sm font-medium text-red-400">
+                        Error
+                      </p>
+                      <p className="mt-1 text-sm text-red-400/80">{error}</p>
+                    </div>
                   </div>
                 ) : result ? (
                   <div className="w-full p-3">
