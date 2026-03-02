@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     // Only send output_format for models that support it
     if (model.supportsOutputFormat !== false) {
-      input.output_format = "jpeg";
+      input.output_format = "png";
     }
     input.num_images = 1;
 
