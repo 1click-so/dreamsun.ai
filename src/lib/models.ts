@@ -32,6 +32,8 @@ export interface ModelConfig {
   loras?: LoRAConfig[];
   /** Extra input params always sent with this model */
   extraInput?: Record<string, unknown>;
+  /** Set false to skip sending output_format (some endpoints don't support it) */
+  supportsOutputFormat?: boolean;
 }
 
 export const MODELS: ModelConfig[] = [
@@ -131,18 +133,113 @@ export const MODELS: ModelConfig[] = [
     name: "FLUX 2 LoRA (ohwx)",
     endpoint: "fal-ai/flux-2/lora",
     capability: "text-to-image",
-    description: "FLUX 2 with custom LoRA. Trigger word: ohwx",
+    description: "FLUX 2 with character LoRA. Trigger word: ohwx",
     costPerImage: "~$0.035",
-    aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
+    aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: false,
+    supportsOutputFormat: false,
     loras: [
       {
         path: "https://v3b.fal.media/files/b/0a906ed4/hK6mYT27l_EYr5pt8mpw9_pytorch_lora_weights.safetensors",
         scale: 1.0,
       },
     ],
-    extraInput: { enable_safety_checker: false },
+    sizeParam: {
+      name: "image_size",
+      mapping: {
+        "16:9": "landscape_16_9",
+        "4:3": "landscape_4_3",
+        "3:2": "landscape_4_3",
+        "1:1": "square_hd",
+        "2:3": "portrait_4_3",
+        "3:4": "portrait_4_3",
+        "9:16": "portrait_16_9",
+      },
+    },
+    extraInput: {
+      enable_safety_checker: false,
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+    },
+  },
+  {
+    id: "flux-2-lora-ohwx-nsfw",
+    name: "FLUX 2 LoRA (ohwx + NSFW)",
+    endpoint: "fal-ai/flux-2/lora",
+    capability: "text-to-image",
+    description: "Character LoRA + NSFW Master stacked. Trigger word: ohwx",
+    costPerImage: "~$0.035",
+    aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
+    defaultAspectRatio: "3:4",
+    supportsNegativePrompt: false,
+    supportsOutputFormat: false,
+    loras: [
+      {
+        path: "https://v3b.fal.media/files/b/0a906ed4/hK6mYT27l_EYr5pt8mpw9_pytorch_lora_weights.safetensors",
+        scale: 1.0,
+      },
+      {
+        path: "https://v3b.fal.media/files/b/0a90946a/GeYC52k-5RbJytNrJNJms_NSFW_master_ZIT_000008766.safetensors",
+        scale: 0.8,
+      },
+    ],
+    sizeParam: {
+      name: "image_size",
+      mapping: {
+        "16:9": "landscape_16_9",
+        "4:3": "landscape_4_3",
+        "3:2": "landscape_4_3",
+        "1:1": "square_hd",
+        "2:3": "portrait_4_3",
+        "3:4": "portrait_4_3",
+        "9:16": "portrait_16_9",
+      },
+    },
+    extraInput: {
+      enable_safety_checker: false,
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+    },
+  },
+  {
+    id: "flux-1-lora-ohwx-nsfw",
+    name: "FLUX 1 LoRA (ohwx + NSFW)",
+    endpoint: "fal-ai/flux-lora",
+    capability: "text-to-image",
+    description: "Flux 1 endpoint — both LoRAs on native base. Trigger word: ohwx",
+    costPerImage: "~$0.035",
+    aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
+    defaultAspectRatio: "3:4",
+    supportsNegativePrompt: false,
+    supportsOutputFormat: false,
+    loras: [
+      {
+        path: "https://v3b.fal.media/files/b/0a906ed4/hK6mYT27l_EYr5pt8mpw9_pytorch_lora_weights.safetensors",
+        scale: 1.0,
+      },
+      {
+        path: "https://v3b.fal.media/files/b/0a90946a/GeYC52k-5RbJytNrJNJms_NSFW_master_ZIT_000008766.safetensors",
+        scale: 0.8,
+      },
+    ],
+    sizeParam: {
+      name: "image_size",
+      mapping: {
+        "16:9": "landscape_16_9",
+        "4:3": "landscape_4_3",
+        "3:2": "landscape_4_3",
+        "1:1": "square_hd",
+        "2:3": "portrait_4_3",
+        "3:4": "portrait_4_3",
+        "9:16": "portrait_16_9",
+      },
+    },
+    extraInput: {
+      enable_safety_checker: false,
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+    },
   },
 
   // --- Image-to-Image / Edit ---

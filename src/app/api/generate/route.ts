@@ -73,7 +73,10 @@ export async function POST(req: NextRequest) {
     // Safety checker — off by default, toggle in UI
     input.enable_safety_checker = safetyChecker === true;
 
-    input.output_format = "jpeg";
+    // Only send output_format for models that support it
+    if (model.supportsOutputFormat !== false) {
+      input.output_format = "jpeg";
+    }
     input.num_images = 1;
 
     const result = await fal.subscribe(model.endpoint, {
