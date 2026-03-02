@@ -207,7 +207,7 @@ export const MODELS: ModelConfig[] = [
     name: "FLUX 1 LoRA (ohwx + NSFW)",
     endpoint: "fal-ai/flux-lora",
     capability: "text-to-image",
-    description: "Flux 1 endpoint — both LoRAs on native base. Trigger word: ohwx",
+    description: "Flux 1 trained character LoRA + NSFW Master — native base. Trigger word: ohwx",
     costPerImage: "~$0.035",
     aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
     defaultAspectRatio: "3:4",
@@ -215,7 +215,7 @@ export const MODELS: ModelConfig[] = [
     supportsOutputFormat: false,
     loras: [
       {
-        path: "https://v3b.fal.media/files/b/0a906ed4/hK6mYT27l_EYr5pt8mpw9_pytorch_lora_weights.safetensors",
+        path: "https://v3b.fal.media/files/b/0a9095b8/lGPkZU5MLmrlGLmPEn_3X_lora-flux1-fal.safetensors",
         scale: 1.0,
       },
       {
