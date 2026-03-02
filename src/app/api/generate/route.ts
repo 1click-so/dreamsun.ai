@@ -9,7 +9,7 @@ fal.config({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { modelId, prompt, aspectRatio, referenceImageUrls, negativePrompt } = body;
+    const { modelId, prompt, aspectRatio, referenceImageUrls, negativePrompt, safetyChecker } = body;
 
     if (!prompt || !modelId) {
       return NextResponse.json(
@@ -69,6 +69,9 @@ export async function POST(req: NextRequest) {
     if (model.extraInput) {
       Object.assign(input, model.extraInput);
     }
+
+    // Safety checker — off by default, toggle in UI
+    input.enable_safety_checker = safetyChecker === true;
 
     input.output_format = "jpeg";
     input.num_images = 1;

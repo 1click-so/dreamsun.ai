@@ -50,6 +50,7 @@ export default function Home() {
     return localStorage.getItem("dreamsun_ratio") || "16:9";
   });
   const [referenceImages, setReferenceImages] = useState<UploadedImage[]>([]);
+  const [safetyChecker, setSafetyChecker] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +137,8 @@ export default function Home() {
       if (negativePrompt.trim() && selectedModel.supportsNegativePrompt) {
         body.negativePrompt = negativePrompt.trim();
       }
+
+      body.safetyChecker = safetyChecker;
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -347,6 +350,26 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </section>
+
+            {/* Safety Checker Toggle */}
+            <section className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-muted">Safety Checker</span>
+                <p className="text-xs text-muted/60">Filter NSFW content</p>
+              </div>
+              <button
+                onClick={() => setSafetyChecker(!safetyChecker)}
+                className={`relative h-6 w-11 rounded-full transition ${
+                  safetyChecker ? "bg-accent" : "bg-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                    safetyChecker ? "translate-x-5" : ""
+                  }`}
+                />
+              </button>
             </section>
 
             {/* Generate Button */}
