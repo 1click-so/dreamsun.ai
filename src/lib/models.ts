@@ -9,6 +9,11 @@ export interface ReferenceImageConfig {
   maxImages: number;
 }
 
+export interface LoRAConfig {
+  path: string;
+  scale: number;
+}
+
 export interface ModelConfig {
   id: string;
   name: string;
@@ -23,6 +28,10 @@ export interface ModelConfig {
   referenceImage?: ReferenceImageConfig;
   /** API param name for size — defaults to "aspect_ratio". GPT Image uses "image_size" with "1024x1024" format */
   sizeParam?: { name: string; mapping: Record<string, string> };
+  /** LoRA weights to apply during generation */
+  loras?: LoRAConfig[];
+  /** Extra input params always sent with this model */
+  extraInput?: Record<string, unknown>;
 }
 
 export const MODELS: ModelConfig[] = [
@@ -114,6 +123,26 @@ export const MODELS: ModelConfig[] = [
     aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: false,
+  },
+
+  // --- LoRA ---
+  {
+    id: "flux-2-lora-ohwx",
+    name: "FLUX 2 LoRA (ohwx)",
+    endpoint: "fal-ai/flux-2/lora",
+    capability: "text-to-image",
+    description: "FLUX 2 with custom LoRA. Trigger word: ohwx",
+    costPerImage: "~$0.035",
+    aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
+    defaultAspectRatio: "16:9",
+    supportsNegativePrompt: false,
+    loras: [
+      {
+        path: "https://v3b.fal.media/files/b/0a906ed4/hK6mYT27l_EYr5pt8mpw9_pytorch_lora_weights.safetensors",
+        scale: 1.0,
+      },
+    ],
+    extraInput: { enable_safety_checker: false },
   },
 
   // --- Image-to-Image / Edit ---

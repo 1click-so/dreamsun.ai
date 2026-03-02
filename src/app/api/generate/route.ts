@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
       input.negative_prompt = negativePrompt;
     }
 
+    // Add LoRA weights if model has them
+    if (model.loras && model.loras.length > 0) {
+      input.loras = model.loras;
+    }
+
+    // Add any extra input params the model requires
+    if (model.extraInput) {
+      Object.assign(input, model.extraInput);
+    }
+
     input.output_format = "jpeg";
     input.num_images = 1;
 
