@@ -94,6 +94,17 @@ export const MODELS: ModelConfig[] = [
     supportsNegativePrompt: true,
   },
   {
+    id: "nano-banana-2",
+    name: "NanoBanana 2",
+    endpoint: "fal-ai/nano-banana-2",
+    capability: "text-to-image",
+    description: "Fast, affordable text-to-image. Good quality at low cost.",
+    costPerImage: "$0.08",
+    aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
+    defaultAspectRatio: "16:9",
+    supportsNegativePrompt: false,
+  },
+  {
     id: "recraft-v3",
     name: "Recraft V3",
     endpoint: "fal-ai/recraft-v3",

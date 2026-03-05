@@ -18,6 +18,21 @@ export const metadata: Metadata = {
     "AI platform aggregator for creating images and videos using state-of-the-art models.",
 };
 
+function Nav() {
+  return (
+    <nav className="border-b border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex items-center gap-6 px-6 py-2">
+        <a href="/" className="text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)]">
+          Generator
+        </a>
+        <a href="/shots" className="text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)]">
+          Shot List
+        </a>
+      </div>
+    </nav>
+  );
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,6 +43,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Nav />
         {children}
       </body>
     </html>
