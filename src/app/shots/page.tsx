@@ -109,7 +109,7 @@ export default function ShotsPage() {
         const found = VIDEO_MODELS.find((m) => m.id === savedId);
         if (found) return found;
       }
-      return VIDEO_MODELS[0];
+      return VIDEO_MODELS.find((m) => m.id === "seedance-1-5-pro") ?? VIDEO_MODELS[0];
     });
   const [aspectRatio, setAspectRatio] = useState(() =>
     loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16")
