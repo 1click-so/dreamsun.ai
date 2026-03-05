@@ -434,15 +434,21 @@ export default function ShotsPage() {
   };
 
   const addShot = () => {
-    setShots((prev) => [
-      ...prev,
-      createShot({
-        number: String(prev.length + 1),
-        title: "",
-        imagePrompt: "",
-        videoPrompt: "",
-      }),
-    ]);
+    setShots((prev) => {
+      const maxNum = prev.reduce((max, s) => {
+        const n = parseInt(String(s.number), 10) || 0;
+        return n > max ? n : max;
+      }, 0);
+      return [
+        ...prev,
+        createShot({
+          number: String(maxNum + 1),
+          title: "",
+          imagePrompt: "",
+          videoPrompt: "",
+        }),
+      ];
+    });
   };
 
   const createShotFromRef = useCallback((imageUrl: string) => {
