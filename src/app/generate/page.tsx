@@ -9,12 +9,21 @@ import {
   resolveModel,
 } from "@/lib/models";
 import { Navbar } from "@/components/Navbar";
-import { Lightbox } from "@/components/shots/Lightbox";
 import { Toggle } from "@/components/ui/Toggle";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
 // --- Types ---
+
+interface GenerationSettings {
+  modelId: string;
+  aspectRatio: string;
+  resolution: string;
+  numImages: number;
+  safetyChecker: boolean;
+  negativePrompt?: string;
+  hasReferenceImages: boolean;
+}
 
 interface GenerationResult {
   imageUrl: string;
@@ -26,6 +35,9 @@ interface GenerationResult {
   requestId: string;
   prompt?: string;
   batchId?: string;
+  settings?: GenerationSettings;
+  createdAt?: number;
+  favorited?: boolean;
 }
 
 interface UploadedImage {
@@ -231,6 +243,7 @@ function GalleryCard({
   onCopyUrl,
   onEdit,
   onRegenerate,
+  onFavorite,
   onClick,
   copied,
 }: {
@@ -240,6 +253,7 @@ function GalleryCard({
   onCopyUrl: () => void;
   onEdit: () => void;
   onRegenerate: () => void;
+  onFavorite: () => void;
   onClick: () => void;
   copied: boolean;
 }) {
@@ -264,16 +278,45 @@ function GalleryCard({
         {result.model}
       </div>
 
+      {/* Favorite heart — top right, visible on hover or when favorited */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onFavorite(); }}
+        className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full transition ${
+          result.favorited
+            ? "bg-black/50 text-red-400 opacity-100"
+            : `bg-black/40 text-white/60 hover:text-red-400 ${hovered ? "opacity-100" : "opacity-0"}`
+        }`}
+      >
+        <svg width="12" height="12" viewBox="0 0 14 14" fill={result.favorited ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+          <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
+        </svg>
+      </button>
+
       {/* Hover overlay */}
       <div
         className={`absolute inset-0 flex flex-col justify-end rounded-lg bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-200 ${
           hovered ? "opacity-100" : "opacity-0"
         }`}
       >
+        {/* Prompt text */}
+        {result.prompt && (
+          <div className="px-2.5 pt-8">
+            <p className="line-clamp-2 text-[10px] leading-snug text-white/70">
+              {result.prompt}
+            </p>
+          </div>
+        )}
         <div className="flex items-end justify-between p-2.5" onClick={(e) => e.stopPropagation()}>
-          <span className="text-[9px] font-medium text-white/50">
-            {result.width}x{result.height}
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] font-medium text-white/50">
+              {result.width}x{result.height}
+            </span>
+            {result.settings && (
+              <span className="text-[8px] text-white/30">
+                {result.settings.aspectRatio} · {result.settings.resolution}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-0.5">
             {isFeatured && (
               <button onClick={onRegenerate} className="rounded-md p-1.5 text-accent transition hover:bg-white/10" title="Regenerate">
@@ -379,10 +422,13 @@ export default function GeneratePage() {
   const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [editPromptValue, setEditPromptValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [lightboxResult, setLightboxResult] = useState<GenerationResult | null>(null);
+  const [selectedResult, setSelectedResult] = useState<GenerationResult | null>(null);
   const [galleryRowHeight, setGalleryRowHeight] = useState(() =>
     loadStorage(STORAGE_KEYS.gallerySize, 180)
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -403,13 +449,26 @@ export default function GeneratePage() {
     saveStorage(STORAGE_KEYS.history, history);
   }, [history]);
 
+  // Filter by search + favorites
+  let filteredHistory = history;
+  if (favoritesOnly) {
+    filteredHistory = filteredHistory.filter((r) => r.favorited);
+  }
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filteredHistory = filteredHistory.filter((r) =>
+      r.prompt?.toLowerCase().includes(q) ||
+      r.model.toLowerCase().includes(q)
+    );
+  }
+
   // Latest batch
   const latestBatch = currentBatchId
-    ? history.filter((r) => r.batchId === currentBatchId)
+    ? filteredHistory.filter((r) => r.batchId === currentBatchId)
     : [];
   const previousHistory = currentBatchId
-    ? history.filter((r) => r.batchId !== currentBatchId)
-    : history;
+    ? filteredHistory.filter((r) => r.batchId !== currentBatchId)
+    : filteredHistory;
 
   // --- Handlers ---
 
@@ -505,6 +564,16 @@ export default function GeneratePage() {
           ...data,
           prompt: usedPrompt.trim(),
           batchId,
+          createdAt: Date.now(),
+          settings: {
+            modelId: effectiveModel.id,
+            aspectRatio,
+            resolution: imageResolution,
+            numImages,
+            safetyChecker,
+            negativePrompt: negativePrompt.trim() || undefined,
+            hasReferenceImages: hasRefs,
+          },
         };
 
         setHistory((prev) => [genResult, ...prev]);
@@ -548,6 +617,18 @@ export default function GeneratePage() {
       setReferenceImages((prev) => [editImage, ...prev]);
     }
     handleGenerate(editPromptValue.trim());
+  };
+
+  const toggleFavorite = (requestId: string) => {
+    setHistory((prev) =>
+      prev.map((r) =>
+        r.requestId === requestId ? { ...r, favorited: !r.favorited } : r
+      )
+    );
+    // Also update selectedResult if it's the same
+    setSelectedResult((prev) =>
+      prev && prev.requestId === requestId ? { ...prev, favorited: !prev.favorited } : prev
+    );
   };
 
   const handleDownload = async (r: GenerationResult) => {
@@ -924,7 +1005,8 @@ export default function GeneratePage() {
                 setShowEditPrompt={setShowEditPrompt}
                 onDownload={handleDownload}
                 onCopyUrl={handleCopyUrl}
-                onClickImage={setLightboxResult}
+                onClickImage={setSelectedResult}
+                onFavorite={toggleFavorite}
               />
             )}
           </div>
@@ -955,6 +1037,112 @@ export default function GeneratePage() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
+              {/* Gallery toolbar */}
+              <div className="flex items-center justify-between border-b border-border/50 px-4 py-1.5">
+                {/* Left — image count */}
+                <span className="text-[10px] font-medium text-muted/50">
+                  {history.length} {history.length === 1 ? "image" : "images"}
+                </span>
+
+                {/* Right — search + size slider */}
+                <div className="flex items-center gap-3">
+                  {/* Search */}
+                  <div className="flex items-center">
+                    {searchOpen ? (
+                      <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-0.5">
+                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-muted/50">
+                          <circle cx="6" cy="6" r="4.5" /><path d="M9.5 9.5L13 13" />
+                        </svg>
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search prompts..."
+                          className="w-28 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted/30"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              setSearchOpen(false);
+                              setSearchQuery("");
+                            }
+                          }}
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery("")}
+                            className="text-muted/40 hover:text-foreground"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M1 1l6 6M7 1l-6 6" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setSearchOpen(true)}
+                        className="rounded-md p-1 text-muted/40 transition hover:bg-surface hover:text-foreground"
+                        title="Search"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <circle cx="6" cy="6" r="4.5" /><path d="M9.5 9.5L13 13" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Favorites filter */}
+                  <button
+                    onClick={() => setFavoritesOnly(!favoritesOnly)}
+                    className={`rounded-md p-1 transition ${
+                      favoritesOnly
+                        ? "bg-red-500/10 text-red-400"
+                        : "text-muted/40 hover:bg-surface hover:text-foreground"
+                    }`}
+                    title={favoritesOnly ? "Show all" : "Show favorites"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill={favoritesOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+                      <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
+                    </svg>
+                  </button>
+
+                  {/* Divider */}
+                  <div className="h-3.5 w-px bg-border" />
+
+                  {/* Size slider */}
+                  <div className="flex items-center gap-2">
+                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/40">
+                      <rect x="1" y="1" width="5" height="5" rx="1" />
+                      <rect x="8" y="1" width="5" height="5" rx="1" />
+                      <rect x="1" y="8" width="5" height="5" rx="1" />
+                      <rect x="8" y="8" width="5" height="5" rx="1" />
+                    </svg>
+                    <input
+                      type="range"
+                      min={0}
+                      max={5}
+                      step={1}
+                      value={[80, 130, 180, 260, 350, 440].indexOf(galleryRowHeight) !== -1
+                        ? [80, 130, 180, 260, 350, 440].indexOf(galleryRowHeight)
+                        : 2}
+                      onChange={(e) => {
+                        const sizes = [80, 130, 180, 260, 350, 440];
+                        const v = sizes[Number(e.target.value)];
+                        setGalleryRowHeight(v);
+                        saveStorage(STORAGE_KEYS.gallerySize, v);
+                      }}
+                      className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-border [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
+                    />
+                    <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/40">
+                      <rect x="1" y="1" width="5" height="5" rx="1" />
+                      <rect x="8" y="1" width="5" height="5" rx="1" />
+                      <rect x="1" y="8" width="5" height="5" rx="1" />
+                      <rect x="8" y="8" width="5" height="5" rx="1" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
               {/* Gallery content */}
               <div className="flex-1 overflow-y-auto p-4">
                 <GalleryGrid
@@ -974,63 +1162,183 @@ export default function GeneratePage() {
                   setShowEditPrompt={setShowEditPrompt}
                   onDownload={handleDownload}
                   onCopyUrl={handleCopyUrl}
-                  onClickImage={setLightboxResult}
+                  onClickImage={setSelectedResult}
+                  onFavorite={toggleFavorite}
                 />
               </div>
 
-              {/* Size slider — pinned to bottom of gallery */}
-              <div className="flex items-center gap-3 border-t border-border px-4 py-2">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" className="shrink-0 text-muted/50">
-                  <rect x="1" y="1" width="5" height="5" rx="1" />
-                  <rect x="8" y="1" width="5" height="5" rx="1" />
-                  <rect x="1" y="8" width="5" height="5" rx="1" />
-                  <rect x="8" y="8" width="5" height="5" rx="1" />
-                </svg>
-                <input
-                  type="range"
-                  min={80}
-                  max={400}
-                  step={10}
-                  value={galleryRowHeight}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setGalleryRowHeight(v);
-                    saveStorage(STORAGE_KEYS.gallerySize, v);
-                  }}
-                  className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-border accent-accent [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
-                />
-                <svg width="18" height="18" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" className="shrink-0 text-muted/50">
-                  <rect x="1" y="1" width="5" height="5" rx="1" />
-                  <rect x="8" y="1" width="5" height="5" rx="1" />
-                  <rect x="1" y="8" width="5" height="5" rx="1" />
-                  <rect x="8" y="8" width="5" height="5" rx="1" />
-                </svg>
-              </div>
             </div>
           )}
         </main>
       </div>
 
-      {/* Lightbox */}
-      {lightboxResult && (
-        <Lightbox
-          src={lightboxResult.imageUrl}
-          type="image"
-          onClose={() => setLightboxResult(null)}
-          onEditImage={(editPrompt) => {
+      {/* Detail Sidebar — image info panel */}
+      {selectedResult && (
+        <DetailSidebar
+          result={selectedResult}
+          onClose={() => setSelectedResult(null)}
+          onFavorite={() => toggleFavorite(selectedResult.requestId)}
+          onDownload={() => handleDownload(selectedResult)}
+          onCopyUrl={() => handleCopyUrl(selectedResult)}
+          onUseAsReference={() => {
             const editId = `img_${++imageIdCounter}`;
             const editImage: UploadedImage = {
               id: editId,
-              preview: lightboxResult.imageUrl,
-              url: lightboxResult.imageUrl,
+              preview: selectedResult.imageUrl,
+              url: selectedResult.imageUrl,
               uploading: false,
             };
             setReferenceImages((prev) => [editImage, ...prev]);
-            setLightboxResult(null);
-            handleGenerate(editPrompt);
+            setSelectedResult(null);
           }}
+          copied={copiedId === selectedResult.requestId}
         />
       )}
+    </div>
+  );
+}
+
+// --- Detail Sidebar ---
+
+function DetailSidebar({
+  result,
+  onClose,
+  onFavorite,
+  onDownload,
+  onCopyUrl,
+  onUseAsReference,
+  copied,
+}: {
+  result: GenerationResult;
+  onClose: () => void;
+  onFavorite: () => void;
+  onDownload: () => void;
+  onCopyUrl: () => void;
+  onUseAsReference: () => void;
+  copied: boolean;
+}) {
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const copyPrompt = () => {
+    if (!result.prompt) return;
+    navigator.clipboard.writeText(result.prompt);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2000);
+  };
+
+  const createdDate = result.createdAt
+    ? new Date(result.createdAt).toLocaleString()
+    : null;
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-40 flex w-[340px] flex-col border-l border-border bg-background shadow-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <span className="text-xs font-semibold text-foreground">Image Details</span>
+        <button
+          onClick={onClose}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-muted transition hover:bg-surface hover:text-foreground"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M1 1l10 10M11 1L1 11" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Image preview */}
+        <div className="p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={result.imageUrl}
+            alt="Selected"
+            className="w-full rounded-lg"
+          />
+        </div>
+
+        {/* Actions row */}
+        <div className="flex items-center gap-1 border-b border-border px-4 pb-3">
+          <button onClick={onFavorite} className={`rounded-md p-1.5 transition ${result.favorited ? "text-red-400" : "text-muted hover:text-red-400"}`} title="Favorite">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill={result.favorited ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+              <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
+            </svg>
+          </button>
+          <button onClick={onDownload} className="rounded-md p-1.5 text-muted transition hover:text-foreground" title="Download">
+            <IconDownload />
+          </button>
+          <button onClick={onCopyUrl} className="rounded-md p-1.5 text-muted transition hover:text-foreground" title="Copy image URL">
+            {copied ? (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M2 7l4 4L12 3" className="text-accent" />
+              </svg>
+            ) : (
+              <IconCopy />
+            )}
+          </button>
+          <button onClick={onUseAsReference} className="rounded-md p-1.5 text-muted transition hover:text-foreground" title="Use as reference image">
+            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="2" width="14" height="14" rx="2" /><path d="M9 6v6M6 9h6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Prompt */}
+        {result.prompt && (
+          <div className="border-b border-border px-4 py-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted">Prompt</span>
+              <button
+                onClick={copyPrompt}
+                className="text-[10px] font-medium text-accent/70 transition hover:text-accent"
+              >
+                {promptCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="text-xs leading-relaxed text-foreground/80">
+              {result.prompt}
+            </p>
+          </div>
+        )}
+
+        {/* Settings */}
+        <div className="px-4 py-3">
+          <span className="mb-2.5 block text-[10px] font-medium uppercase tracking-wider text-muted">Settings</span>
+          <div className="space-y-2">
+            <DetailRow label="Model" value={result.model} />
+            <DetailRow label="Size" value={`${result.width} × ${result.height}`} />
+            {result.settings && (
+              <>
+                <DetailRow label="Aspect Ratio" value={result.settings.aspectRatio} />
+                <DetailRow label="Resolution" value={result.settings.resolution.toUpperCase()} />
+                <DetailRow label="Num Images" value={String(result.settings.numImages)} />
+                <DetailRow label="Safety" value={result.settings.safetyChecker ? "On" : "Off"} />
+                {result.settings.negativePrompt && (
+                  <DetailRow label="Negative" value={result.settings.negativePrompt} />
+                )}
+                {result.settings.hasReferenceImages && (
+                  <DetailRow label="References" value="Yes" />
+                )}
+              </>
+            )}
+            {result.seed != null && (
+              <DetailRow label="Seed" value={String(result.seed)} />
+            )}
+            {createdDate && (
+              <DetailRow label="Created" value={createdDate} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-[11px] text-muted">{label}</span>
+      <span className="text-right text-[11px] font-medium text-foreground/80">{value}</span>
     </div>
   );
 }
@@ -1103,6 +1411,7 @@ function GalleryGrid({
   onDownload,
   onCopyUrl,
   onClickImage,
+  onFavorite,
 }: {
   latestBatch: GenerationResult[];
   previousHistory: GenerationResult[];
@@ -1121,6 +1430,7 @@ function GalleryGrid({
   onDownload: (r: GenerationResult) => void;
   onCopyUrl: (r: GenerationResult) => void;
   onClickImage: (r: GenerationResult) => void;
+  onFavorite: (requestId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -1269,6 +1579,7 @@ function GalleryGrid({
                         onCopyUrl={() => onCopyUrl(r)}
                         onEdit={onEdit}
                         onRegenerate={onRegenerate}
+                        onFavorite={() => onFavorite(r.requestId)}
                         onClick={() => onClickImage(r)}
                         copied={copiedId === r.requestId}
                       />
