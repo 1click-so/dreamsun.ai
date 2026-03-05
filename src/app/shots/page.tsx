@@ -69,6 +69,7 @@ export default function ShotsPage() {
   const [selectedVideoModel, setSelectedVideoModel] =
     useState<VideoModelConfig>(() => VIDEO_MODELS[0]);
   const [aspectRatio, setAspectRatio] = useState("9:16");
+  const [duration, setDuration] = useState(5);
 
   // --- Project-level character reference images ---
   const [charRefs, setCharRefs] = useState<UploadedRef[]>([]);
@@ -328,7 +329,7 @@ export default function ShotsPage() {
             videoModelId: selectedVideoModel.id,
             prompt: shot.videoPrompt,
             imageUrl: shot.imageUrl,
-            duration: selectedVideoModel.defaultDuration,
+            duration,
             aspectRatio,
             shotNumber: shot.number,
             outputFolder: outputFolder || undefined,
@@ -390,11 +391,12 @@ export default function ShotsPage() {
   })();
 
   const estimatedVideoCost = (() => {
-    const cost = parseFloat(
+    const costPer5 = parseFloat(
       selectedVideoModel.costPer5Sec.replace(/[^0-9.]/g, "")
     );
+    const costPerSec = costPer5 / 5;
     const readyShots = shots.filter((s) => s.imageStatus === "done").length;
-    return (cost * readyShots).toFixed(2);
+    return (costPerSec * duration * readyShots).toFixed(2);
   })();
 
   return (
@@ -418,7 +420,7 @@ export default function ShotsPage() {
 
       {/* Settings Bar */}
       <div className="border-b border-border bg-surface px-6 py-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
           {/* Output Folder */}
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">
@@ -472,13 +474,36 @@ export default function ShotsPage() {
               value={selectedVideoModel.id}
               onChange={(e) => {
                 const m = VIDEO_MODELS.find((m) => m.id === e.target.value);
-                if (m) setSelectedVideoModel(m);
+                if (m) {
+                  setSelectedVideoModel(m);
+                  if (!m.durations.includes(duration)) {
+                    setDuration(m.defaultDuration);
+                  }
+                }
               }}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             >
               {VIDEO_MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name} — {m.costPer5Sec}/5s
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">
+              Duration
+            </label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+            >
+              {selectedVideoModel.durations.map((d) => (
+                <option key={d} value={d}>
+                  {d}s
                 </option>
               ))}
             </select>
@@ -595,9 +620,6 @@ export default function ShotsPage() {
                 refInputRef={(el) => {
                   shotRefInputs.current[shot.id] = el;
                 }}
-                isImageToImage={
-                  selectedImageModel.capability === "image-to-image"
-                }
               />
             ))}
           </div>
@@ -708,7 +730,6 @@ function ShotCard({
   onRefUpload,
   onRefRemove,
   refInputRef,
-  isImageToImage,
 }: {
   shot: Shot;
   onUpdate: (updates: Partial<Shot>) => void;
@@ -716,7 +737,6 @@ function ShotCard({
   onRefUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRefRemove: (refId: string) => void;
   refInputRef: (el: HTMLInputElement | null) => void;
-  isImageToImage: boolean;
 }) {
   const statusColors: Record<ShotStatus, string> = {
     pending: "border-border text-muted",
@@ -786,58 +806,56 @@ function ShotCard({
             </div>
           </div>
 
-          {/* Per-shot refs (only for image-to-image) */}
-          {isImageToImage && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                Shot refs:
-              </span>
-              {shot.refImages.map((ref) => (
-                <div
-                  key={ref.id}
-                  className="relative h-8 w-8 overflow-hidden rounded border border-border"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={ref.preview}
-                    alt="Ref"
-                    className="h-full w-full object-cover"
-                  />
-                  {ref.uploading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-                      <div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => onRefRemove(ref.id)}
-                    className="absolute -right-0.5 -top-0.5 rounded-full bg-background/80 px-0.5 text-[8px] text-muted hover:text-foreground"
-                  >
-                    x
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={() => {
-                  const input = document.getElementById(
-                    `shot-ref-${shot.id}`
-                  ) as HTMLInputElement;
-                  input?.click();
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-border text-xs text-muted hover:border-accent/50 hover:text-accent"
+          {/* Per-shot reference images */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+              Shot refs:
+            </span>
+            {shot.refImages.map((ref) => (
+              <div
+                key={ref.id}
+                className="relative h-8 w-8 overflow-hidden rounded border border-border"
               >
-                +
-              </button>
-              <input
-                id={`shot-ref-${shot.id}`}
-                ref={refInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                multiple
-                onChange={onRefUpload}
-                className="hidden"
-              />
-            </div>
-          )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={ref.preview}
+                  alt="Ref"
+                  className="h-full w-full object-cover"
+                />
+                {ref.uploading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                    <div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" />
+                  </div>
+                )}
+                <button
+                  onClick={() => onRefRemove(ref.id)}
+                  className="absolute -right-0.5 -top-0.5 rounded-full bg-background/80 px-0.5 text-[8px] text-muted hover:text-foreground"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                const input = document.getElementById(
+                  `shot-ref-${shot.id}`
+                ) as HTMLInputElement;
+                input?.click();
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-border text-xs text-muted hover:border-accent/50 hover:text-accent"
+            >
+              +
+            </button>
+            <input
+              id={`shot-ref-${shot.id}`}
+              ref={refInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              onChange={onRefUpload}
+              className="hidden"
+            />
+          </div>
 
           {/* Error */}
           {shot.error && (

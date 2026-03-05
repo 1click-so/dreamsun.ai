@@ -42,11 +42,24 @@ export async function POST(req: NextRequest) {
     const input: Record<string, unknown> = {
       [model.params.imageUrl]: imageUrl,
       [model.params.prompt]: prompt || "",
-      [model.params.duration]: duration || model.defaultDuration,
+      [model.params.duration]: String(duration || model.defaultDuration),
     };
 
     if (aspectRatio && model.params.aspectRatio) {
       input[model.params.aspectRatio] = aspectRatio;
+    }
+
+    // Add any extra input params the model requires (negative_prompt, cfg_scale, etc.)
+    if (model.extraInput) {
+      Object.assign(input, model.extraInput);
+    }
+
+    // Override with user-provided values
+    if (body.negativePrompt && model.supportsNegativePrompt) {
+      input.negative_prompt = body.negativePrompt;
+    }
+    if (body.cfgScale != null && model.supportsCfgScale) {
+      input.cfg_scale = body.cfgScale;
     }
 
     const result = await fal.subscribe(model.endpoint, {
