@@ -1111,8 +1111,34 @@ export default function ShotsPage() {
     }
   };
 
+  // --- Auto-hide header on scroll down, show on scroll up ---
+  const headerRef = useRef<HTMLDivElement>(null);
+  const lastScrollY = useRef(0);
+  const [headerVisible, setHeaderVisible] = useState(true);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      // Show when scrolling up or near top
+      if (y < 80 || y < lastScrollY.current) {
+        setHeaderVisible(true);
+      } else if (y > lastScrollY.current + 5) {
+        setHeaderVisible(false);
+      }
+      lastScrollY.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <div
+        ref={headerRef}
+        className={`sticky top-0 z-30 bg-background transition-transform duration-300 ${
+          headerVisible ? "translate-y-0" : "-translate-y-full"
+        }`}
+      >
       <Navbar />
       {/* Page Header */}
       <header className="flex items-center justify-between border-b border-border px-6 py-2.5">
@@ -1578,6 +1604,7 @@ export default function ShotsPage() {
           </div>
         </div>
       </div>
+      </div>{/* end sticky header wrapper */}
 
       {/* Shots Section */}
       <div className="mx-6 mt-6 mb-4 flex items-center gap-4">
