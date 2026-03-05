@@ -220,148 +220,133 @@ export default function ShotsPage() {
     );
   };
 
-  // --- Batch Image Generation ---
-  const generateAllImages = async () => {
-    setIsBatchGenerating(true);
+  // --- Single Shot Image Generation (reusable) ---
+  const generateSingleShot = async (shot: Shot) => {
+    updateShot(shot.id, { imageStatus: "generating", error: null });
 
-    // Mark all pending shots as generating
-    setShots((prev) =>
-      prev.map((s) =>
-        s.imageStatus === "pending" || s.imageStatus === "error"
-          ? { ...s, imageStatus: "generating", error: null }
-          : s
-      )
-    );
-
-    const shotsToGenerate = shots.filter(
-      (s) => s.imageStatus === "pending" || s.imageStatus === "error"
-    );
-
-    // Collect all character ref URLs
     const charRefUrls = charRefs
       .filter((r) => r.url)
       .map((r) => r.url as string);
+    const shotRefUrls = shot.refImages
+      .filter((r) => r.url)
+      .map((r) => r.url as string);
+    const allRefs = [...charRefUrls, ...shotRefUrls];
 
-    const promises = shotsToGenerate.map(async (shot) => {
-      // Merge project-level + per-shot refs
-      const shotRefUrls = shot.refImages
-        .filter((r) => r.url)
-        .map((r) => r.url as string);
-      const allRefs = [...charRefUrls, ...shotRefUrls];
+    try {
+      const shotHasRefs = allRefs.length > 0;
+      const model = resolveModel(selectedImageModel.id, shotHasRefs) ?? selectedImageModel;
 
-      try {
-        // Auto-resolve to edit variant if this shot has refs
-        const shotHasRefs = allRefs.length > 0;
-        const model = resolveModel(selectedImageModel.id, shotHasRefs) ?? selectedImageModel;
+      const body: Record<string, unknown> = {
+        modelId: model.id,
+        prompt: shot.imagePrompt,
+        aspectRatio,
+        shotNumber: shot.number,
+        outputFolder: outputFolder || undefined,
+        safetyChecker: false,
+      };
 
-        const body: Record<string, unknown> = {
-          modelId: model.id,
-          prompt: shot.imagePrompt,
+      if (shotHasRefs && model.capability === "image-to-image") {
+        body.referenceImageUrls = allRefs;
+      }
+
+      const res = await fetch("/api/generate-shot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        updateShot(shot.id, {
+          imageStatus: "error",
+          error: data.error || "Generation failed",
+        });
+        return;
+      }
+
+      updateShot(shot.id, {
+        imageStatus: "done",
+        imageUrl: data.imageUrl,
+        localImagePath: data.localPath,
+        // Reset video status when image changes
+        videoStatus: "pending",
+        videoUrl: null,
+        localVideoPath: null,
+        error: null,
+      });
+    } catch (err) {
+      updateShot(shot.id, {
+        imageStatus: "error",
+        error: err instanceof Error ? err.message : "Network error",
+      });
+    }
+  };
+
+  // --- Single Shot Animation (reusable) ---
+  const animateSingleShot = async (shot: Shot) => {
+    if (!shot.imageUrl) return;
+    updateShot(shot.id, { videoStatus: "generating", error: null });
+
+    try {
+      const res = await fetch("/api/animate-shot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoModelId: selectedVideoModel.id,
+          prompt: shot.videoPrompt,
+          imageUrl: shot.imageUrl,
+          duration,
           aspectRatio,
           shotNumber: shot.number,
           outputFolder: outputFolder || undefined,
-          safetyChecker: false,
-        };
+        }),
+      });
 
-        // Send refs when using an image-to-image model
-        if (shotHasRefs && model.capability === "image-to-image") {
-          body.referenceImageUrls = allRefs;
-        }
+      const data = await res.json();
 
-        const res = await fetch("/api/generate-shot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          updateShot(shot.id, {
-            imageStatus: "error",
-            error: data.error || "Generation failed",
-          });
-          return;
-        }
-
+      if (!res.ok) {
         updateShot(shot.id, {
-          imageStatus: "done",
-          imageUrl: data.imageUrl,
-          localImagePath: data.localPath,
-          error: null,
+          videoStatus: "error",
+          error: data.error || "Animation failed",
         });
-      } catch (err) {
-        updateShot(shot.id, {
-          imageStatus: "error",
-          error: err instanceof Error ? err.message : "Network error",
-        });
+        return;
       }
-    });
 
-    await Promise.allSettled(promises);
+      updateShot(shot.id, {
+        videoStatus: "done",
+        videoUrl: data.videoUrl,
+        localVideoPath: data.localPath,
+        error: null,
+      });
+    } catch (err) {
+      updateShot(shot.id, {
+        videoStatus: "error",
+        error: err instanceof Error ? err.message : "Network error",
+      });
+    }
+  };
+
+  // --- Batch Image Generation ---
+  const generateAllImages = async () => {
+    setIsBatchGenerating(true);
+    const shotsToGenerate = shots.filter(
+      (s) => s.imageStatus === "pending" || s.imageStatus === "error"
+    );
+    await Promise.allSettled(shotsToGenerate.map((s) => generateSingleShot(s)));
     setIsBatchGenerating(false);
   };
 
   // --- Batch Video Animation ---
   const animateAll = async () => {
     setIsBatchAnimating(true);
-
     const shotsToAnimate = shots.filter(
       (s) =>
         s.imageStatus === "done" &&
         s.imageUrl &&
         (s.videoStatus === "pending" || s.videoStatus === "error")
     );
-
-    setShots((prev) =>
-      prev.map((s) =>
-        shotsToAnimate.some((a) => a.id === s.id)
-          ? { ...s, videoStatus: "generating", error: null }
-          : s
-      )
-    );
-
-    const promises = shotsToAnimate.map(async (shot) => {
-      try {
-        const res = await fetch("/api/animate-shot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            videoModelId: selectedVideoModel.id,
-            prompt: shot.videoPrompt,
-            imageUrl: shot.imageUrl,
-            duration,
-            aspectRatio,
-            shotNumber: shot.number,
-            outputFolder: outputFolder || undefined,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          updateShot(shot.id, {
-            videoStatus: "error",
-            error: data.error || "Animation failed",
-          });
-          return;
-        }
-
-        updateShot(shot.id, {
-          videoStatus: "done",
-          videoUrl: data.videoUrl,
-          localVideoPath: data.localPath,
-          error: null,
-        });
-      } catch (err) {
-        updateShot(shot.id, {
-          videoStatus: "error",
-          error: err instanceof Error ? err.message : "Network error",
-        });
-      }
-    });
-
-    await Promise.allSettled(promises);
+    await Promise.allSettled(shotsToAnimate.map((s) => animateSingleShot(s)));
     setIsBatchAnimating(false);
   };
 
@@ -618,6 +603,8 @@ export default function ShotsPage() {
                 refInputRef={(el) => {
                   shotRefInputs.current[shot.id] = el;
                 }}
+                onGenerateImage={() => generateSingleShot(shot)}
+                onAnimateShot={() => animateSingleShot(shot)}
               />
             ))}
           </div>
@@ -728,6 +715,8 @@ function ShotCard({
   onRefUpload,
   onRefRemove,
   refInputRef,
+  onGenerateImage,
+  onAnimateShot,
 }: {
   shot: Shot;
   onUpdate: (updates: Partial<Shot>) => void;
@@ -735,6 +724,8 @@ function ShotCard({
   onRefUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRefRemove: (refId: string) => void;
   refInputRef: (el: HTMLInputElement | null) => void;
+  onGenerateImage: () => void;
+  onAnimateShot: () => void;
 }) {
   const statusColors: Record<ShotStatus, string> = {
     pending: "border-border text-muted",
@@ -743,41 +734,45 @@ function ShotCard({
     error: "border-red-500 text-red-400",
   };
 
+  const isImageBusy = shot.imageStatus === "generating";
+  const isVideoBusy = shot.videoStatus === "generating";
+  const canAnimate = shot.imageStatus === "done" && shot.imageUrl && !isVideoBusy;
+
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="flex items-start gap-4">
-        {/* Shot Info + Prompts */}
-        <div className="min-w-0 flex-1 space-y-3">
-          {/* Header Row */}
-          <div className="flex items-center gap-3">
-            <span className="shrink-0 rounded bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">
-              #{shot.number}
-            </span>
-            <input
-              type="text"
-              value={shot.title}
-              onChange={(e) => onUpdate({ title: e.target.value })}
-              placeholder="Shot title"
-              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted/40"
-            />
-            <span
-              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusColors[shot.imageStatus]}`}
-            >
-              img: {shot.imageStatus}
-            </span>
-            <span
-              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusColors[shot.videoStatus]}`}
-            >
-              vid: {shot.videoStatus}
-            </span>
-            <button
-              onClick={onRemove}
-              className="shrink-0 text-xs text-muted hover:text-red-400"
-            >
-              delete
-            </button>
-          </div>
+      {/* Header Row */}
+      <div className="mb-3 flex items-center gap-3">
+        <span className="shrink-0 rounded bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">
+          #{shot.number}
+        </span>
+        <input
+          type="text"
+          value={shot.title}
+          onChange={(e) => onUpdate({ title: e.target.value })}
+          placeholder="Shot title"
+          className="min-w-0 flex-1 bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted/40"
+        />
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusColors[shot.imageStatus]}`}
+        >
+          img: {shot.imageStatus}
+        </span>
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusColors[shot.videoStatus]}`}
+        >
+          vid: {shot.videoStatus}
+        </span>
+        <button
+          onClick={onRemove}
+          className="shrink-0 text-xs text-muted hover:text-red-400"
+        >
+          delete
+        </button>
+      </div>
 
+      <div className="flex items-start gap-4">
+        {/* Left: Prompts + Refs */}
+        <div className="min-w-0 flex-1 space-y-3">
           {/* Prompts */}
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <div>
@@ -859,28 +854,82 @@ function ShotCard({
           {shot.error && (
             <p className="text-xs text-red-400">{shot.error}</p>
           )}
+
+          {/* Per-shot action buttons */}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={onGenerateImage}
+              disabled={isImageBusy}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-black transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isImageBusy
+                ? "Generating..."
+                : shot.imageStatus === "done"
+                  ? "Regenerate Image"
+                  : "Generate Image"}
+            </button>
+            <button
+              onClick={onAnimateShot}
+              disabled={!canAnimate}
+              className="rounded-md border border-accent bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isVideoBusy
+                ? "Animating..."
+                : shot.videoStatus === "done"
+                  ? "Re-animate"
+                  : "Animate"}
+            </button>
+          </div>
         </div>
 
-        {/* Image Preview */}
-        <div className="shrink-0">
-          {shot.imageUrl ? (
-            <a href={shot.imageUrl} target="_blank" rel="noopener noreferrer">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={shot.imageUrl}
-                alt={`Shot ${shot.number}`}
-                className="h-24 w-24 rounded-md border border-border object-cover transition hover:border-accent"
-              />
-            </a>
-          ) : (
-            <div className="flex h-24 w-24 items-center justify-center rounded-md border border-dashed border-border">
-              {shot.imageStatus === "generating" ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-              ) : (
-                <span className="text-xs text-muted/40">No image</span>
-              )}
-            </div>
-          )}
+        {/* Right: Previews */}
+        <div className="flex shrink-0 gap-2">
+          {/* Image Preview */}
+          <div>
+            {shot.imageUrl ? (
+              <a href={shot.imageUrl} target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={shot.imageUrl}
+                  alt={`Shot ${shot.number}`}
+                  className="h-32 w-20 rounded-md border border-border object-cover transition hover:border-accent"
+                />
+              </a>
+            ) : (
+              <div className="flex h-32 w-20 items-center justify-center rounded-md border border-dashed border-border">
+                {isImageBusy ? (
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                ) : (
+                  <span className="text-center text-[10px] text-muted/40">
+                    No image
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Video Preview */}
+          <div>
+            {shot.videoUrl ? (
+              <a href={shot.videoUrl} target="_blank" rel="noopener noreferrer">
+                <div className="flex h-32 w-20 items-center justify-center rounded-md border border-green-500/30 bg-green-500/5">
+                  <span className="text-center text-[10px] text-green-400">
+                    Video ready
+                  </span>
+                </div>
+              </a>
+            ) : (
+              <div className="flex h-32 w-20 items-center justify-center rounded-md border border-dashed border-border">
+                {isVideoBusy ? (
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                ) : (
+                  <span className="text-center text-[10px] text-muted/40">
+                    No video
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
