@@ -312,6 +312,18 @@ export const MODELS: ModelConfig[] = [
     supportsNegativePrompt: false,
     referenceImage: { paramName: "image_url", isArray: false, maxImages: 1 },
   },
+  {
+    id: "nano-banana-2-edit",
+    name: "NanoBanana 2 (Edit)",
+    endpoint: "fal-ai/nano-banana-2/edit",
+    capability: "image-to-image",
+    description: "Google's Nano Banana 2 with image editing. Up to 14 reference images.",
+    costPerImage: "$0.08",
+    aspectRatios: ["16:9", "4:3", "1:1", "3:4", "9:16"],
+    defaultAspectRatio: "1:1",
+    supportsNegativePrompt: false,
+    referenceImage: { paramName: "image_urls", isArray: true, maxImages: 14 },
+  },
 ];
 
 export function getModelById(id: string): ModelConfig | undefined {
