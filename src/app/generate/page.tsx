@@ -4,6 +4,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
 import { Navbar } from "@/components/Navbar";
+import { Button } from "@/components/ui/Button";
+import { Toggle } from "@/components/ui/Toggle";
 
 // Route uploads through our proxy (keeps FAL_KEY server-side).
 // fal.storage.upload() sends file bytes directly to fal CDN via presigned URL,
@@ -332,37 +334,27 @@ export default function Home() {
             </section>
 
             {/* Safety Checker Toggle */}
-            <section className="flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-muted">Safety Checker</span>
-                <p className="text-xs text-muted/60">Filter NSFW content</p>
-              </div>
-              <button
-                onClick={() => setSafetyChecker(!safetyChecker)}
-                className={`relative h-6 w-11 rounded-full transition ${
-                  safetyChecker ? "bg-accent" : "bg-border"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                    safetyChecker ? "translate-x-5" : ""
-                  }`}
-                />
-              </button>
-            </section>
+            <Toggle
+              checked={safetyChecker}
+              onChange={setSafetyChecker}
+              label="Safety Checker"
+              description="Filter NSFW content"
+            />
 
             {/* Generate Button */}
-            <button
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
               onClick={handleGenerate}
               disabled={
                 isGenerating ||
                 !prompt.trim() ||
                 referenceImages.some((img) => img.uploading)
               }
-              className="w-full rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-black transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? "Generating..." : "Generate"}
-            </button>
+            </Button>
 
           </div>
 
@@ -381,11 +373,11 @@ export default function Home() {
                   </div>
                 ) : error ? (
                   <div className="w-full p-4">
-                    <div className="rounded-md border border-red-500/20 bg-red-500/10 px-4 py-3">
-                      <p className="text-sm font-medium text-red-400">
+                    <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3">
+                      <p className="text-sm font-medium text-destructive">
                         Error
                       </p>
-                      <p className="mt-1 text-sm text-red-400/80">{error}</p>
+                      <p className="mt-1 text-sm text-destructive/80">{error}</p>
                     </div>
                   </div>
                 ) : result ? (
