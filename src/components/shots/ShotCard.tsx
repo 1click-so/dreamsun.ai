@@ -171,13 +171,13 @@ export function ShotCard({
             onChange={(e) => onUpdate({ imagePrompt: e.target.value })}
             rows={3} placeholder="Image prompt..."
             className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
-          {/* Row 1: Refs + History */}
+          {/* Row 1: References + Generations */}
           <div className="grid grid-cols-2 gap-2">
-            {/* Refs column */}
+            {/* References column */}
             <div
               onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
               onDrop={(e) => { if (e.dataTransfer.files.length > 0) { e.preventDefault(); onRefFileDrop(Array.from(e.dataTransfer.files)); } }}>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Refs</span>
+              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">References</span>
               <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                 {refImages.map((ref) => (
                   <div key={ref.id} className="relative h-12 w-12 shrink-0 overflow-hidden rounded border border-border" draggable onDragStart={(e) => ref.url && handleDragStart(e, ref.url)}>
@@ -192,18 +192,21 @@ export function ShotCard({
                 <input id={`shot-ref-${shot.id}`} ref={refInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={onRefUpload} className="hidden" />
               </div>
             </div>
-            {/* History column */}
+            {/* Generations column */}
             <div>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">History{history.length > 0 ? ` (${history.length})` : ""}</span>
+              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Generations{history.length > 0 ? ` (${history.length})` : ""}</span>
               {history.length > 0 ? (
                 <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                   {history.map((url, i) => (
-                    <div key={i} draggable onDragStart={(e) => handleDragStart(e, url)} className="shrink-0 cursor-grab">
+                    <div key={i} draggable onDragStart={(e) => handleDragStart(e, url)} className="relative shrink-0 cursor-grab">
                       <button onClick={() => onOpenLightbox(url, "image")} className="block">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`History ${i + 1}`}
-                          className="h-12 w-12 rounded border border-border/50 object-cover transition hover:border-accent" />
+                        <img src={url} alt={`Generation ${i + 1}`}
+                          className={`h-12 w-12 rounded border object-cover transition hover:border-accent ${
+                            url === shot.imageUrl ? "border-accent" : "border-border/50"
+                          }`} />
                       </button>
+                      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[7px] leading-tight text-white/70">{i + 1}</span>
                     </div>
                   ))}
                 </div>

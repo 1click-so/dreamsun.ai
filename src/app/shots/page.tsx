@@ -610,19 +610,12 @@ export default function ShotsPage() {
 
       // All generated image URLs (first is primary, rest are alternatives)
       const allUrls: string[] = data.allImageUrls ?? [data.imageUrl];
-      // Extra images (index 1+) go to history alongside previous generations
-      const extraUrls = allUrls.slice(1);
 
       setShots((prev) =>
         prev.map((s) => {
           if (s.id !== shot.id) return s;
-          const prevHistory = s.imageHistory ?? [];
-          // Build new history: previous first frame (if any) + extra generations + old history
-          const newHistory = [
-            ...(s.imageUrl ? [s.imageUrl] : []),
-            ...extraUrls,
-            ...prevHistory,
-          ];
+          const prevGenerations = s.imageHistory ?? [];
+          // All new images go to generations (newest batch first), then previous generations
           return {
             ...s,
             imageStatus: "done" as ShotStatus,
@@ -632,7 +625,7 @@ export default function ShotsPage() {
             videoUrl: null,
             localVideoPath: null,
             error: null,
-            imageHistory: newHistory,
+            imageHistory: [...allUrls, ...prevGenerations],
           };
         })
       );

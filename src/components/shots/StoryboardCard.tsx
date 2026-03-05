@@ -206,7 +206,7 @@ export function StoryboardCard({
             <div className="flex flex-wrap items-center gap-1"
               onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
               onDrop={(e) => { if (e.dataTransfer.files.length > 0) { e.preventDefault(); onRefFileDrop(Array.from(e.dataTransfer.files)); } }}>
-              <span className="text-[8px] font-medium uppercase text-muted">Refs:</span>
+              <span className="text-[8px] font-medium uppercase text-muted">References:</span>
               {refImages.map((ref) => (
                 <div key={ref.id} className="relative h-6 w-6 overflow-hidden rounded border border-border">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
