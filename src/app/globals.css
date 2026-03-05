@@ -6,8 +6,8 @@
   --surface: #f5f5f5;
   --surface-hover: #ebebeb;
   --border: #e5e5e5;
-  --accent: #f59e0b;
-  --accent-hover: #d97706;
+  --accent: #A1FCDF;
+  --accent-hover: #6EF0C3;
   --muted: #737373;
 }
 
@@ -31,8 +31,8 @@
     --surface: #171717;
     --surface-hover: #262626;
     --border: #262626;
-    --accent: #f59e0b;
-    --accent-hover: #fbbf24;
+    --accent: #A1FCDF;
+    --accent-hover: #C8FEE9;
     --muted: #a3a3a3;
   }
 }
@@ -44,8 +44,8 @@ html.dark {
   --surface: #171717;
   --surface-hover: #262626;
   --border: #262626;
-  --accent: #f59e0b;
-  --accent-hover: #fbbf24;
+  --accent: #A1FCDF;
+  --accent-hover: #C8FEE9;
   --muted: #a3a3a3;
 }
 
@@ -53,4 +53,24 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Custom scrollbar for storyboard */
+.storyboard-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.storyboard-scroll::-webkit-scrollbar-track {
+  background: var(--border);
+  border-radius: 3px;
+}
+.storyboard-scroll::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 3px;
+}
+.storyboard-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover);
+}
+.storyboard-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--border);
 }

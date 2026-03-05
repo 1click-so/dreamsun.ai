@@ -180,14 +180,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <h1 className="text-xl font-bold tracking-tight">
-            <span className="text-accent">Dream</span>Sun.ai
-          </h1>
-          <span className="text-sm text-muted">AI Image Generator</span>
-        </div>
+      {/* Page Header */}
+      <header className="flex items-center justify-between border-b border-border px-6 py-2.5">
+        <h1 className="text-lg font-semibold tracking-tight">
+          <span className="text-accent">Image</span> Generator
+        </h1>
+        <span className="text-xs text-muted">AI Image Generator</span>
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
