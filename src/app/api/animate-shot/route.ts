@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
       input.cfg_scale = body.cfgScale;
     }
 
+    console.log(`[animate-shot] endpoint=${model.endpoint} input=`, JSON.stringify(input, null, 2));
+
     const result = await fal.subscribe(model.endpoint, {
       input,
       logs: true,
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
     if (outputFolder && shotNumber != null) {
       try {
         const paddedNum = String(shotNumber).padStart(3, "0");
-        const fileName = `shot-${paddedNum}.mp4`;
+        const fileName = `video-shot-${paddedNum}.mp4`;
         const filePath = join(outputFolder, fileName);
 
         await mkdir(dirname(filePath), { recursive: true });

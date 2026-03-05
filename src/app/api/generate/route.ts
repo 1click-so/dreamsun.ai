@@ -9,7 +9,7 @@ fal.config({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { modelId, prompt, aspectRatio, referenceImageUrls, negativePrompt, safetyChecker } = body;
+    const { modelId, prompt, aspectRatio, referenceImageUrls, negativePrompt, safetyChecker, numImages, imageResolution } = body;
 
     if (!prompt || !modelId) {
       return NextResponse.json(
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       prompt,
     };
 
-    // Add size/aspect ratio — some models use different param names and formats
+    // Always send aspect ratio in the model's preferred format
     if (aspectRatio) {
       if (model.sizeParam) {
         input[model.sizeParam.name] =
@@ -36,6 +36,18 @@ export async function POST(req: NextRequest) {
       } else {
         input.aspect_ratio = aspectRatio;
       }
+    }
+
+    // Additionally, send explicit pixel dimensions for resolution control
+    const resMultiplier: Record<string, number> = { "1k": 1024, "2k": 2048, "4k": 4096 };
+    const longSide = resMultiplier[imageResolution as string];
+
+    if (longSide && aspectRatio && !model.sizeParam) {
+      const [w, h] = (aspectRatio as string).split(":").map(Number);
+      const ratio = w / h;
+      const width = ratio >= 1 ? longSide : Math.round(longSide * ratio);
+      const height = ratio >= 1 ? Math.round(longSide / ratio) : longSide;
+      input.image_size = { width, height };
     }
 
     // Add reference images using the model's specific parameter name
@@ -77,7 +89,7 @@ export async function POST(req: NextRequest) {
     if (model.supportsOutputFormat !== false) {
       input.output_format = "png";
     }
-    input.num_images = 1;
+    input.num_images = typeof numImages === "number" && numImages >= 1 && numImages <= 4 ? numImages : 1;
 
     const result = await fal.subscribe(model.endpoint, {
       input,
@@ -102,6 +114,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageUrl: images[0].url,
+      allImageUrls: images.map((img) => img.url),
       width: images[0].width,
       height: images[0].height,
       seed: data.seed,

@@ -9,3 +9,4 @@ export { Label } from "./Label";
 export { SectionDivider } from "./SectionDivider";
 export { Spinner } from "./Spinner";
 export { Select } from "./Select";
+export { TaggableTextarea } from "./TaggableTextarea";

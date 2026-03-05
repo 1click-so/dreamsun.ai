@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getModelById } from "@/lib/models";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, readdir } from "fs/promises";
 import { dirname, join } from "path";
 
 fal.config({
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     const {
       modelId,
       prompt,
+      negativePrompt,
       aspectRatio,
       referenceImageUrls,
       shotNumber,
@@ -83,6 +84,11 @@ export async function POST(req: NextRequest) {
       Object.assign(input, model.extraInput);
     }
 
+    // Negative prompt — only if model supports it and user provided one
+    if (negativePrompt && model.supportsNegativePrompt) {
+      input.negative_prompt = negativePrompt;
+    }
+
     input.enable_safety_checker = safetyChecker === true;
 
     if (model.supportsOutputFormat !== false) {
@@ -118,15 +124,27 @@ export async function POST(req: NextRequest) {
     if (outputFolder && shotNumber != null) {
       try {
         const paddedNum = String(shotNumber).padStart(3, "0");
+        const prefix = `shot-${paddedNum}`;
 
-        // Save all images (first as shot-001.png, extras as shot-001-2.png, etc.)
+        // Find next available generation number by scanning existing files
+        await mkdir(outputFolder, { recursive: true });
+        let nextGen = 1;
+        try {
+          const existing = await readdir(outputFolder);
+          const pattern = new RegExp(`^${prefix}_(\\d+)(?:-\\d+)?\\.png$`);
+          for (const f of existing) {
+            const m = f.match(pattern);
+            if (m) nextGen = Math.max(nextGen, Number(m[1]) + 1);
+          }
+        } catch { /* folder doesn't exist yet, nextGen stays 1 */ }
+
+        // Save as shot-006_1.png, shot-006_1-2.png (multi-image), next gen: shot-006_2.png, etc.
         for (let i = 0; i < allImageUrls.length; i++) {
           const suffix = i === 0 ? "" : `-${i + 1}`;
-          const fileName = `shot-${paddedNum}${suffix}.png`;
+          const fileName = `${prefix}_${nextGen}${suffix}.png`;
           const filePath = join(outputFolder, fileName);
 
           console.log("[generate-shot] Saving to:", filePath);
-          await mkdir(dirname(filePath), { recursive: true });
 
           const imgRes = await fetch(allImageUrls[i]);
           const buffer = Buffer.from(await imgRes.arrayBuffer());

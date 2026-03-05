@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
-import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown } from "lucide-react";
+import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download } from "lucide-react";
+import JSZip from "jszip";
 import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
 import { Navbar } from "@/components/Navbar";
@@ -41,7 +42,9 @@ function createShot(parsed?: ParsedShot): Shot {
     number: parsed?.number ?? "1",
     title: parsed?.title ?? "",
     imagePrompt: parsed?.imagePrompt ?? "",
+    imageNegativePrompt: "",
     videoPrompt: parsed?.videoPrompt ?? "",
+    videoNegativePrompt: "",
     imageStatus: "pending",
     videoStatus: "pending",
     imageUrl: null,
@@ -53,6 +56,7 @@ function createShot(parsed?: ParsedShot): Shot {
     endImageUrl: null,
     endImageRef: null,
     imageHistory: [],
+    videoHistory: [],
     settings: {
       image: {
         modelId: null,
@@ -103,6 +107,7 @@ function migrateShot(raw: Record<string, unknown>): Shot {
   if (!s.endImageUrl) s.endImageUrl = null;
   if (!s.endImageRef) s.endImageRef = null;
   if (!Array.isArray(s.imageHistory)) s.imageHistory = [];
+  if (!Array.isArray(s.videoHistory)) s.videoHistory = [];
 
   return s;
 }
@@ -120,6 +125,7 @@ const STORAGE_KEYS = {
   safetyChecker: "dreamsun_shots_safety",
   resolution: "dreamsun_shots_resolution",
   generateAudio: "dreamsun_shots_audio",
+  cameraFixed: "dreamsun_shots_camera_fixed",
   shots: "dreamsun_shots_data",
 } as const;
 
@@ -194,6 +200,9 @@ export default function ShotsPage() {
   const [generateAudio, setGenerateAudio] = useState(() =>
     loadFromStorage(STORAGE_KEYS.generateAudio, false)
   );
+  const [cameraFixed, setCameraFixed] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.cameraFixed, false)
+  );
 
   // --- View mode ---
   const [viewMode, setViewMode] = useState<"list" | "storyboard">(() =>
@@ -217,8 +226,12 @@ export default function ShotsPage() {
   });
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState("");
-  const [lightbox, setLightbox] = useState<{ src: string; type: "image" | "video"; shotNumber?: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; type: "image" | "video"; shotId?: string; shotNumber?: string } | null>(null);
   const [newShotModal, setNewShotModal] = useState<{ imageUrl: string; suggestedNumber: string } | null>(null);
+  const [addShotModal, setAddShotModal] = useState<{ suggestedNumber: string } | null>(null);
+  const [modalRefs, setModalRefs] = useState<UploadedRef[]>([]);
+  const [modalFirstFrame, setModalFirstFrame] = useState<string | null>(null);
+  const [modalEndFrame, setModalEndFrame] = useState<UploadedRef | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string } | null>(null);
 
   // --- Persist state changes to localStorage ---
@@ -254,22 +267,90 @@ export default function ShotsPage() {
   };
 
   const addShot = () => {
-    setShots((prev) => {
-      const maxNum = prev.reduce((max, s) => {
-        const n = parseInt(String(s.number), 10) || 0;
-        return n > max ? n : max;
-      }, 0);
-      return [
-        ...prev,
-        createShot({
-          number: String(maxNum + 1),
-          title: "",
-          imagePrompt: "",
-          videoPrompt: "",
-        }),
-      ];
-    });
+    const maxNum = shots.reduce((max, s) => {
+      const n = parseInt(String(s.number), 10) || 0;
+      return n > max ? n : max;
+    }, 0);
+    setModalRefs([]);
+    setModalFirstFrame(null);
+    setModalEndFrame(null);
+    setAddShotModal({ suggestedNumber: String(maxNum + 1) });
   };
+
+  const confirmAddShot = useCallback((number: string, title: string, imagePrompt: string, videoPrompt: string, refs: UploadedRef[], firstFrame: string | null, endFrame: UploadedRef | null) => {
+    setAddShotModal(null);
+    const shot = createShot({ number, title, imagePrompt, videoPrompt });
+    shot.refImages = refs;
+    if (firstFrame) {
+      shot.imageUrl = firstFrame;
+      shot.imageStatus = "done";
+      shot.imageHistory = [firstFrame];
+    }
+    if (endFrame) {
+      shot.endImageRef = endFrame;
+      shot.endImageUrl = endFrame.url;
+    }
+    setShots((prev) => [...prev, shot]);
+    setModalRefs([]);
+    setModalFirstFrame(null);
+    setModalEndFrame(null);
+    // Scroll to new shot after render
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`shot-${shot.id}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, []);
+
+  // Modal ref helpers — upload files to fal and track in modalRefs state
+  const addModalRefFiles = useCallback(async (files: File[]) => {
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      const id = nextRefId();
+      const preview = URL.createObjectURL(file);
+      const newRef: UploadedRef = { id, preview, url: null, uploading: true, file };
+      setModalRefs((prev) => [...prev, newRef]);
+      try {
+        const url = await fal.storage.upload(file);
+        setModalRefs((prev) => prev.map((r) => r.id === id ? { ...r, url, uploading: false } : r));
+      } catch {
+        setModalRefs((prev) => prev.filter((r) => r.id !== id));
+      }
+    }
+  }, []);
+
+  const addModalRefUrl = useCallback((url: string) => {
+    if (!url) return;
+    const id = nextRefId();
+    setModalRefs((prev) => [...prev, { id, preview: url, url, uploading: false }]);
+  }, []);
+
+  const removeModalRef = useCallback((refId: string) => {
+    setModalRefs((prev) => {
+      const ref = prev.find((r) => r.id === refId);
+      if (ref) URL.revokeObjectURL(ref.preview);
+      return prev.filter((r) => r.id !== refId);
+    });
+  }, []);
+
+  const addModalEndFrame = useCallback(async (files: File[]) => {
+    const file = files.find((f) => f.type.startsWith("image/"));
+    if (!file) return;
+    const id = nextRefId();
+    const preview = URL.createObjectURL(file);
+    setModalEndFrame({ id, preview, url: null, uploading: true, file });
+    try {
+      const url = await fal.storage.upload(file);
+      setModalEndFrame({ id, preview, url, uploading: false, file });
+    } catch {
+      setModalEndFrame(null);
+    }
+  }, []);
+
+  const addModalEndFrameUrl = useCallback((url: string) => {
+    if (!url) return;
+    const id = nextRefId();
+    setModalEndFrame({ id, preview: url, url, uploading: false });
+  }, []);
 
   const createShotFromRef = useCallback((imageUrl: string) => {
     // Find highest numeric shot number and suggest +1
@@ -297,6 +378,10 @@ export default function ShotsPage() {
     const shot = createShot({ number: shotNumber, title: "", imagePrompt: "", videoPrompt: "" });
     shot.refImages = [ref];
     setShots((prev) => [...prev, shot]);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`shot-${shot.id}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }, []);
 
   const removeShot = (id: string) => {
@@ -344,30 +429,47 @@ export default function ShotsPage() {
   };
 
   // --- Character ref upload ---
+  const uploadCharRef = useCallback(async (file: File) => {
+    const id = nextRefId();
+    const preview = URL.createObjectURL(file);
+    const newRef: UploadedRef = { id, preview, url: null, uploading: true, file };
+    setCharRefs((prev) => [...prev, newRef]);
+
+    try {
+      const url = await fal.storage.upload(file);
+      console.log("[charRef] Upload success:", url);
+      setCharRefs((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, url, uploading: false } : r))
+      );
+    } catch (err) {
+      console.error("[charRef] Upload failed:", err);
+      // Keep ref visible (preview thumbnail) but url stays null — will retry upload on generation
+      setCharRefs((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, url: null, uploading: false } : r))
+      );
+    }
+  }, []);
+
   const handleCharRefUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files) return;
-
       for (const file of Array.from(files)) {
-        const id = nextRefId();
-        const preview = URL.createObjectURL(file);
-        const newRef: UploadedRef = { id, preview, url: null, uploading: true };
-        setCharRefs((prev) => [...prev, newRef]);
-
-        try {
-          const url = await fal.storage.upload(file);
-          setCharRefs((prev) =>
-            prev.map((r) => (r.id === id ? { ...r, url, uploading: false } : r))
-          );
-        } catch {
-          setCharRefs((prev) => prev.filter((r) => r.id !== id));
-        }
+        await uploadCharRef(file);
       }
-
       if (charRefInput.current) charRefInput.current.value = "";
     },
-    []
+    [uploadCharRef]
+  );
+
+  const handleCharRefFileDrop = useCallback(
+    async (files: File[]) => {
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) continue;
+        await uploadCharRef(file);
+      }
+    },
+    [uploadCharRef]
   );
 
   const removeCharRef = (id: string) => {
@@ -387,7 +489,7 @@ export default function ShotsPage() {
       for (const file of Array.from(files)) {
         const id = nextRefId();
         const preview = URL.createObjectURL(file);
-        const newRef: UploadedRef = { id, preview, url: null, uploading: true };
+        const newRef: UploadedRef = { id, preview, url: null, uploading: true, file };
 
         setShots((prev) =>
           prev.map((s) =>
@@ -434,7 +536,7 @@ export default function ShotsPage() {
         if (!file.type.startsWith("image/")) continue;
         const id = nextRefId();
         const preview = URL.createObjectURL(file);
-        const newRef: UploadedRef = { id, preview, url: null, uploading: true };
+        const newRef: UploadedRef = { id, preview, url: null, uploading: true, file };
 
         setShots((prev) =>
           prev.map((s) =>
@@ -474,6 +576,18 @@ export default function ShotsPage() {
     );
   };
 
+  // --- Add ref from URL (drag from generations/frames/other shots) ---
+  const handleShotRefUrlDrop = useCallback((shotId: string, url: string) => {
+    if (!url) return;
+    const id = nextRefId();
+    const newRef: UploadedRef = { id, preview: url, url, uploading: false };
+    setShots((prev) =>
+      prev.map((s) =>
+        s.id === shotId ? { ...s, refImages: [...s.refImages, newRef] } : s
+      )
+    );
+  }, []);
+
   // --- End frame (last frame) upload ---
   const handleEndFrameUpload = useCallback(
     async (shotId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -482,7 +596,7 @@ export default function ShotsPage() {
 
       const id = nextRefId();
       const preview = URL.createObjectURL(file);
-      const newRef: UploadedRef = { id, preview, url: null, uploading: true };
+      const newRef: UploadedRef = { id, preview, url: null, uploading: true, file };
 
       setShots((prev) =>
         prev.map((s) =>
@@ -553,12 +667,19 @@ export default function ShotsPage() {
 
     updateShot(shot.id, { imageStatus: "generating", error: null });
 
-    const charRefUrls = charRefs
-      .filter((r) => r.url)
-      .map((r) => r.url as string);
-    const shotRefUrls = shot.refImages
-      .filter((r) => r.url)
-      .map((r) => r.url as string);
+    // Collect valid fal URLs; retry upload for refs that failed initially
+    const resolveRef = async (ref: UploadedRef): Promise<string | null> => {
+      if (ref.url && ref.url.startsWith("https://")) return ref.url;
+      if (ref.file) {
+        try {
+          const url = await fal.storage.upload(ref.file);
+          return url;
+        } catch { return null; }
+      }
+      return null;
+    };
+    const charRefUrls = (await Promise.all(charRefs.filter((r) => r.url || r.file).map(resolveRef))).filter(Boolean) as string[];
+    const shotRefUrls = (await Promise.all(shot.refImages.filter((r) => r.url || r.file).map(resolveRef))).filter(Boolean) as string[];
     const allRefs = [...charRefUrls, ...shotRefUrls];
 
     try {
@@ -568,9 +689,16 @@ export default function ShotsPage() {
       const shotAR = shot.settings.image.aspectRatio ?? aspectRatio;
       const shotSafety = shot.settings.image.safetyChecker ?? safetyChecker;
 
+      // Replace @N tags with natural language refs the model understands
+      const resolvedPrompt = shot.imagePrompt.replace(
+        /@(\d+)/g,
+        (_, n) => `Reference Image ${n}`
+      );
+      const fullPrompt = promptPrefix ? `${promptPrefix.trim()} ${resolvedPrompt}` : resolvedPrompt;
+
       const body: Record<string, unknown> = {
         modelId: model.id,
-        prompt: promptPrefix ? `${promptPrefix.trim()} ${shot.imagePrompt}` : shot.imagePrompt,
+        prompt: fullPrompt,
         aspectRatio: shotAR,
         shotNumber: shot.number,
         outputFolder: outputFolder || undefined,
@@ -578,6 +706,11 @@ export default function ShotsPage() {
         numImages,
         imageResolution,
       };
+
+      // Negative prompt — only send if model supports it
+      if (shot.imageNegativePrompt && model.supportsNegativePrompt) {
+        body.negativePrompt = shot.imageNegativePrompt;
+      }
 
       if (shotHasRefs && model.capability === "image-to-image") {
         body.referenceImageUrls = allRefs;
@@ -598,18 +731,29 @@ export default function ShotsPage() {
         signal: controller.signal,
       });
 
-      const data = await res.json();
+      // Handle non-JSON responses (e.g. Next.js 500 plain text)
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        updateShot(shot.id, {
+          imageStatus: "error",
+          error: `Server error (${res.status}): ${text.slice(0, 200)}`,
+        });
+        return;
+      }
 
       if (!res.ok) {
         updateShot(shot.id, {
           imageStatus: "error",
-          error: data.error || "Generation failed",
+          error: (data.error as string) || "Generation failed",
         });
         return;
       }
 
       // All generated image URLs (first is primary, rest are alternatives)
-      const allUrls: string[] = data.allImageUrls ?? [data.imageUrl];
+      const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
 
       setShots((prev) =>
         prev.map((s) => {
@@ -620,7 +764,7 @@ export default function ShotsPage() {
             ...s,
             imageStatus: "done" as ShotStatus,
             imageUrl: allUrls[0],
-            localImagePath: data.localPath,
+            localImagePath: (data.localPath as string | null) ?? null,
             videoStatus: "pending" as ShotStatus,
             videoUrl: null,
             localVideoPath: null,
@@ -635,6 +779,99 @@ export default function ShotsPage() {
         return;
       }
       updateShot(shot.id, {
+        imageStatus: "error",
+        error: err instanceof Error ? err.message : "Network error",
+      });
+    } finally {
+      delete abortControllers.current[abortKey];
+    }
+  };
+
+  // --- Edit Image (image-to-image with edit prompt, same shot) ---
+  const editImage = async (shotId: string, sourceImageUrl: string, editPrompt: string) => {
+    const shot = shots.find((s) => s.id === shotId);
+    if (!shot) return;
+
+    const abortKey = `img_${shotId}`;
+    abortControllers.current[abortKey]?.abort();
+    const controller = new AbortController();
+    abortControllers.current[abortKey] = controller;
+
+    updateShot(shotId, { imageStatus: "generating", error: null });
+
+    try {
+      // Force image-to-image: use the source image as the only reference
+      const shotImageModelId = shot.settings.image.modelId ?? selectedImageModel.id;
+      const model = resolveModel(shotImageModelId, true) ?? selectedImageModel;
+      const shotAR = shot.settings.image.aspectRatio ?? aspectRatio;
+      const shotSafety = shot.settings.image.safetyChecker ?? safetyChecker;
+
+      const editInstruction = `Recreate this exact image. Just apply the following edit: ${editPrompt}`;
+      const fullPrompt = promptPrefix ? `${promptPrefix.trim()} ${editInstruction}` : editInstruction;
+
+      const body: Record<string, unknown> = {
+        modelId: model.id,
+        prompt: fullPrompt,
+        aspectRatio: shotAR,
+        shotNumber: shot.number,
+        outputFolder: outputFolder || undefined,
+        safetyChecker: shotSafety,
+        numImages: 1,
+        imageResolution,
+        referenceImageUrls: [sourceImageUrl],
+      };
+
+      console.log(`[Shot #${shot.number} EDIT] Model: ${model.id}`, { sourceImageUrl, editPrompt });
+
+      const res = await fetch("/api/generate-shot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        updateShot(shotId, {
+          imageStatus: "error",
+          error: `Server error (${res.status}): ${text.slice(0, 200)}`,
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        updateShot(shotId, {
+          imageStatus: "error",
+          error: (data.error as string) || "Edit failed",
+        });
+        return;
+      }
+
+      const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
+
+      setShots((prev) =>
+        prev.map((s) => {
+          if (s.id !== shotId) return s;
+          const prevGenerations = s.imageHistory ?? [];
+          return {
+            ...s,
+            imageStatus: "done" as ShotStatus,
+            imageUrl: allUrls[0],
+            localImagePath: (data.localPath as string | null) ?? null,
+            error: null,
+            imageHistory: [...allUrls, ...prevGenerations],
+          };
+        })
+      );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        updateShot(shotId, { imageStatus: "pending", error: "Cancelled" });
+        return;
+      }
+      updateShot(shotId, {
         imageStatus: "error",
         error: err instanceof Error ? err.message : "Network error",
       });
@@ -672,7 +909,7 @@ export default function ShotsPage() {
       };
 
       // End image (last frame)
-      if (shot.endImageUrl) {
+      if (shot.endImageUrl && shot.endImageUrl.startsWith("https://")) {
         animateBody.endImageUrl = shot.endImageUrl;
       }
 
@@ -681,13 +918,16 @@ export default function ShotsPage() {
         animateBody.resolution = shotResolution;
       }
 
-      // Camera fixed
-      if (shot.settings.video.cameraFixed != null) {
-        animateBody.cameraFixed = shot.settings.video.cameraFixed;
-      }
+      // Camera fixed — per-shot overrides global
+      animateBody.cameraFixed = shot.settings.video.cameraFixed ?? cameraFixed;
 
       // Generate audio — per-shot overrides global, global defaults to off
       animateBody.generateAudio = shot.settings.video.generateAudio ?? generateAudio;
+
+      // Video negative prompt
+      if (shot.videoNegativePrompt) {
+        animateBody.negativePrompt = shot.videoNegativePrompt;
+      }
 
       const res = await fetch("/api/animate-shot", {
         method: "POST",
@@ -696,22 +936,40 @@ export default function ShotsPage() {
         signal: controller.signal,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
         updateShot(shot.id, {
           videoStatus: "error",
-          error: data.error || "Animation failed",
+          error: `Server error (${res.status}): ${text.slice(0, 200)}`,
         });
         return;
       }
 
-      updateShot(shot.id, {
-        videoStatus: "done",
-        videoUrl: data.videoUrl,
-        localVideoPath: data.localPath,
-        error: null,
-      });
+      if (!res.ok) {
+        updateShot(shot.id, {
+          videoStatus: "error",
+          error: (data.error as string) || "Animation failed",
+        });
+        return;
+      }
+
+      setShots((prev) =>
+        prev.map((s) => {
+          if (s.id !== shot.id) return s;
+          const prevVideos = s.videoHistory ?? [];
+          return {
+            ...s,
+            videoStatus: "done" as ShotStatus,
+            videoUrl: data.videoUrl as string,
+            localVideoPath: data.localPath as string | null,
+            error: null,
+            videoHistory: [data.videoUrl as string, ...prevVideos],
+          };
+        })
+      );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
@@ -804,6 +1062,54 @@ export default function ShotsPage() {
     const readyShots = shots.filter((s) => s.imageStatus === "done").length;
     return (costPerSec * duration * readyShots).toFixed(2);
   })();
+
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const hasAnyOutput = shots.some((s) => s.imageUrl || s.videoUrl);
+  const hasAnyImage = shots.some((s) => s.imageUrl);
+  const hasAnyVideo = shots.some((s) => s.videoUrl);
+  const imageCount = shots.filter((s) => s.imageUrl).length;
+  const videoCount = shots.filter((s) => s.videoUrl).length;
+
+  const batchDownload = async (include: "all" | "images" | "videos") => {
+    setShowDownloadModal(false);
+    setIsDownloading(true);
+    try {
+      const zip = new JSZip();
+      const sorted = [...shots].sort((a, b) => compareShotNumbers(a.number, b.number));
+
+      for (const shot of sorted) {
+        const pad = String(shot.number).padStart(3, "0");
+        if ((include === "all" || include === "images") && shot.imageUrl) {
+          try {
+            const res = await fetch(shot.imageUrl);
+            const blob = await res.blob();
+            zip.file(`shot-${pad}.png`, blob);
+          } catch { /* skip failed downloads */ }
+        }
+        if ((include === "all" || include === "videos") && shot.videoUrl) {
+          try {
+            const res = await fetch(shot.videoUrl);
+            const blob = await res.blob();
+            zip.file(`video-shot-${pad}.mp4`, blob);
+          } catch { /* skip failed downloads */ }
+        }
+      }
+
+      const suffix = include === "all" ? "" : `-${include}`;
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `shots${suffix}-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Batch download failed:", err);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -914,6 +1220,21 @@ export default function ShotsPage() {
               <Film size={13} />
               {isBatchAnimating ? `Animating ${videosCompleted}/${shots.filter((s) => s.imageStatus === "done").length}` : "Animate All"}
             </Button>
+
+            {hasAnyOutput && (
+              <>
+                <div className="h-5 w-px bg-border" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => isDownloading ? null : setShowDownloadModal(true)}
+                  disabled={isDownloading}
+                >
+                  <Download size={13} />
+                  {isDownloading ? "Zipping..." : "Download"}
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Settings Panel (expandable) — split Image / Video */}
@@ -953,7 +1274,7 @@ export default function ShotsPage() {
                         Aspect Ratio
                       </label>
                       <div className="flex gap-1.5">
-                        {["9:16", "16:9", "1:1"].map((ratio) => (
+                        {["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"].map((ratio) => (
                           <button
                             key={ratio}
                             onClick={() => {
@@ -1148,6 +1469,28 @@ export default function ShotsPage() {
                         </button>
                       </div>
                     )}
+
+                    {/* Camera Fixed */}
+                    {selectedVideoModel.supportsCameraFixed && (
+                      <div>
+                        <label className="mb-1.5 block text-[10px] font-medium text-muted">Camera Fixed</label>
+                        <button
+                          onClick={() => {
+                            const next = !cameraFixed;
+                            setCameraFixed(next);
+                            saveToStorage(STORAGE_KEYS.cameraFixed, next);
+                            resetAllShotVideoSettings("cameraFixed");
+                          }}
+                          className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
+                            cameraFixed
+                              ? "border-accent/30 bg-accent/10 text-accent"
+                              : "border-border bg-surface text-muted hover:border-accent/30"
+                          }`}
+                        >
+                          {cameraFixed ? "Fixed" : "Free"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1171,12 +1514,26 @@ export default function ShotsPage() {
           {/* Always-visible: Master Reference + Prompt Prefix as bento sub-cells */}
           <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
             {/* Master Reference Cell */}
-            <div className="min-w-[240px] rounded-lg border border-border bg-background p-3">
+            <div
+              className="min-w-[240px] rounded-lg border border-border bg-background p-3"
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes("Files")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                }
+              }}
+              onDrop={(e) => {
+                if (e.dataTransfer.files.length > 0) {
+                  e.preventDefault();
+                  handleCharRefFileDrop(Array.from(e.dataTransfer.files));
+                }
+              }}
+            >
               <p className="mb-2 text-[11px] font-medium text-muted">Master Reference</p>
-              <p className="mb-2.5 text-[9px] text-muted/50">Applied to all shots</p>
+              <p className="mb-2.5 text-[9px] text-muted/50">Applied to all shots — drag & drop or click +</p>
               <div className="flex items-center gap-2">
-                {charRefs.map((ref) => (
-                  <div key={ref.id} className="relative h-12 w-12 overflow-hidden rounded-md border border-border">
+                {charRefs.map((ref, i) => (
+                  <div key={ref.id} className="relative h-14 w-14 overflow-hidden rounded-md border border-border">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={ref.preview} alt="Ref" className="h-full w-full object-cover" />
                     {ref.uploading && (
@@ -1190,11 +1547,12 @@ export default function ShotsPage() {
                     >
                       x
                     </button>
+                    <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 font-mono text-[7px] font-bold leading-tight text-accent">@{i + 1}</span>
                   </div>
                 ))}
                 <button
                   onClick={() => charRefInput.current?.click()}
-                  className="flex h-12 w-12 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted transition hover:border-muted hover:text-foreground"
+                  className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted transition hover:border-muted hover:text-foreground"
                 >
                   +
                 </button>
@@ -1246,9 +1604,10 @@ export default function ShotsPage() {
         ) : viewMode === "list" ? (
           <div className="space-y-3">
             {sortedShots.map((shot, idx) => (
+              <div key={shot.id} id={`shot-${shot.id}`}>
               <ShotCard
-                key={shot.id}
                 shot={shot}
+                masterRefs={charRefs}
                 globalDuration={duration}
                 globalAspectRatio={aspectRatio}
                 globalGenerateAudio={generateAudio}
@@ -1260,6 +1619,7 @@ export default function ShotsPage() {
                 onMoveDown={idx < sortedShots.length - 1 ? () => moveShot(shot.id, "down") : undefined}
                 onRefUpload={(e) => handleShotRefUpload(shot.id, e)}
                 onRefFileDrop={(files) => handleShotRefFiles(shot.id, files)}
+                onRefUrlDrop={(url) => handleShotRefUrlDrop(shot.id, url)}
                 onRefRemove={(refId) => removeShotRef(shot.id, refId)}
                 refInputRef={(el) => {
                   shotRefInputs.current[shot.id] = el;
@@ -1268,7 +1628,7 @@ export default function ShotsPage() {
                 onAnimateShot={() => animateSingleShot(shot)}
                 onCancelImage={() => cancelShot(shot.id, "image")}
                 onCancelVideo={() => cancelShot(shot.id, "video")}
-                onOpenLightbox={(src, type) => setLightbox({ src, type, shotNumber: shot.number })}
+                onOpenLightbox={(src, type) => setLightbox({ src, type, shotId: shot.id, shotNumber: shot.number })}
                 onEndFrameUpload={(e) => handleEndFrameUpload(shot.id, e)}
                 onEndFrameRemove={() => removeEndFrame(shot.id)}
                 onImageSettingsChange={(updates) => updateShotImageSettings(shot.id, updates)}
@@ -1277,14 +1637,16 @@ export default function ShotsPage() {
                 onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
               />
+              </div>
             ))}
           </div>
         ) : (
-          <div className="storyboard-scroll flex gap-3 overflow-x-auto pb-3" style={{ scrollSnapType: "x mandatory" }}>
+          <div className="storyboard-scroll -mx-3 flex gap-3 overflow-x-auto px-3 py-3" style={{ scrollSnapType: "x mandatory" }}>
             {sortedShots.map((shot) => (
+              <div key={shot.id} id={`shot-${shot.id}`}>
               <StoryboardCard
-                key={shot.id}
                 shot={shot}
+                masterRefs={charRefs}
                 globalDuration={duration}
                 globalAspectRatio={aspectRatio}
                 globalGenerateAudio={generateAudio}
@@ -1295,13 +1657,14 @@ export default function ShotsPage() {
                 onRemove={() => removeShot(shot.id)}
                 onRefUpload={(e) => handleShotRefUpload(shot.id, e)}
                 onRefFileDrop={(files) => handleShotRefFiles(shot.id, files)}
+                onRefUrlDrop={(url) => handleShotRefUrlDrop(shot.id, url)}
                 onRefRemove={(refId) => removeShotRef(shot.id, refId)}
                 refInputRef={(el) => { shotRefInputs.current[shot.id] = el; }}
                 onGenerateImage={() => generateSingleShot(shot)}
                 onAnimateShot={() => animateSingleShot(shot)}
                 onCancelImage={() => cancelShot(shot.id, "image")}
                 onCancelVideo={() => cancelShot(shot.id, "video")}
-                onOpenLightbox={(src, type) => setLightbox({ src, type, shotNumber: shot.number })}
+                onOpenLightbox={(src, type) => setLightbox({ src, type, shotId: shot.id, shotNumber: shot.number })}
                 onEndFrameUpload={(e) => handleEndFrameUpload(shot.id, e)}
                 onEndFrameRemove={() => removeEndFrame(shot.id)}
                 onImageSettingsChange={(updates) => updateShotImageSettings(shot.id, updates)}
@@ -1309,6 +1672,7 @@ export default function ShotsPage() {
                 onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
               />
+              </div>
             ))}
           </div>
         )}
@@ -1323,6 +1687,10 @@ export default function ShotsPage() {
           shotNumber={lightbox.shotNumber}
           onClose={() => setLightbox(null)}
           onNewShotFromRef={createShotFromRef}
+          onEditImage={lightbox.shotId ? (editPrompt) => {
+            editImage(lightbox.shotId!, lightbox.src, editPrompt);
+            setLightbox(null);
+          } : undefined}
         />
       )}
 
@@ -1375,6 +1743,251 @@ export default function ShotsPage() {
                 confirmNewShotFromRef(newShotModal.imageUrl, val);
               }}>Create Shot</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Shot Modal */}
+      {addShotModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md" onClick={() => { setAddShotModal(null); setModalRefs([]); setModalFirstFrame(null); setModalEndFrame(null); }} onKeyDown={(e) => { if (e.key === "Escape") { setAddShotModal(null); setModalRefs([]); setModalFirstFrame(null); setModalEndFrame(null); } }}>
+          <div className="w-full max-w-md rounded-xl border border-accent/40 bg-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
+                <Plus size={18} className="text-accent" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">New Shot</h2>
+                <p className="text-[11px] text-muted">Add a new shot to the storyboard</p>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const num = (form.elements.namedItem("shotNumber") as HTMLInputElement)?.value.replace(/[^0-9a-zA-Z]/g, "") || addShotModal.suggestedNumber;
+              const title = (form.elements.namedItem("shotTitle") as HTMLInputElement)?.value.trim() || "";
+              const imgPrompt = (form.elements.namedItem("imagePrompt") as HTMLTextAreaElement)?.value.trim() || "";
+              const vidPrompt = (form.elements.namedItem("videoPrompt") as HTMLTextAreaElement)?.value.trim() || "";
+              confirmAddShot(num, title, imgPrompt, vidPrompt, modalRefs, modalFirstFrame, modalEndFrame);
+            }}>
+              <div className="space-y-3">
+                {/* Shot Number + Title row */}
+                <div className="flex gap-3">
+                  <div className="w-24 shrink-0">
+                    <label className="mb-1 block text-[11px] font-medium text-muted">Number</label>
+                    <input
+                      type="text"
+                      name="shotNumber"
+                      defaultValue={addShotModal.suggestedNumber}
+                      className="w-full rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                      placeholder="e.g. 5"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[11px] font-medium text-muted">Title <span className="text-muted/40">(optional)</span></label>
+                    <input
+                      type="text"
+                      name="shotTitle"
+                      autoFocus
+                      className="w-full rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                      placeholder="e.g. Wide establishing shot"
+                    />
+                  </div>
+                </div>
+
+                {/* Image Prompt */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted">Image Prompt <span className="text-muted/40">(optional)</span></label>
+                  <textarea
+                    name="imagePrompt"
+                    rows={3}
+                    className="w-full resize-none rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                    placeholder="Describe the image you want to generate..."
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
+                  />
+                </div>
+
+                {/* Video Prompt */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted">Video Prompt <span className="text-muted/40">(optional)</span></label>
+                  <textarea
+                    name="videoPrompt"
+                    rows={2}
+                    className="w-full resize-none rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                    placeholder="Describe the camera motion or action..."
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
+                  />
+                </div>
+
+                {/* References → First Frame → Last Frame (horizontal) */}
+                <div className="flex gap-4">
+                  {/* References */}
+                  <div className="flex-1"
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.files.length > 0) {
+                        addModalRefFiles(Array.from(e.dataTransfer.files));
+                      } else {
+                        const url = e.dataTransfer.getData("text/plain");
+                        if (url) addModalRefUrl(url);
+                      }
+                    }}
+                  >
+                    <label className="mb-1 block text-[11px] font-medium text-muted">References</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {modalRefs.map((ref) => (
+                        <div key={ref.id} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={ref.preview} alt="Ref" className="h-full w-full object-cover" />
+                          {ref.uploading && <div className="absolute inset-0 flex items-center justify-center bg-background/60"><div className="h-2 w-2 animate-spin rounded-full border border-accent border-t-transparent" /></div>}
+                          <button type="button" onClick={() => removeModalRef(ref.id)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
+                        </div>
+                      ))}
+                      <label className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[11px] text-muted hover:border-accent/50 hover:text-accent">
+                        +
+                        <input type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => {
+                          if (e.target.files) addModalRefFiles(Array.from(e.target.files));
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* First Frame */}
+                  <div className="shrink-0"
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const url = e.dataTransfer.files.length > 0
+                        ? URL.createObjectURL(e.dataTransfer.files[0])
+                        : e.dataTransfer.getData("text/plain");
+                      if (url) setModalFirstFrame(url);
+                    }}
+                  >
+                    <label className="mb-1 block text-[11px] font-medium text-muted">First Frame</label>
+                    {modalFirstFrame ? (
+                      <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={modalFirstFrame} alt="First frame" className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => setModalFirstFrame(null)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
+                      </div>
+                    ) : (
+                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[8px] text-muted/40 hover:border-accent/50 hover:text-accent">
+                        <span className="text-center leading-tight">Drop or<br/>upload</span>
+                        <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) setModalFirstFrame(URL.createObjectURL(f));
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Last Frame */}
+                  <div className="shrink-0"
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.files.length > 0) {
+                        addModalEndFrame(Array.from(e.dataTransfer.files));
+                      } else {
+                        const url = e.dataTransfer.getData("text/plain");
+                        if (url) addModalEndFrameUrl(url);
+                      }
+                    }}
+                  >
+                    <label className="mb-1 block text-[11px] font-medium text-muted">Last Frame</label>
+                    {modalEndFrame ? (
+                      <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={modalEndFrame.preview} alt="Last frame" className="h-full w-full object-cover" />
+                        {modalEndFrame.uploading && <div className="absolute inset-0 flex items-center justify-center bg-background/60"><div className="h-2 w-2 animate-spin rounded-full border border-accent border-t-transparent" /></div>}
+                        <button type="button" onClick={() => setModalEndFrame(null)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
+                      </div>
+                    ) : (
+                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[8px] text-muted/40 hover:border-accent/50 hover:text-accent">
+                        <span className="text-center leading-tight">Drop or<br/>upload</span>
+                        <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => {
+                          if (e.target.files) addModalEndFrame(Array.from(e.target.files));
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between">
+                <p className="text-[10px] text-muted/50">Enter to add</p>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" type="button" onClick={() => { setAddShotModal(null); setModalRefs([]); setModalFirstFrame(null); setModalEndFrame(null); }}>Cancel</Button>
+                  <Button variant="primary" size="sm" type="submit">
+                    <Plus size={13} />
+                    Add Shot
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Download Modal */}
+      {showDownloadModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md" onClick={() => setShowDownloadModal(false)}>
+          <div className="w-full max-w-xs rounded-xl border border-accent/40 bg-surface p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
+                <Download size={18} className="text-accent" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Download Shots</h2>
+                <p className="text-[11px] text-muted">{imageCount} image{imageCount !== 1 ? "s" : ""}, {videoCount} video{videoCount !== 1 ? "s" : ""} ready</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {hasAnyImage && hasAnyVideo && (
+                <button
+                  onClick={() => batchDownload("all")}
+                  className="flex w-full items-center gap-3 rounded-lg bg-background px-3 py-2.5 text-left text-sm text-foreground transition hover:bg-surface-hover"
+                >
+                  <span className="text-base">📦</span>
+                  <div>
+                    <div className="font-medium">Everything</div>
+                    <div className="text-[10px] text-muted">{imageCount} images + {videoCount} videos as ZIP</div>
+                  </div>
+                </button>
+              )}
+              {hasAnyImage && (
+                <button
+                  onClick={() => batchDownload("images")}
+                  className="flex w-full items-center gap-3 rounded-lg bg-background px-3 py-2.5 text-left text-sm text-foreground transition hover:bg-surface-hover"
+                >
+                  <span className="text-base">🖼</span>
+                  <div>
+                    <div className="font-medium">Images only</div>
+                    <div className="text-[10px] text-muted">{imageCount} PNG file{imageCount !== 1 ? "s" : ""}</div>
+                  </div>
+                </button>
+              )}
+              {hasAnyVideo && (
+                <button
+                  onClick={() => batchDownload("videos")}
+                  className="flex w-full items-center gap-3 rounded-lg bg-background px-3 py-2.5 text-left text-sm text-foreground transition hover:bg-surface-hover"
+                >
+                  <span className="text-base">🎬</span>
+                  <div>
+                    <div className="font-medium">Videos only</div>
+                    <div className="text-[10px] text-muted">{videoCount} MP4 file{videoCount !== 1 ? "s" : ""}</div>
+                  </div>
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowDownloadModal(false)}
+              className="mt-3 w-full rounded-lg py-1.5 text-center text-xs text-muted transition hover:text-foreground"
+            >Cancel</button>
           </div>
         </div>
       )}

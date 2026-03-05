@@ -25,6 +25,8 @@ export interface UploadedRef {
   preview: string;
   url: string | null;
   uploading: boolean;
+  /** Original file kept in memory for re-upload if fal CDN URL expires */
+  file?: File;
 }
 
 export interface Shot {
@@ -32,7 +34,9 @@ export interface Shot {
   number: string;
   title: string;
   imagePrompt: string;
+  imageNegativePrompt: string;
   videoPrompt: string;
+  videoNegativePrompt: string;
   imageStatus: ShotStatus;
   videoStatus: ShotStatus;
   imageUrl: string | null;
@@ -49,4 +53,6 @@ export interface Shot {
   settings: ShotSettings;
   /** History of all generated image URLs (newest first) */
   imageHistory: string[];
+  /** History of all generated video URLs (newest first) */
+  videoHistory: string[];
 }
