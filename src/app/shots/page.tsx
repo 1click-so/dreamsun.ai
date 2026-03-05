@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
 import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
@@ -57,28 +57,84 @@ function createShot(parsed?: ParsedShot): Shot {
   };
 }
 
+// --- localStorage helpers ---
+const STORAGE_KEYS = {
+  folder: "dreamsun_shots_folder",
+  imageModel: "dreamsun_shots_image_model",
+  videoModel: "dreamsun_shots_video_model",
+  aspectRatio: "dreamsun_shots_ratio",
+  duration: "dreamsun_shots_duration",
+  shots: "dreamsun_shots_data",
+} as const;
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveToStorage(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* quota exceeded — ignore */ }
+}
+
 export default function ShotsPage() {
-  // --- Settings ---
+  // --- Settings (all persisted to localStorage) ---
   const [outputFolder, setOutputFolder] = useState(() => {
     if (typeof window === "undefined") return "";
-    return localStorage.getItem("dreamsun_shots_folder") || "";
+    return localStorage.getItem(STORAGE_KEYS.folder) || "";
   });
   const [selectedImageModel, setSelectedImageModel] = useState<ModelConfig>(
-    () => MODELS[0]
+    () => {
+      if (typeof window === "undefined") return MODELS.find((m) => m.id === "nano-banana-2") ?? MODELS[0];
+      const savedId = localStorage.getItem(STORAGE_KEYS.imageModel);
+      if (savedId) {
+        const found = MODELS.find((m) => m.id === savedId);
+        if (found) return found;
+      }
+      return MODELS.find((m) => m.id === "nano-banana-2") ?? MODELS[0];
+    }
   );
   const [selectedVideoModel, setSelectedVideoModel] =
-    useState<VideoModelConfig>(() => VIDEO_MODELS[0]);
-  const [aspectRatio, setAspectRatio] = useState("9:16");
-  const [duration, setDuration] = useState(5);
+    useState<VideoModelConfig>(() => {
+      if (typeof window === "undefined") return VIDEO_MODELS[0];
+      const savedId = localStorage.getItem(STORAGE_KEYS.videoModel);
+      if (savedId) {
+        const found = VIDEO_MODELS.find((m) => m.id === savedId);
+        if (found) return found;
+      }
+      return VIDEO_MODELS[0];
+    });
+  const [aspectRatio, setAspectRatio] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16")
+  );
+  const [duration, setDuration] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.duration, 5)
+  );
 
   // --- Project-level character reference images ---
   const [charRefs, setCharRefs] = useState<UploadedRef[]>([]);
   const charRefInput = useRef<HTMLInputElement>(null);
 
-  // --- Shots ---
-  const [shots, setShots] = useState<Shot[]>([]);
+  // --- Shots (persisted to localStorage) ---
+  const [shots, setShots] = useState<Shot[]>(() =>
+    loadFromStorage<Shot[]>(STORAGE_KEYS.shots, [])
+  );
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState("");
+
+  // --- Persist state changes to localStorage ---
+  useEffect(() => {
+    // Save shots without refImages previews (ObjectURLs aren't valid across sessions)
+    const serializable = shots.map((s) => ({ ...s, refImages: [] }));
+    saveToStorage(STORAGE_KEYS.shots, serializable);
+  }, [shots]);
 
   // --- Batch progress ---
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -91,7 +147,7 @@ export default function ShotsPage() {
 
   const handleOutputFolderChange = (val: string) => {
     setOutputFolder(val);
-    localStorage.setItem("dreamsun_shots_folder", val);
+    localStorage.setItem(STORAGE_KEYS.folder, val);
   };
 
   const handleParse = () => {
@@ -436,7 +492,10 @@ export default function ShotsPage() {
               value={selectedImageModel.id}
               onChange={(e) => {
                 const m = MODELS.find((m) => m.id === e.target.value);
-                if (m) setSelectedImageModel(m);
+                if (m) {
+                  setSelectedImageModel(m);
+                  localStorage.setItem(STORAGE_KEYS.imageModel, m.id);
+                }
               }}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             >
@@ -459,8 +518,11 @@ export default function ShotsPage() {
                 const m = VIDEO_MODELS.find((m) => m.id === e.target.value);
                 if (m) {
                   setSelectedVideoModel(m);
+                  localStorage.setItem(STORAGE_KEYS.videoModel, m.id);
                   if (!m.durations.includes(duration)) {
-                    setDuration(m.defaultDuration);
+                    const newDur = m.defaultDuration;
+                    setDuration(newDur);
+                    saveToStorage(STORAGE_KEYS.duration, newDur);
                   }
                 }
               }}
@@ -481,7 +543,11 @@ export default function ShotsPage() {
             </label>
             <select
               value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
+              onChange={(e) => {
+                const d = Number(e.target.value);
+                setDuration(d);
+                saveToStorage(STORAGE_KEYS.duration, d);
+              }}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             >
               {selectedVideoModel.durations.map((d) => (
@@ -501,7 +567,10 @@ export default function ShotsPage() {
               {["9:16", "16:9", "1:1"].map((ratio) => (
                 <button
                   key={ratio}
-                  onClick={() => setAspectRatio(ratio)}
+                  onClick={() => {
+                    setAspectRatio(ratio);
+                    saveToStorage(STORAGE_KEYS.aspectRatio, ratio);
+                  }}
                   className={`flex-1 rounded-md border px-2 py-2 text-xs font-medium transition ${
                     aspectRatio === ratio
                       ? "border-accent bg-accent/10 text-accent"
