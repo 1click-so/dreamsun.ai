@@ -834,18 +834,16 @@ export default function ShotsPage() {
             <div className="h-5 w-px bg-border" />
 
             {/* Settings Toggle */}
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setShowSettings(!showSettings)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
-                showSettings
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:bg-surface-hover hover:text-foreground"
-              }`}
+              className={showSettings ? "bg-accent/10 text-accent" : ""}
             >
               <Settings2 size={14} />
               Settings
               <ChevronDown size={11} className={`ml-0.5 transition-transform duration-200 ${showSettings ? "rotate-180" : ""}`} />
-            </button>
+            </Button>
 
             <div className="flex-1" />
 
@@ -872,21 +870,25 @@ export default function ShotsPage() {
             <div className="h-5 w-px bg-border" />
 
             {/* View Toggle */}
-            <div className="flex overflow-hidden rounded-lg border border-border text-xs font-medium">
-              <button
+            <div className="flex overflow-hidden rounded-lg border border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`rounded-none ${viewMode === "list" ? "bg-accent/10 text-accent" : ""}`}
                 onClick={() => { setViewMode("list"); saveToStorage("dreamsun_shots_view", "list"); }}
-                className={`flex items-center gap-1.5 px-3 py-2 transition ${viewMode === "list" ? "bg-accent/10 text-accent" : "text-muted hover:text-foreground"}`}
               >
                 <LayoutList size={13} />
                 List
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`rounded-none ${viewMode === "storyboard" ? "bg-accent/10 text-accent" : ""}`}
                 onClick={() => { setViewMode("storyboard"); saveToStorage("dreamsun_shots_view", "storyboard"); }}
-                className={`flex items-center gap-1.5 px-3 py-2 transition ${viewMode === "storyboard" ? "bg-accent/10 text-accent" : "text-muted hover:text-foreground"}`}
               >
                 <LayoutGrid size={13} />
                 Storyboard
-              </button>
+              </Button>
             </div>
 
             <div className="h-5 w-px bg-border" />
@@ -895,7 +897,6 @@ export default function ShotsPage() {
             <Button
               variant="primary"
               size="sm"
-              className="px-4 font-semibold"
               onClick={generateAllImages}
               disabled={isBatchGenerating || shots.length === 0 || shots.every((s) => s.imageStatus === "done")}
             >
@@ -905,7 +906,6 @@ export default function ShotsPage() {
             <Button
               variant="secondary"
               size="sm"
-              className="px-4 font-semibold"
               onClick={animateAll}
               disabled={!allImagesDone || isBatchAnimating}
             >
