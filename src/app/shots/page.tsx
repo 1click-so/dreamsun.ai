@@ -310,6 +310,14 @@ export default function ShotsPage() {
         body.referenceImageUrls = allRefs;
       }
 
+      console.log(`[Shot #${shot.number}] Model: ${model.id} (${model.capability})`, {
+        charRefs: charRefUrls.length,
+        shotRefs: shotRefUrls.length,
+        totalRefs: allRefs.length,
+        hasRefs: shotHasRefs,
+        sentRefs: body.referenceImageUrls ? (body.referenceImageUrls as string[]).length : 0,
+      });
+
       const res = await fetch("/api/generate-shot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
