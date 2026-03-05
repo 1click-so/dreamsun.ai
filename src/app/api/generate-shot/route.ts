@@ -99,11 +99,14 @@ export async function POST(req: NextRequest) {
     let localPath: string | null = null;
 
     // Save to local file if outputFolder is specified
+    console.log("[generate-shot] Save check:", { outputFolder, shotNumber, hasOutputFolder: !!outputFolder, shotNumberNotNull: shotNumber != null });
     if (outputFolder && shotNumber != null) {
       try {
         const paddedNum = String(shotNumber).padStart(3, "0");
         const fileName = `shot-${paddedNum}.png`;
         const filePath = join(outputFolder, fileName);
+
+        console.log("[generate-shot] Saving to:", filePath);
 
         // Ensure directory exists
         await mkdir(dirname(filePath), { recursive: true });
@@ -113,9 +116,10 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(await imgRes.arrayBuffer());
         await writeFile(filePath, buffer);
 
+        console.log("[generate-shot] Saved successfully:", filePath, `(${buffer.length} bytes)`);
         localPath = filePath;
       } catch (saveErr) {
-        console.error("Failed to save image locally:", saveErr);
+        console.error("[generate-shot] Failed to save image locally:", saveErr);
         // Don't fail the request — image was still generated
       }
     }
