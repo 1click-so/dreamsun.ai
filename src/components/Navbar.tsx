@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Logo } from "./Logo";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Image" },
+  { href: "/generate", label: "Image" },
   { href: "/video", label: "Video" },
   { href: "/shots", label: "Shot List" },
 ];
@@ -17,7 +17,7 @@ export function Navbar() {
     <nav className="flex items-center gap-4 border-b border-border px-5 py-2.5">
       <Link href="/" className="flex items-center gap-2 transition hover:opacity-80">
         <Logo size={20} />
-        <span className="text-sm font-semibold text-foreground">DreamSun</span>
+        <span className="font-display text-sm font-bold tracking-tight text-foreground">DreamSun</span>
       </Link>
       <span className="text-border">|</span>
       <div className="flex items-center gap-1">

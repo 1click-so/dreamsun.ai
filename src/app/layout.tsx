@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
-import { Navbar } from "@/components/Navbar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,10 +13,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const outfit = Outfit({
+  variable: "--font-display",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "DreamSun.ai — AI Image & Video Generator",
   description:
-    "AI platform aggregator for creating images and videos using state-of-the-art models.",
+    "Artistic AI image and video generation platform for creatives.",
 };
 
 export default function RootLayout({
@@ -25,11 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Navbar />
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} dark`}>
+      <body className="antialiased">
         {children}
       </body>
     </html>

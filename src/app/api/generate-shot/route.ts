@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
       shotNumber,
       outputFolder,
       safetyChecker,
+      numImages,
+      imageResolution,
     } = body;
 
     if (!prompt || !modelId) {
@@ -38,7 +40,19 @@ export async function POST(req: NextRequest) {
     // Build input — same logic as /api/generate
     const input: Record<string, unknown> = { prompt };
 
-    if (aspectRatio) {
+    // Resolution → explicit pixel dimensions (overrides aspect_ratio with image_size)
+    // 1k = 1024px long side, 2k = 2048px, 4k = 4096px
+    const resMultiplier: Record<string, number> = { "1k": 1024, "2k": 2048, "4k": 4096 };
+    const longSide = resMultiplier[imageResolution as string];
+
+    if (longSide && aspectRatio && !model.sizeParam) {
+      // Compute width/height from aspect ratio + resolution
+      const [w, h] = (aspectRatio as string).split(":").map(Number);
+      const ratio = w / h;
+      const width = ratio >= 1 ? longSide : Math.round(longSide * ratio);
+      const height = ratio >= 1 ? Math.round(longSide / ratio) : longSide;
+      input.image_size = { width, height };
+    } else if (aspectRatio) {
       if (model.sizeParam) {
         input[model.sizeParam.name] =
           model.sizeParam.mapping[aspectRatio] || aspectRatio;
@@ -74,7 +88,7 @@ export async function POST(req: NextRequest) {
     if (model.supportsOutputFormat !== false) {
       input.output_format = "png";
     }
-    input.num_images = 1;
+    input.num_images = typeof numImages === "number" && numImages >= 1 && numImages <= 4 ? numImages : 1;
 
     const result = await fal.subscribe(model.endpoint, {
       input,

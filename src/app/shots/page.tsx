@@ -6,6 +6,7 @@ import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/l
 import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown } from "lucide-react";
 import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
+import { Navbar } from "@/components/Navbar";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
@@ -159,6 +160,11 @@ const STORAGE_KEYS = {
   videoModel: "dreamsun_shots_video_model",
   aspectRatio: "dreamsun_shots_ratio",
   duration: "dreamsun_shots_duration",
+  imageResolution: "dreamsun_shots_img_res",
+  numImages: "dreamsun_shots_num_images",
+  safetyChecker: "dreamsun_shots_safety",
+  resolution: "dreamsun_shots_resolution",
+  generateAudio: "dreamsun_shots_audio",
   shots: "dreamsun_shots_data",
 } as const;
 
@@ -261,6 +267,61 @@ function Lightbox({
   );
 }
 
+// --- Custom Dropdown ---
+function CustomSelect<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string; detail?: string }[];
+  onChange: (value: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground transition hover:border-accent/30 focus:border-accent"
+      >
+        <span className="truncate">{selected?.label ?? value}</span>
+        <ChevronDown size={12} className={`ml-2 shrink-0 text-muted transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-lg">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`flex w-full items-center justify-between px-3 py-2 text-xs transition ${
+                opt.value === value
+                  ? "bg-accent/10 text-accent"
+                  : "text-foreground hover:bg-accent/5 hover:text-accent"
+              }`}
+            >
+              <span>{opt.label}</span>
+              {opt.detail && <span className="ml-2 text-[10px] opacity-50">{opt.detail}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ShotsPage() {
   // --- Settings (all persisted to localStorage) ---
   const [outputFolder, setOutputFolder] = useState(() => {
@@ -295,8 +356,23 @@ export default function ShotsPage() {
   const [aspectRatio, setAspectRatio] = useState(() =>
     loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16")
   );
+  const [imageResolution, setImageResolution] = useState(() =>
+    loadFromStorage<string>(STORAGE_KEYS.imageResolution, "1k")
+  );
+  const [numImages, setNumImages] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.numImages, 1)
+  );
+  const [safetyChecker, setSafetyChecker] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.safetyChecker, false)
+  );
   const [duration, setDuration] = useState(() =>
     loadFromStorage(STORAGE_KEYS.duration, 5)
+  );
+  const [resolution, setResolution] = useState(() =>
+    loadFromStorage<string>(STORAGE_KEYS.resolution, "720p")
+  );
+  const [generateAudio, setGenerateAudio] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.generateAudio, false)
   );
 
   // --- View mode ---
@@ -425,6 +501,20 @@ export default function ShotsPage() {
     setShots((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
+  };
+
+  // --- Master setting change: reset per-shot overrides so all shots inherit the new global ---
+  const resetAllShotImageSettings = (key: keyof ImageSettings) => {
+    setShots((prev) => prev.map((s) => ({
+      ...s,
+      settings: { ...s.settings, image: { ...s.settings.image, [key]: null } },
+    })));
+  };
+  const resetAllShotVideoSettings = (key: keyof VideoSettings) => {
+    setShots((prev) => prev.map((s) => ({
+      ...s,
+      settings: { ...s.settings, video: { ...s.settings.video, [key]: null } },
+    })));
   };
 
   // --- Character ref upload ---
@@ -650,7 +740,7 @@ export default function ShotsPage() {
       const shotImageModelId = shot.settings.image.modelId ?? selectedImageModel.id;
       const model = resolveModel(shotImageModelId, shotHasRefs) ?? selectedImageModel;
       const shotAR = shot.settings.image.aspectRatio ?? aspectRatio;
-      const shotSafety = shot.settings.image.safetyChecker ?? false;
+      const shotSafety = shot.settings.image.safetyChecker ?? safetyChecker;
 
       const body: Record<string, unknown> = {
         modelId: model.id,
@@ -659,6 +749,8 @@ export default function ShotsPage() {
         shotNumber: shot.number,
         outputFolder: outputFolder || undefined,
         safetyChecker: shotSafety,
+        numImages,
+        imageResolution,
       };
 
       if (shotHasRefs && model.capability === "image-to-image") {
@@ -737,7 +829,7 @@ export default function ShotsPage() {
     // Per-shot settings override globals
     const shotDuration = shot.settings.video.duration ?? duration;
     const shotAspectRatio = shot.settings.video.aspectRatio ?? aspectRatio;
-    const shotResolution = shot.settings.video.resolution ?? null;
+    const shotResolution = shot.settings.video.resolution ?? resolution;
     const shotVideoModelId = shot.settings.video.modelId ?? selectedVideoModel.id;
 
     try {
@@ -766,8 +858,8 @@ export default function ShotsPage() {
         animateBody.cameraFixed = shot.settings.video.cameraFixed;
       }
 
-      // Generate audio — default OFF
-      animateBody.generateAudio = shot.settings.video.generateAudio ?? false;
+      // Generate audio — per-shot overrides global, global defaults to off
+      animateBody.generateAudio = shot.settings.video.generateAudio ?? generateAudio;
 
       const res = await fetch("/api/animate-shot", {
         method: "POST",
@@ -887,6 +979,7 @@ export default function ShotsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <Navbar />
       {/* Page Header */}
       <header className="flex items-center justify-between border-b border-border px-6 py-2.5">
         <h1 className="text-lg font-semibold tracking-tight">
@@ -902,22 +995,6 @@ export default function ShotsPage() {
         <div className="rounded-xl border border-border bg-surface/50 p-2">
           {/* Top row: actions + stats + controls */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Settings Toggle */}
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
-                showSettings
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:bg-surface-hover hover:text-foreground"
-              }`}
-            >
-              <Settings2 size={14} />
-              Settings
-              <ChevronDown size={11} className={`ml-0.5 transition-transform duration-200 ${showSettings ? "rotate-180" : ""}`} />
-            </button>
-
-            <div className="h-5 w-px bg-border" />
-
             {/* Shot Actions */}
             <button
               onClick={() => setShowPasteModal(true)}
@@ -932,6 +1009,22 @@ export default function ShotsPage() {
             >
               <Plus size={13} />
               Add Shot
+            </button>
+
+            <div className="h-5 w-px bg-border" />
+
+            {/* Settings Toggle */}
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
+                showSettings
+                  ? "bg-accent/10 text-accent"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground"
+              }`}
+            >
+              <Settings2 size={14} />
+              Settings
+              <ChevronDown size={11} className={`ml-0.5 transition-transform duration-200 ${showSettings ? "rotate-180" : ""}`} />
             </button>
 
             <div className="flex-1" />
@@ -997,6 +1090,258 @@ export default function ShotsPage() {
             </button>
           </div>
 
+          {/* Settings Panel (expandable) — split Image / Video */}
+          {showSettings && (
+            <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {/* Image Settings */}
+              <div className="rounded-lg border border-border bg-background p-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">Image</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Image Model */}
+                  <div>
+                    <label className="mb-1.5 block text-[10px] font-medium text-muted">
+                      Model
+                      {hasAnyRefs && effectiveModel.id !== selectedImageModel.id && (
+                        <span className="ml-1 text-accent">(Edit)</span>
+                      )}
+                    </label>
+                    <CustomSelect
+                      value={selectedImageModel.id}
+                      options={selectableModels.map((m) => ({ value: m.id, label: m.name, detail: m.costPerImage }))}
+                      onChange={(id) => {
+                        const m = MODELS.find((m) => m.id === id);
+                        if (m) {
+                          setSelectedImageModel(m);
+                          localStorage.setItem(STORAGE_KEYS.imageModel, m.id);
+                          resetAllShotImageSettings("modelId");
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Aspect Ratio + Num Images + Safety */}
+                  <div className="space-y-3">
+                    {/* Aspect Ratio */}
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-medium text-muted">
+                        Aspect Ratio
+                      </label>
+                      <div className="flex gap-1.5">
+                        {["9:16", "16:9", "1:1"].map((ratio) => (
+                          <button
+                            key={ratio}
+                            onClick={() => {
+                              setAspectRatio(ratio);
+                              saveToStorage(STORAGE_KEYS.aspectRatio, ratio);
+                              resetAllShotImageSettings("aspectRatio");
+                            }}
+                            className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                              aspectRatio === ratio
+                                ? "border-accent/30 bg-accent/10 text-accent"
+                                : "border-border bg-surface text-muted hover:border-accent/30"
+                            }`}
+                          >
+                            {ratio}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Resolution */}
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-medium text-muted">
+                        Resolution
+                      </label>
+                      <div className="flex gap-1.5">
+                        {(["1k", "2k", "4k"] as const).map((res) => (
+                          <button
+                            key={res}
+                            onClick={() => {
+                              setImageResolution(res);
+                              saveToStorage(STORAGE_KEYS.imageResolution, res);
+                            }}
+                            className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium uppercase transition ${
+                              imageResolution === res
+                                ? "border-accent/30 bg-accent/10 text-accent"
+                                : "border-border bg-surface text-muted hover:border-accent/30"
+                            }`}
+                          >
+                            {res}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Number of Images */}
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-medium text-muted">
+                        Number of Images
+                      </label>
+                      <div className="flex gap-1.5">
+                        {[1, 2, 3, 4].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => {
+                              setNumImages(n);
+                              saveToStorage(STORAGE_KEYS.numImages, n);
+                            }}
+                            className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                              numImages === n
+                                ? "border-accent/30 bg-accent/10 text-accent"
+                                : "border-border bg-surface text-muted hover:border-accent/30"
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Safety Checker */}
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-medium text-muted">
+                        Safety Filter
+                      </label>
+                      <button
+                        onClick={() => {
+                          const next = !safetyChecker;
+                          setSafetyChecker(next);
+                          saveToStorage(STORAGE_KEYS.safetyChecker, next);
+                          resetAllShotImageSettings("safetyChecker");
+                        }}
+                        className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
+                          safetyChecker
+                            ? "border-accent/30 bg-accent/10 text-accent"
+                            : "border-border bg-surface text-muted hover:border-accent/30"
+                        }`}
+                      >
+                        {safetyChecker ? "On" : "Off"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Settings */}
+              <div className="rounded-lg border border-border bg-background p-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">Video</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Video Model */}
+                  <div>
+                    <label className="mb-1.5 block text-[10px] font-medium text-muted">Model</label>
+                    <CustomSelect
+                      value={selectedVideoModel.id}
+                      options={VIDEO_MODELS.map((m) => ({ value: m.id, label: m.name, detail: `${m.costPer5Sec}/5s` }))}
+                      onChange={(id) => {
+                        const m = VIDEO_MODELS.find((m) => m.id === id);
+                        if (m) {
+                          setSelectedVideoModel(m);
+                          localStorage.setItem(STORAGE_KEYS.videoModel, m.id);
+                          resetAllShotVideoSettings("modelId");
+                          if (!m.durations.includes(duration)) {
+                            const newDur = m.defaultDuration;
+                            setDuration(newDur);
+                            saveToStorage(STORAGE_KEYS.duration, newDur);
+                            resetAllShotVideoSettings("duration");
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Duration + Resolution + Sound */}
+                  <div className="space-y-3">
+                    {/* Duration */}
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-medium text-muted">Duration</label>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedVideoModel.durations.map((d) => (
+                          <button
+                            key={d}
+                            onClick={() => {
+                              setDuration(d);
+                              saveToStorage(STORAGE_KEYS.duration, d);
+                              resetAllShotVideoSettings("duration");
+                            }}
+                            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                              duration === d
+                                ? "border-accent/30 bg-accent/10 text-accent"
+                                : "border-border bg-surface text-muted hover:border-accent/30"
+                            }`}
+                          >
+                            {d}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Resolution */}
+                    {selectedVideoModel.resolutions.length > 0 && (
+                      <div>
+                        <label className="mb-1.5 block text-[10px] font-medium text-muted">Resolution</label>
+                        <div className="flex gap-1.5">
+                          {selectedVideoModel.resolutions.map((res) => (
+                            <button
+                              key={res}
+                              onClick={() => {
+                                setResolution(res);
+                                saveToStorage(STORAGE_KEYS.resolution, res);
+                                resetAllShotVideoSettings("resolution");
+                              }}
+                              className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                                resolution === res
+                                  ? "border-accent/30 bg-accent/10 text-accent"
+                                  : "border-border bg-surface text-muted hover:border-accent/30"
+                              }`}
+                            >
+                              {res}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sound */}
+                    {selectedVideoModel.supportsGenerateAudio && (
+                      <div>
+                        <label className="mb-1.5 block text-[10px] font-medium text-muted">Sound</label>
+                        <button
+                          onClick={() => {
+                            const next = !generateAudio;
+                            setGenerateAudio(next);
+                            saveToStorage(STORAGE_KEYS.generateAudio, next);
+                            resetAllShotVideoSettings("generateAudio");
+                          }}
+                          className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
+                            generateAudio
+                              ? "border-accent/30 bg-accent/10 text-accent"
+                              : "border-border bg-surface text-muted hover:border-accent/30"
+                          }`}
+                        >
+                          {generateAudio ? "On" : "Off"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Output Folder — localhost only, under video settings */}
+                {isLocal && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <label className="mb-1.5 block text-[10px] font-medium text-muted">Output Folder</label>
+                    <input
+                      type="text"
+                      value={outputFolder}
+                      onChange={(e) => handleOutputFolderChange(e.target.value)}
+                      placeholder="G:\My Drive\Shorts\PROJECT"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Always-visible: Master Reference + Prompt Prefix as bento sub-cells */}
           <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
             {/* Master Reference Cell */}
@@ -1047,136 +1392,19 @@ export default function ShotsPage() {
               />
             </div>
           </div>
-
-          {/* Settings Panel (expandable) — models, duration, ratio, output folder */}
-          {showSettings && (
-            <div className="mt-2 rounded-lg border border-border bg-background p-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {/* Image Model */}
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">
-                    Image Model
-                    {hasAnyRefs && effectiveModel.id !== selectedImageModel.id && (
-                      <span className="ml-1.5 normal-case tracking-normal text-accent">(Edit)</span>
-                    )}
-                  </label>
-                  <select
-                    value={selectedImageModel.id}
-                    onChange={(e) => {
-                      const m = MODELS.find((m) => m.id === e.target.value);
-                      if (m) {
-                        setSelectedImageModel(m);
-                        localStorage.setItem(STORAGE_KEYS.imageModel, m.id);
-                      }
-                    }}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition focus:border-accent"
-                  >
-                    {selectableModels.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} — {m.costPerImage}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Video Model */}
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">
-                    Video Model
-                  </label>
-                  <select
-                    value={selectedVideoModel.id}
-                    onChange={(e) => {
-                      const m = VIDEO_MODELS.find((m) => m.id === e.target.value);
-                      if (m) {
-                        setSelectedVideoModel(m);
-                        localStorage.setItem(STORAGE_KEYS.videoModel, m.id);
-                        if (!m.durations.includes(duration)) {
-                          const newDur = m.defaultDuration;
-                          setDuration(newDur);
-                          saveToStorage(STORAGE_KEYS.duration, newDur);
-                        }
-                      }
-                    }}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition focus:border-accent"
-                  >
-                    {VIDEO_MODELS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} — {m.costPer5Sec}/5s
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Duration */}
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">
-                    Duration
-                  </label>
-                  <select
-                    value={duration}
-                    onChange={(e) => {
-                      const d = Number(e.target.value);
-                      setDuration(d);
-                      saveToStorage(STORAGE_KEYS.duration, d);
-                    }}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition focus:border-accent"
-                  >
-                    {selectedVideoModel.durations.map((d) => (
-                      <option key={d} value={d}>{d}s</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Aspect Ratio */}
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">
-                    Aspect Ratio
-                  </label>
-                  <div className="flex gap-1.5">
-                    {["9:16", "16:9", "1:1"].map((ratio) => (
-                      <button
-                        key={ratio}
-                        onClick={() => {
-                          setAspectRatio(ratio);
-                          saveToStorage(STORAGE_KEYS.aspectRatio, ratio);
-                        }}
-                        className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
-                          aspectRatio === ratio
-                            ? "border-accent bg-accent/10 text-accent"
-                            : "border-border bg-surface text-muted hover:border-accent/30"
-                        }`}
-                      >
-                        {ratio}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Output Folder — localhost only */}
-              {isLocal && (
-                <div className="mt-4">
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">
-                    Output Folder
-                  </label>
-                  <input
-                    type="text"
-                    value={outputFolder}
-                    onChange={(e) => handleOutputFolderChange(e.target.value)}
-                    placeholder="G:\My Drive\Shorts\PROJECT"
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
-                  />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
       {/* Shots Section */}
-      <div className="flex items-center gap-3 px-6 pt-5 pb-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Shots</h2>
+      <div className="mx-6 mt-6 mb-4 flex items-center gap-4">
+        <div className="h-px flex-1 bg-border" />
+        <h2 className="flex items-center gap-2.5 text-lg font-bold uppercase tracking-widest text-foreground">
+          <Film size={18} className="text-accent" />
+          Shots
+          <span className="text-xs font-normal normal-case tracking-normal text-muted/50">
+            {shots.length > 0 ? `${shots.length} shot${shots.length !== 1 ? "s" : ""}` : ""}
+          </span>
+        </h2>
         <div className="h-px flex-1 bg-border" />
       </div>
       <div className={viewMode === "storyboard" ? "relative px-6 pb-4" : "px-6 pb-4"}>
@@ -1197,6 +1425,8 @@ export default function ShotsPage() {
                 shot={shot}
                 globalDuration={duration}
                 globalAspectRatio={aspectRatio}
+                globalGenerateAudio={generateAudio}
+                globalResolution={resolution}
                 videoModel={selectedVideoModel}
                 onUpdate={(updates) => updateShot(shot.id, updates)}
                 onRemove={() => removeShot(shot.id)}
@@ -1231,6 +1461,8 @@ export default function ShotsPage() {
                 shot={shot}
                 globalDuration={duration}
                 globalAspectRatio={aspectRatio}
+                globalGenerateAudio={generateAudio}
+                globalResolution={resolution}
                 videoModel={selectedVideoModel}
                 imageModel={selectedImageModel}
                 onUpdate={(updates) => updateShot(shot.id, updates)}
@@ -1305,7 +1537,7 @@ export default function ShotsPage() {
                       confirmNewShotFromRef(newShotModal.imageUrl, val);
                     }
                   }}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-muted"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
                   placeholder={`e.g. ${newShotModal.suggestedNumber} or 1B`}
                 />
                 <p className="mt-1 text-[10px] text-muted">Type a number like &quot;5&quot; or &quot;1B&quot; to insert between shots</p>
@@ -1334,7 +1566,7 @@ export default function ShotsPage() {
               onChange={(e) => setPasteText(e.target.value)}
               placeholder={`SHOT 1 — Title\nIMAGE: image prompt here\nVIDEO: video prompt here\n\nSHOT 2 — Title\nIMAGE: image prompt here\nVIDEO: video prompt here`}
               rows={16}
-              className="w-full resize-y rounded-md border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-muted"
+              className="w-full resize-y rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
               autoFocus
             />
             <div className="mt-4 flex items-center justify-end gap-3">
@@ -1368,6 +1600,8 @@ function ShotCard({
   shot,
   globalDuration,
   globalAspectRatio,
+  globalGenerateAudio,
+  globalResolution,
   videoModel,
   imageModel,
   onUpdate,
@@ -1393,6 +1627,8 @@ function ShotCard({
   shot: Shot;
   globalDuration: number;
   globalAspectRatio: string;
+  globalGenerateAudio: boolean;
+  globalResolution: string;
   videoModel: VideoModelConfig;
   imageModel: ModelConfig;
   onUpdate: (updates: Partial<Shot>) => void;
@@ -1420,7 +1656,7 @@ function ShotCard({
   const statusColors: Record<ShotStatus, string> = {
     pending: "border-border text-muted",
     generating: "border-accent text-accent",
-    done: "border-green-500 text-green-400",
+    done: "border-accent text-accent",
     error: "border-red-500 text-red-400",
   };
 
@@ -1468,7 +1704,7 @@ function ShotCard({
   return (
     <div className={`overflow-hidden rounded-lg border bg-surface transition-all ${
       isBusy ? "border-accent/60 shadow-[0_0_12px_-3px] shadow-accent/20"
-      : shot.imageStatus === "done" && shot.videoStatus === "done" ? "border-green-500/25"
+      : shot.imageStatus === "done" && shot.videoStatus === "done" ? "border-accent/25"
       : shot.imageStatus === "error" || shot.videoStatus === "error" ? "border-red-500/30"
       : "border-border"
     }`}>
@@ -1514,7 +1750,7 @@ function ShotCard({
           <textarea value={shot.imagePrompt}
             onChange={(e) => onUpdate({ imagePrompt: e.target.value })}
             rows={3} placeholder="Image prompt..."
-            className="w-full resize-y rounded border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-muted" />
+            className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
           {/* Row 1: Refs + History — two columns side by side */}
           <div className="grid grid-cols-2 gap-2">
             {/* Refs column */}
@@ -1594,7 +1830,7 @@ function ShotCard({
           <textarea value={shot.videoPrompt}
             onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
             rows={3} placeholder="Video/motion prompt..."
-            className="w-full resize-y rounded border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-muted" />
+            className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
           {/* Last frame */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-medium uppercase text-muted">Last:</span>
@@ -1634,21 +1870,24 @@ function ShotCard({
                 <span className="text-[9px] font-medium uppercase text-muted">Res</span>
                 <select value={vidSettings.resolution ?? ""} onChange={(e) => onVideoSettingsChange({ resolution: e.target.value || null })}
                   className="rounded border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">{effVideoModel.defaultResolution}</option>
+                  <option value="">{globalResolution}</option>
                   {(effVideoModel.resolutions ?? []).map((r) => (<option key={r} value={r}>{r}</option>))}
                 </select>
               </div>
             )}
-            {effVideoModel.supportsGenerateAudio && (
-              <button
-                onClick={() => onVideoSettingsChange({ generateAudio: vidSettings.generateAudio === true ? null : true })}
-                className={`rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase transition ${
-                  vidSettings.generateAudio === true
-                    ? "border-green-500/30 bg-green-500/10 text-green-400"
-                    : "border-border bg-background text-muted hover:border-muted"
-                }`}
-              >{vidSettings.generateAudio === true ? "Sound on" : "Sound off"}</button>
-            )}
+            {effVideoModel.supportsGenerateAudio && (() => {
+              const effAudio = vidSettings.generateAudio ?? globalGenerateAudio;
+              return (
+                <button
+                  onClick={() => onVideoSettingsChange({ generateAudio: effAudio ? false : true })}
+                  className={`rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase transition ${
+                    effAudio
+                      ? "border-accent/30 bg-accent/10 text-accent"
+                      : "border-border bg-background text-muted hover:border-muted"
+                  }`}
+                >{effAudio ? "Sound on" : "Sound off"}</button>
+              );
+            })()}
           </div>
           {/* Advanced video settings */}
           {showSettings && (
@@ -1767,6 +2006,8 @@ function StoryboardCard({
   shot,
   globalDuration,
   globalAspectRatio,
+  globalGenerateAudio,
+  globalResolution,
   videoModel,
   imageModel,
   onUpdate,
@@ -1790,6 +2031,8 @@ function StoryboardCard({
   shot: Shot;
   globalDuration: number;
   globalAspectRatio: string;
+  globalGenerateAudio: boolean;
+  globalResolution: string;
   videoModel: VideoModelConfig;
   imageModel: ModelConfig;
   onUpdate: (updates: Partial<Shot>) => void;
@@ -1843,7 +2086,7 @@ function StoryboardCard({
   return (
     <div className={`flex w-56 shrink-0 flex-col rounded-lg border bg-surface transition-all ${
       isBusy ? "border-accent/60 shadow-[0_0_12px_-3px] shadow-accent/20"
-      : shot.imageStatus === "done" && shot.videoStatus === "done" ? "border-green-500/25"
+      : shot.imageStatus === "done" && shot.videoStatus === "done" ? "border-accent/25"
       : shot.imageStatus === "error" || shot.videoStatus === "error" ? "border-red-500/30"
       : "border-border hover:border-border/80"
     }`} style={{ scrollSnapAlign: "start" }}>
@@ -1878,7 +2121,7 @@ function StoryboardCard({
         <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-6 rounded-b-none">
           <span className="text-xs font-bold text-white/90">#{shot.number}</span>
           <div className="flex items-center gap-1.5">
-            {shot.videoUrl && <span className="text-[9px] text-green-400">▶</span>}
+            {shot.videoUrl && <span className="text-[9px] text-accent">▶</span>}
             <span className="text-[10px] text-white/70">{effDuration}s</span>
           </div>
         </div>
@@ -1946,7 +2189,7 @@ function StoryboardCard({
             <textarea value={shot.imagePrompt}
               onChange={(e) => onUpdate({ imagePrompt: e.target.value })}
               rows={3} placeholder="Image prompt..."
-              className="w-full resize-y rounded border border-border bg-background px-2 py-1.5 text-[10px] text-foreground outline-none placeholder:text-muted/40 focus:border-muted" />
+              className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[10px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
             {/* Refs */}
             <div className="flex flex-wrap items-center gap-1"
               onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
@@ -1997,7 +2240,7 @@ function StoryboardCard({
             <textarea value={shot.videoPrompt}
               onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
               rows={3} placeholder="Video/motion prompt..."
-              className="w-full resize-y rounded border border-border bg-background px-2 py-1.5 text-[10px] text-foreground outline-none placeholder:text-muted/40 focus:border-muted" />
+              className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[10px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
             {/* Last frame */}
             <div className="flex items-center gap-1"
               onDragOver={handleDragOver}
@@ -2038,7 +2281,7 @@ function StoryboardCard({
                   <label className="mb-0.5 block text-[8px] font-medium uppercase text-muted">Res</label>
                   <select value={vidSettings.resolution ?? ""} onChange={(e) => onVideoSettingsChange({ resolution: e.target.value || null })}
                     className="w-full rounded border border-border bg-background px-1 py-0.5 text-[10px] text-foreground outline-none focus:border-muted">
-                    <option value="">{effVideoModel.defaultResolution}</option>
+                    <option value="">{globalResolution}</option>
                     {(effVideoModel.resolutions ?? []).map((r) => (<option key={r} value={r}>{r}</option>))}
                   </select>
                 </div>
@@ -2052,14 +2295,17 @@ function StoryboardCard({
                 </select>
               </div>
             </div>
-            {effVideoModel.supportsGenerateAudio && (
-              <button onClick={() => onVideoSettingsChange({ generateAudio: vidSettings.generateAudio === true ? null : true })}
-                className={`w-full rounded border py-0.5 text-[9px] font-medium uppercase transition ${
-                  vidSettings.generateAudio === true
-                    ? "border-green-500/30 bg-green-500/10 text-green-400"
-                    : "border-border bg-background text-muted hover:border-muted"
-                }`}>{vidSettings.generateAudio === true ? "Sound on" : "Sound off"}</button>
-            )}
+            {effVideoModel.supportsGenerateAudio && (() => {
+              const effAudio = vidSettings.generateAudio ?? globalGenerateAudio;
+              return (
+                <button onClick={() => onVideoSettingsChange({ generateAudio: effAudio ? false : true })}
+                  className={`w-full rounded border py-0.5 text-[9px] font-medium uppercase transition ${
+                    effAudio
+                      ? "border-accent/30 bg-accent/10 text-accent"
+                      : "border-border bg-background text-muted hover:border-muted"
+                  }`}>{effAudio ? "Sound on" : "Sound off"}</button>
+              );
+            })()}
           </div>
         )}
       </div>
