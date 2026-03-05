@@ -17,8 +17,12 @@ export async function POST(req: NextRequest) {
       videoModelId,
       prompt,
       imageUrl,
+      endImageUrl,
       duration,
       aspectRatio,
+      resolution,
+      cameraFixed,
+      generateAudio,
       shotNumber,
       outputFolder,
     } = body;
@@ -45,8 +49,25 @@ export async function POST(req: NextRequest) {
       [model.params.duration]: String(duration || model.defaultDuration),
     };
 
+    // End image (last frame)
+    if (endImageUrl && model.params.endImageUrl) {
+      input[model.params.endImageUrl] = endImageUrl;
+    }
+
     if (aspectRatio && model.params.aspectRatio) {
       input[model.params.aspectRatio] = aspectRatio;
+    }
+
+    if (resolution && model.params.resolution) {
+      input[model.params.resolution] = resolution;
+    }
+
+    if (cameraFixed === true && model.supportsCameraFixed) {
+      input.camera_fixed = true;
+    }
+
+    if (generateAudio === false && model.supportsGenerateAudio) {
+      input.generate_audio = false;
     }
 
     // Add any extra input params the model requires (negative_prompt, cfg_scale, etc.)

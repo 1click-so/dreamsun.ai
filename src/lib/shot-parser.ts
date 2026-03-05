@@ -1,5 +1,5 @@
 export interface ParsedShot {
-  number: number;
+  number: string;
   title: string;
   imagePrompt: string;
   videoPrompt: string;
@@ -25,14 +25,14 @@ export function parseShotList(text: string): ParsedShot[] {
     const line = rawLine.trim();
 
     // Match SHOT header: "SHOT 1 — Title" or "SHOT 1 - Title"
-    const shotMatch = line.match(/^SHOT\s+(\d+)\s*[—\-–]\s*(.+)$/i);
+    const shotMatch = line.match(/^SHOT\s+(\d+[a-zA-Z]?)\s*[—\-–]\s*(.+)$/i);
     if (shotMatch) {
       // Save previous shot
       if (currentShot?.number != null) {
         shots.push(finalizeShot(currentShot));
       }
       currentShot = {
-        number: parseInt(shotMatch[1], 10),
+        number: shotMatch[1],
         title: shotMatch[2].trim(),
         imagePrompt: "",
         videoPrompt: "",
@@ -79,7 +79,7 @@ export function parseShotList(text: string): ParsedShot[] {
 
 function finalizeShot(partial: Partial<ParsedShot>): ParsedShot {
   return {
-    number: partial.number ?? 0,
+    number: partial.number ?? "0",
     title: (partial.title ?? "").trim(),
     imagePrompt: (partial.imagePrompt ?? "").trim(),
     videoPrompt: (partial.videoPrompt ?? "").trim(),
