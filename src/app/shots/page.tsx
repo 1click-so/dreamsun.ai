@@ -1272,7 +1272,7 @@ export default function ShotsPage() {
                 onImageSettingsChange={(updates) => updateShotImageSettings(shot.id, updates)}
                 onVideoSettingsChange={(updates) => updateShotVideoSettings(shot.id, updates)}
                 imageModel={selectedImageModel}
-                onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url })}
+                onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
               />
             ))}
@@ -1304,7 +1304,7 @@ export default function ShotsPage() {
                 onEndFrameRemove={() => removeEndFrame(shot.id)}
                 onImageSettingsChange={(updates) => updateShotImageSettings(shot.id, updates)}
                 onVideoSettingsChange={(updates) => updateShotVideoSettings(shot.id, updates)}
-                onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url })}
+                onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
               />
             ))}
