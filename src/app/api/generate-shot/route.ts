@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
     }
 
     const imageUrl = images[0].url;
+    const allImageUrls = images.map((img) => img.url);
     let localPath: string | null = null;
 
     // Save to local file if outputFolder is specified
@@ -117,29 +118,31 @@ export async function POST(req: NextRequest) {
     if (outputFolder && shotNumber != null) {
       try {
         const paddedNum = String(shotNumber).padStart(3, "0");
-        const fileName = `shot-${paddedNum}.png`;
-        const filePath = join(outputFolder, fileName);
 
-        console.log("[generate-shot] Saving to:", filePath);
+        // Save all images (first as shot-001.png, extras as shot-001-2.png, etc.)
+        for (let i = 0; i < allImageUrls.length; i++) {
+          const suffix = i === 0 ? "" : `-${i + 1}`;
+          const fileName = `shot-${paddedNum}${suffix}.png`;
+          const filePath = join(outputFolder, fileName);
 
-        // Ensure directory exists
-        await mkdir(dirname(filePath), { recursive: true });
+          console.log("[generate-shot] Saving to:", filePath);
+          await mkdir(dirname(filePath), { recursive: true });
 
-        // Fetch image bytes from fal.media URL
-        const imgRes = await fetch(imageUrl);
-        const buffer = Buffer.from(await imgRes.arrayBuffer());
-        await writeFile(filePath, buffer);
+          const imgRes = await fetch(allImageUrls[i]);
+          const buffer = Buffer.from(await imgRes.arrayBuffer());
+          await writeFile(filePath, buffer);
 
-        console.log("[generate-shot] Saved successfully:", filePath, `(${buffer.length} bytes)`);
-        localPath = filePath;
+          console.log("[generate-shot] Saved successfully:", filePath, `(${buffer.length} bytes)`);
+          if (i === 0) localPath = filePath;
+        }
       } catch (saveErr) {
         console.error("[generate-shot] Failed to save image locally:", saveErr);
-        // Don't fail the request — image was still generated
       }
     }
 
     return NextResponse.json({
       imageUrl,
+      allImageUrls,
       width: images[0].width,
       height: images[0].height,
       seed: data.seed,
