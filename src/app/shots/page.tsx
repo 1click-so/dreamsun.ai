@@ -60,6 +60,7 @@ function createShot(parsed?: ParsedShot): Shot {
 // --- localStorage helpers ---
 const STORAGE_KEYS = {
   folder: "dreamsun_shots_folder",
+  promptPrefix: "dreamsun_shots_prompt_prefix",
   imageModel: "dreamsun_shots_image_model",
   videoModel: "dreamsun_shots_video_model",
   aspectRatio: "dreamsun_shots_ratio",
@@ -89,6 +90,10 @@ export default function ShotsPage() {
   const [outputFolder, setOutputFolder] = useState(() => {
     if (typeof window === "undefined") return "";
     return localStorage.getItem(STORAGE_KEYS.folder) || "";
+  });
+  const [promptPrefix, setPromptPrefix] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem(STORAGE_KEYS.promptPrefix) || "";
   });
   const [selectedImageModel, setSelectedImageModel] = useState<ModelConfig>(
     () => {
@@ -294,7 +299,7 @@ export default function ShotsPage() {
 
       const body: Record<string, unknown> = {
         modelId: model.id,
-        prompt: shot.imagePrompt,
+        prompt: promptPrefix ? `${promptPrefix.trim()} ${shot.imagePrompt}` : shot.imagePrompt,
         aspectRatio,
         shotNumber: shot.number,
         outputFolder: outputFolder || undefined,
@@ -462,8 +467,9 @@ export default function ShotsPage() {
       </header>
 
       {/* Settings Bar */}
-      <div className="border-b border-border bg-surface px-6 py-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <div className="border-b border-border bg-surface px-6 py-4 space-y-3">
+        {/* Top row: Output Folder + Prompt Prefix */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_2fr]">
           {/* Output Folder */}
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">
@@ -477,6 +483,28 @@ export default function ShotsPage() {
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
             />
           </div>
+
+          {/* Prompt Prefix */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">
+              Prompt Prefix
+              <span className="ml-1.5 text-muted/50">(prepended to every shot)</span>
+            </label>
+            <input
+              type="text"
+              value={promptPrefix}
+              onChange={(e) => {
+                setPromptPrefix(e.target.value);
+                localStorage.setItem(STORAGE_KEYS.promptPrefix, e.target.value);
+              }}
+              placeholder="The same donkey with the same animated characteristics. Do not modify the animation style - on a white background."
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+            />
+          </div>
+        </div>
+
+        {/* Bottom row: Models + Settings */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
 
           {/* Image Model */}
           <div>
