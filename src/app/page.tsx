@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { fal } from "@fal-ai/client";
-import { MODELS, type ModelConfig } from "@/lib/models";
+import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
 
 // Route uploads through our proxy (keeps FAL_KEY server-side).
 // fal.storage.upload() sends file bytes directly to fal CDN via presigned URL,
@@ -57,8 +57,6 @@ export default function Home() {
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const maxImages = selectedModel.referenceImage?.maxImages ?? 1;
-
   const handleImageUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
@@ -66,7 +64,7 @@ export default function Home() {
 
       const filesToProcess = Array.from(files).slice(
         0,
-        maxImages - referenceImages.length
+        14 - referenceImages.length
       );
 
       for (const file of filesToProcess) {
@@ -97,7 +95,7 @@ export default function Home() {
       // Reset input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
-    [maxImages, referenceImages.length]
+    [referenceImages.length]
   );
 
   const removeReferenceImage = useCallback((id: string) => {
@@ -115,17 +113,17 @@ export default function Home() {
     setError(null);
 
     try {
+      // Auto-resolve to edit variant if reference images are present
+      const hasRefs = referenceImages.some((img) => img.url);
+      const effectiveModel = resolveModel(selectedModel.id, hasRefs) ?? selectedModel;
+
       const body: Record<string, unknown> = {
-        modelId: selectedModel.id,
+        modelId: effectiveModel.id,
         prompt: prompt.trim(),
         aspectRatio,
       };
 
-      if (
-        referenceImages.length > 0 &&
-        selectedModel.capability === "image-to-image"
-      ) {
-        // Send the uploaded fal.media URLs (not base64)
+      if (hasRefs && effectiveModel.capability === "image-to-image") {
         const urls = referenceImages
           .filter((img) => img.url)
           .map((img) => img.url as string);
@@ -134,7 +132,7 @@ export default function Home() {
         }
       }
 
-      if (negativePrompt.trim() && selectedModel.supportsNegativePrompt) {
+      if (negativePrompt.trim() && effectiveModel.supportsNegativePrompt) {
         body.negativePrompt = negativePrompt.trim();
       }
 
@@ -172,19 +170,13 @@ export default function Home() {
         setAspectRatio(newRatio);
         localStorage.setItem("dreamsun_ratio", newRatio);
       }
-      // Clear reference images when switching models
-      if (model.capability !== selectedModel.capability) {
-        setReferenceImages([]);
-      }
     }
   };
 
-  const textToImageModels = MODELS.filter(
-    (m) => m.capability === "text-to-image" || m.capability === "both"
-  );
-  const imageToImageModels = MODELS.filter(
-    (m) => m.capability === "image-to-image" || m.capability === "both"
-  );
+  const selectableModels = getSelectableModels();
+  const hasRefs = referenceImages.some((img) => img.url);
+  const currentEffectiveModel = resolveModel(selectedModel.id, hasRefs) ?? selectedModel;
+  const maxImages = currentEffectiveModel.referenceImage?.maxImages ?? 14;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -212,31 +204,25 @@ export default function Home() {
                 onChange={(e) => handleModelChange(e.target.value)}
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
               >
-                <optgroup label="Text to Image">
-                  {textToImageModels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} — {m.costPerImage}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Image to Image">
-                  {imageToImageModels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} — {m.costPerImage}
-                    </option>
-                  ))}
-                </optgroup>
+                {selectableModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} — {m.costPerImage}
+                  </option>
+                ))}
               </select>
               <p className="mt-1.5 text-xs text-muted">
-                {selectedModel.description}
+                {currentEffectiveModel.description}
+                {hasRefs && currentEffectiveModel.id !== selectedModel.id && (
+                  <span className="ml-1 text-accent">(Edit mode)</span>
+                )}
               </p>
             </section>
 
-            {/* Reference Images (for image-to-image) */}
-            {selectedModel.capability === "image-to-image" && (
+            {/* Reference Images — always shown, auto-switches to edit variant */}
+            {selectedModel.editVariant && (
               <section>
                 <label className="mb-2 block text-sm font-medium text-muted">
-                  Reference Image{maxImages > 1 ? `s (up to ${maxImages})` : ""}
+                  Reference Images (up to {maxImages})
                 </label>
 
                 {/* Uploaded images grid */}
@@ -312,7 +298,7 @@ export default function Home() {
             </section>
 
             {/* Negative Prompt */}
-            {selectedModel.supportsNegativePrompt && (
+            {currentEffectiveModel.supportsNegativePrompt && (
               <section>
                 <label className="mb-2 block text-sm font-medium text-muted">
                   Negative Prompt

@@ -34,6 +34,8 @@ export interface ModelConfig {
   extraInput?: Record<string, unknown>;
   /** Set false to skip sending output_format (some endpoints don't support it) */
   supportsOutputFormat?: boolean;
+  /** ID of the image-to-image variant of this model (auto-switch when refs added) */
+  editVariant?: string;
 }
 
 export const MODELS: ModelConfig[] = [
@@ -48,6 +50,7 @@ export const MODELS: ModelConfig[] = [
     aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: true,
+    editVariant: "nano-banana-pro-edit",
   },
   {
     id: "nano-banana-2",
@@ -59,10 +62,11 @@ export const MODELS: ModelConfig[] = [
     aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: false,
+    editVariant: "nano-banana-2-edit",
   },
   {
     id: "grok-imagine",
-    name: "Grok Imagine Image",
+    name: "Grok Imagine",
     endpoint: "xai/grok-imagine-image",
     capability: "text-to-image",
     description: "xAI's highly aesthetic image generation model.",
@@ -70,6 +74,7 @@ export const MODELS: ModelConfig[] = [
     aspectRatios: ["16:9", "4:3", "1:1", "3:4", "9:16"],
     defaultAspectRatio: "1:1",
     supportsNegativePrompt: false,
+    editVariant: "grok-imagine-edit",
   },
 
   // --- LoRA ---
@@ -236,4 +241,19 @@ export function getTextToImageModels(): ModelConfig[] {
 
 export function getImageToImageModels(): ModelConfig[] {
   return MODELS.filter((m) => m.capability === "image-to-image" || m.capability === "both");
+}
+
+/** Models shown in the selector — text-to-image only (edit variants are auto-resolved) */
+export function getSelectableModels(): ModelConfig[] {
+  return MODELS.filter((m) => m.capability === "text-to-image");
+}
+
+/** Resolve which model to actually use: if refs are present and model has an edit variant, use that */
+export function resolveModel(modelId: string, hasRefs: boolean): ModelConfig | undefined {
+  const model = getModelById(modelId);
+  if (!model) return undefined;
+  if (hasRefs && model.editVariant) {
+    return getModelById(model.editVariant) ?? model;
+  }
+  return model;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { fal } from "@fal-ai/client";
-import { MODELS, type ModelConfig } from "@/lib/models";
+import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
 import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
 
@@ -250,8 +250,12 @@ export default function ShotsPage() {
       const allRefs = [...charRefUrls, ...shotRefUrls];
 
       try {
+        // Auto-resolve to edit variant if this shot has refs
+        const shotHasRefs = allRefs.length > 0;
+        const model = resolveModel(selectedImageModel.id, shotHasRefs) ?? selectedImageModel;
+
         const body: Record<string, unknown> = {
-          modelId: selectedImageModel.id,
+          modelId: model.id,
           prompt: shot.imagePrompt,
           aspectRatio,
           shotNumber: shot.number,
@@ -259,11 +263,8 @@ export default function ShotsPage() {
           safetyChecker: false,
         };
 
-        // Only send refs for image-to-image models
-        if (
-          allRefs.length > 0 &&
-          selectedImageModel.capability === "image-to-image"
-        ) {
+        // Send refs when using an image-to-image model
+        if (shotHasRefs && model.capability === "image-to-image") {
           body.referenceImageUrls = allRefs;
         }
 
@@ -365,12 +366,13 @@ export default function ShotsPage() {
   };
 
   // --- Computed ---
-  const textToImageModels = MODELS.filter(
-    (m) => m.capability === "text-to-image" || m.capability === "both"
-  );
-  const imageToImageModels = MODELS.filter(
-    (m) => m.capability === "image-to-image" || m.capability === "both"
-  );
+  const selectableModels = getSelectableModels();
+
+  // Whether any refs exist (project-level or per-shot)
+  const hasAnyRefs = charRefs.some((r) => r.url);
+
+  // The actual model that will be used (auto-switches to edit variant when refs present)
+  const effectiveModel = resolveModel(selectedImageModel.id, hasAnyRefs) ?? selectedImageModel;
 
   const imagesCompleted = shots.filter((s) => s.imageStatus === "done").length;
   const imagesGenerating = shots.filter(
@@ -385,7 +387,7 @@ export default function ShotsPage() {
 
   const estimatedImageCost = (() => {
     const cost = parseFloat(
-      selectedImageModel.costPerImage.replace(/[^0-9.]/g, "")
+      effectiveModel.costPerImage.replace(/[^0-9.]/g, "")
     );
     return (cost * shots.length).toFixed(2);
   })();
@@ -439,6 +441,11 @@ export default function ShotsPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">
               Image Model
+              {hasAnyRefs && effectiveModel.id !== selectedImageModel.id && (
+                <span className="ml-1.5 text-accent">
+                  (Edit mode)
+                </span>
+              )}
             </label>
             <select
               value={selectedImageModel.id}
@@ -448,20 +455,11 @@ export default function ShotsPage() {
               }}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             >
-              <optgroup label="Text to Image">
-                {textToImageModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} — {m.costPerImage}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Image to Image">
-                {imageToImageModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} — {m.costPerImage}
-                  </option>
-                ))}
-              </optgroup>
+              {selectableModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} — {m.costPerImage}
+                </option>
+              ))}
             </select>
           </div>
 
