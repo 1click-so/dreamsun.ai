@@ -1112,19 +1112,34 @@ export default function ShotsPage() {
   };
 
   // --- Auto-hide header on scroll down, show on scroll up ---
+  // Requires ~30px of sustained upward scrolling to reveal (not a single flick)
   const headerRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
+  const upDistance = useRef(0);
   const [headerVisible, setHeaderVisible] = useState(true);
 
   useEffect(() => {
+    const UP_THRESHOLD = 30; // px of cumulative upward scroll needed to show
     const onScroll = () => {
       const y = window.scrollY;
-      // Show when scrolling up or near top
-      if (y < 80 || y < lastScrollY.current) {
+      const delta = y - lastScrollY.current;
+
+      if (y < 80) {
+        // Near the top — always show
         setHeaderVisible(true);
-      } else if (y > lastScrollY.current + 5) {
+        upDistance.current = 0;
+      } else if (delta < 0) {
+        // Scrolling up — accumulate distance
+        upDistance.current += Math.abs(delta);
+        if (upDistance.current >= UP_THRESHOLD) {
+          setHeaderVisible(true);
+        }
+      } else if (delta > 5) {
+        // Scrolling down — hide and reset accumulator
+        upDistance.current = 0;
         setHeaderVisible(false);
       }
+
       lastScrollY.current = y;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
