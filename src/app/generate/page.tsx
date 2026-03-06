@@ -1754,12 +1754,10 @@ function ImageLightbox({
     ? new Date(result.createdAt).toLocaleString()
     : null;
 
-  // Load scenes from localStorage for the shot picker
-  const scenes = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("dreamsun_scenes");
-      return raw ? (JSON.parse(raw) as { id: string; name: string; shots: unknown[] }[]) : [];
-    } catch { return []; }
+  // Load scenes from Supabase for the shot picker
+  const [scenes, setScenes] = useState<{ id: string; name: string; shots: unknown[] }[]>([]);
+  useEffect(() => {
+    fetch("/api/scenes").then((r) => r.ok ? r.json() : []).then(setScenes).catch(() => {});
   }, []);
 
   const sizeLabel = imageMeta.w && imageMeta.h ? `${imageMeta.w} × ${imageMeta.h}` : null;
@@ -1872,11 +1870,10 @@ function ImageLightbox({
                 )}
                 {/* New Scene — always available */}
                 <button
-                  onClick={() => {
-                    const allScenes = JSON.parse(localStorage.getItem("dreamsun_scenes") || "[]");
+                  onClick={async () => {
                     const newScene = {
                       id: `scene_${Date.now()}`,
-                      name: `Scene ${allScenes.length + 1}`,
+                      name: `Scene ${scenes.length + 1}`,
                       shots: [{
                         id: `shot_${Date.now()}`,
                         number: "1",
@@ -1919,10 +1916,15 @@ function ImageLightbox({
                       createdAt: Date.now(),
                       updatedAt: Date.now(),
                     };
-                    allScenes.unshift(newScene);
-                    localStorage.setItem("dreamsun_scenes", JSON.stringify(allScenes));
+                    setScenes((prev) => [newScene, ...prev]);
                     onAddToShots(result.imageUrl);
                     setShowShotPicker(false);
+                    // Fire-and-forget save to Supabase
+                    fetch("/api/scenes", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ ...newScene, sort_order: 0 }),
+                    }).catch(() => {});
                   }}
                   className="mb-1 flex w-full items-center gap-2 rounded-lg border border-dashed border-white/10 px-2 py-1.5 text-left transition hover:border-accent/30 hover:bg-white/5"
                 >
@@ -1940,15 +1942,14 @@ function ImageLightbox({
                     {filtered.map((scene) => (
                       <button
                         key={scene.id}
-                        onClick={() => {
-                          const allScenes = JSON.parse(localStorage.getItem("dreamsun_scenes") || "[]");
-                          const target = allScenes.find((s: { id: string }) => s.id === scene.id);
+                        onClick={async () => {
+                          const target = scenes.find((s) => s.id === scene.id);
                           if (target) {
                             const maxNum = (target.shots as { number?: string | number }[]).reduce((max: number, s: { number?: string | number }) => {
                               const n = parseInt(String(s.number ?? 0), 10) || 0;
                               return n > max ? n : max;
                             }, 0);
-                            target.shots.push({
+                            const newShot = {
                               id: `shot_${Date.now()}`,
                               number: String(maxNum + 1),
                               title: "",
@@ -1972,9 +1973,17 @@ function ImageLightbox({
                                 image: { modelId: null, aspectRatio: null, safetyChecker: null },
                                 video: { modelId: null, duration: null, aspectRatio: null, resolution: null, cameraFixed: null, generateAudio: null },
                               },
-                            });
-                            target.updatedAt = Date.now();
-                            localStorage.setItem("dreamsun_scenes", JSON.stringify(allScenes));
+                            };
+                            const updatedShots = [...(target.shots as unknown[]), newShot];
+                            setScenes((prev) => prev.map((s) =>
+                              s.id === scene.id ? { ...s, shots: updatedShots } : s
+                            ));
+                            // Fire-and-forget save to Supabase
+                            fetch("/api/scenes", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ ...target, shots: updatedShots }),
+                            }).catch(() => {});
                           }
                           onAddToShots(result.imageUrl);
                           setShowShotPicker(false);

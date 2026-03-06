@@ -142,20 +142,72 @@ interface Scene {
   updatedAt: number;
 }
 
-const SCENES_KEY = "dreamsun_scenes";
 const ACTIVE_SCENE_KEY = "dreamsun_active_scene";
+const SCENES_KEY = "dreamsun_scenes"; // legacy localStorage key for migration
 
-function loadScenes(): Scene[] {
+// --- Supabase scene persistence ---
+
+async function fetchScenesFromDB(): Promise<Scene[]> {
+  try {
+    const res = await fetch("/api/scenes");
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return rows.map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      name: r.name as string,
+      shots: (r.shots as Record<string, unknown>[]) || [],
+      settings: r.settings as SceneSettings,
+      createdAt: new Date(r.created_at as string).getTime(),
+      updatedAt: new Date(r.updated_at as string).getTime(),
+    }));
+  } catch { return []; }
+}
+
+async function saveSceneToDB(scene: Scene) {
+  try {
+    await fetch("/api/scenes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: scene.id,
+        name: scene.name,
+        settings: scene.settings,
+        shots: scene.shots,
+      }),
+    });
+  } catch (err) { console.error("[scenes] Save failed:", err); }
+}
+
+async function deleteSceneFromDB(id: string) {
+  try {
+    await fetch(`/api/scenes?id=${id}`, { method: "DELETE" });
+  } catch (err) { console.error("[scenes] Delete failed:", err); }
+}
+
+async function bulkSaveScenesToDB(scenes: Scene[]) {
+  try {
+    await fetch("/api/scenes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scenes: scenes.map((s) => ({
+          id: s.id,
+          name: s.name,
+          settings: s.settings,
+          shots: s.shots,
+        })),
+      }),
+    });
+  } catch (err) { console.error("[scenes] Bulk save failed:", err); }
+}
+
+/** Load from legacy localStorage (for migration only) */
+function loadScenesFromLocalStorage(): Scene[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(SCENES_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
-}
-
-function saveScenes(scenes: Scene[]) {
-  try { localStorage.setItem(SCENES_KEY, JSON.stringify(scenes)); }
-  catch { /* quota */ }
 }
 
 function getDefaultSettings(): SceneSettings {
@@ -408,54 +460,85 @@ function SceneOverview({
 // --- Main Page (with scene routing) ---
 
 export default function ShotsPage() {
-  // --- Scene management ---
-  const [scenes, setScenes] = useState<Scene[]>(() => {
-    const loaded = loadScenes();
-    // Migrate: if no scenes exist but old shots do, create a scene from them
-    if (loaded.length === 0 && typeof window !== "undefined") {
-      try {
-        const oldShots = localStorage.getItem(STORAGE_KEYS.shots);
-        if (oldShots) {
-          const parsed = JSON.parse(oldShots);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const migrated: Scene = {
-              id: `scene_${Date.now()}`,
-              name: "Untitled Scene",
-              shots: parsed,
-              settings: {
-                imageModelId: localStorage.getItem(STORAGE_KEYS.imageModel) || "nano-banana-2",
-                videoModelId: localStorage.getItem(STORAGE_KEYS.videoModel) || "seedance-1-5-pro",
-                aspectRatio: loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16"),
-                imageResolution: loadFromStorage(STORAGE_KEYS.imageResolution, "1k"),
-                numImages: loadFromStorage(STORAGE_KEYS.numImages, 1),
-                safetyChecker: loadFromStorage(STORAGE_KEYS.safetyChecker, false),
-                duration: loadFromStorage(STORAGE_KEYS.duration, 5),
-                resolution: loadFromStorage(STORAGE_KEYS.resolution, "720p"),
-                generateAudio: loadFromStorage(STORAGE_KEYS.generateAudio, false),
-                cameraFixed: loadFromStorage(STORAGE_KEYS.cameraFixed, false),
-                promptPrefix: localStorage.getItem(STORAGE_KEYS.promptPrefix) || "",
-                outputFolder: localStorage.getItem(STORAGE_KEYS.folder) || "",
-              },
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            };
-            saveScenes([migrated]);
-            try { localStorage.setItem(ACTIVE_SCENE_KEY, migrated.id); } catch {}
-            return [migrated];
-          }
-        }
-      } catch {}
-    }
-    return loaded;
-  });
+  // --- Scene management (Supabase-backed) ---
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [scenesLoaded, setScenesLoaded] = useState(false);
   const [activeSceneId, setActiveSceneId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(ACTIVE_SCENE_KEY) || null;
   });
 
+  // Load scenes from Supabase on mount, migrate localStorage if needed
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // 1. Fetch from Supabase
+      const dbScenes = await fetchScenesFromDB();
+
+      if (cancelled) return;
+
+      if (dbScenes.length > 0) {
+        // Supabase has scenes — use them
+        setScenes(dbScenes);
+        setScenesLoaded(true);
+        return;
+      }
+
+      // 2. Supabase is empty — check localStorage for migration
+      const localScenes = loadScenesFromLocalStorage();
+
+      // Also check for legacy flat shots format
+      if (localScenes.length === 0 && typeof window !== "undefined") {
+        try {
+          const oldShots = localStorage.getItem(STORAGE_KEYS.shots);
+          if (oldShots) {
+            const parsed = JSON.parse(oldShots);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const migrated: Scene = {
+                id: `scene_${Date.now()}`,
+                name: "Untitled Scene",
+                shots: parsed,
+                settings: {
+                  imageModelId: localStorage.getItem(STORAGE_KEYS.imageModel) || "nano-banana-2",
+                  videoModelId: localStorage.getItem(STORAGE_KEYS.videoModel) || "seedance-1-5-pro",
+                  aspectRatio: loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16"),
+                  imageResolution: loadFromStorage(STORAGE_KEYS.imageResolution, "1k"),
+                  numImages: loadFromStorage(STORAGE_KEYS.numImages, 1),
+                  safetyChecker: loadFromStorage(STORAGE_KEYS.safetyChecker, false),
+                  duration: loadFromStorage(STORAGE_KEYS.duration, 5),
+                  resolution: loadFromStorage(STORAGE_KEYS.resolution, "720p"),
+                  generateAudio: loadFromStorage(STORAGE_KEYS.generateAudio, false),
+                  cameraFixed: loadFromStorage(STORAGE_KEYS.cameraFixed, false),
+                  promptPrefix: localStorage.getItem(STORAGE_KEYS.promptPrefix) || "",
+                  outputFolder: localStorage.getItem(STORAGE_KEYS.folder) || "",
+                },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              };
+              localScenes.push(migrated);
+            }
+          }
+        } catch {}
+      }
+
+      if (localScenes.length > 0) {
+        // Migrate localStorage scenes to Supabase
+        setScenes(localScenes);
+        setScenesLoaded(true);
+        await bulkSaveScenesToDB(localScenes);
+        // Clear localStorage after successful migration
+        try { localStorage.removeItem(SCENES_KEY); } catch {}
+        console.log(`[scenes] Migrated ${localScenes.length} scene(s) from localStorage to Supabase`);
+      } else {
+        setScenesLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeScene = scenes.find((s) => s.id === activeSceneId) ?? null;
 
-  // Scene CRUD
+  // Scene CRUD — optimistic UI + async Supabase save
   const createScene = () => {
     const scene: Scene = {
       id: `scene_${Date.now()}`,
@@ -467,26 +550,27 @@ export default function ShotsPage() {
     };
     const updated = [scene, ...scenes];
     setScenes(updated);
-    saveScenes(updated);
     setActiveSceneId(scene.id);
     try { localStorage.setItem(ACTIVE_SCENE_KEY, scene.id); } catch {}
+    saveSceneToDB(scene);
   };
 
   const deleteScene = (id: string) => {
     const updated = scenes.filter((s) => s.id !== id);
     setScenes(updated);
-    saveScenes(updated);
     if (activeSceneId === id) {
       setActiveSceneId(null);
       try { localStorage.removeItem(ACTIVE_SCENE_KEY); } catch {}
     }
+    deleteSceneFromDB(id);
   };
 
   const renameScene = (id: string, name: string) => {
     if (!name) return;
     const updated = scenes.map((s) => s.id === id ? { ...s, name, updatedAt: Date.now() } : s);
     setScenes(updated);
-    saveScenes(updated);
+    const scene = updated.find((s) => s.id === id);
+    if (scene) saveSceneToDB(scene);
   };
 
   const openScene = (id: string) => {
@@ -606,10 +690,23 @@ export default function ShotsPage() {
             }
           : sc
       );
-      saveScenes(updated);
+      // Save to Supabase
+      const scene = updated.find((s) => s.id === activeSceneId);
+      if (scene) saveSceneToDB(scene);
       return updated;
     });
   }, [activeSceneId]);
+
+  if (!scenesLoaded) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Navbar />
+        <div className="flex min-h-[400px] items-center justify-center">
+          <div className="text-sm text-muted animate-pulse">Loading scenes...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!activeScene) {
     return (
