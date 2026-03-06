@@ -49,6 +49,9 @@ export interface Shot {
   /** Per-shot end frame (last frame) for video */
   endImageUrl: string | null;
   endImageRef: UploadedRef | null;
+  /** Per-shot audio URL for audio-to-video models */
+  audioUrl: string | null;
+  audioRef: UploadedRef | null;
   /** Per-shot overrides (null = use global) */
   settings: ShotSettings;
   /** History of all generated image URLs (newest first) */

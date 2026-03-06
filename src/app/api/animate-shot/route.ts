@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getVideoModelById } from "@/lib/video-models";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, readdir } from "fs/promises";
 import { dirname, join } from "path";
 
 fal.config({
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       prompt,
       imageUrl,
       endImageUrl,
+      audioUrl,
       duration,
       aspectRatio,
       resolution,
@@ -43,11 +44,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Build input using model's param mapping
+    const durationVal = duration || model.defaultDuration;
     const input: Record<string, unknown> = {
       [model.params.imageUrl]: imageUrl,
       [model.params.prompt]: prompt || "",
-      [model.params.duration]: String(duration || model.defaultDuration),
+      [model.params.duration]: typeof durationVal === "number" ? durationVal : Number(durationVal),
     };
+
+    // Audio URL for audio-to-video models
+    if (audioUrl && model.params.audioUrl) {
+      input[model.params.audioUrl] = audioUrl;
+    }
 
     // End image (last frame)
     if (endImageUrl && model.params.endImageUrl) {
@@ -114,10 +121,21 @@ export async function POST(req: NextRequest) {
     if (outputFolder && shotNumber != null) {
       try {
         const paddedNum = String(shotNumber).padStart(3, "0");
-        const fileName = `video-shot-${paddedNum}.mp4`;
-        const filePath = join(outputFolder, fileName);
+        const prefix = `video-shot-${paddedNum}`;
 
-        await mkdir(dirname(filePath), { recursive: true });
+        await mkdir(outputFolder, { recursive: true });
+        let nextGen = 1;
+        try {
+          const existing = await readdir(outputFolder);
+          const pattern = new RegExp(`^${prefix}_(\\d+)\\.mp4$`);
+          for (const f of existing) {
+            const m = f.match(pattern);
+            if (m) nextGen = Math.max(nextGen, Number(m[1]) + 1);
+          }
+        } catch { /* folder doesn't exist yet */ }
+
+        const fileName = `${prefix}_${nextGen}.mp4`;
+        const filePath = join(outputFolder, fileName);
 
         const vidRes = await fetch(videoUrl);
         const buffer = Buffer.from(await vidRes.arrayBuffer());

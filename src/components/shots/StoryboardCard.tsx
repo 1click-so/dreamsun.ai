@@ -329,9 +329,9 @@ export function StoryboardCard({
           </div>
         )}
 
-        {/* Generating indicator */}
+        {/* Generating indicator — right side to avoid tag overlap */}
         {isBusy && (
-          <div className="absolute left-2 top-2">
+          <div className="absolute right-2 top-2">
             <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-medium text-accent">
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
               {isImageBusy ? "Image..." : "Video..."}

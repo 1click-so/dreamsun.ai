@@ -156,17 +156,26 @@ textarea:focus {
   scrollbar-color: var(--color-muted) var(--color-border);
 }
 
+/* Hidden scrollbar — for auto-expanding textareas */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* ================================================================
    GENERATING STATE — subtle pulsing border
    ================================================================ */
 
 @keyframes pulse-border {
-  0%, 100% { border-color: rgba(161, 252, 223, 0.15); }
-  50% { border-color: rgba(161, 252, 223, 0.4); }
+  0%, 100% { border-color: rgba(161, 252, 223, 0.2); }
+  50% { border-color: rgba(161, 252, 223, 0.6); }
 }
 
 .glow-border {
-  animation: pulse-border 2s ease-in-out infinite;
+  animation: pulse-border 1.8s ease-in-out infinite;
 }
 
 /* ================================================================

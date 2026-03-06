@@ -26,10 +26,10 @@ export function LandingNavbar() {
       </div>
 
       <div className="flex items-center gap-4">
-        <button className="text-sm font-medium hover:text-accent transition-colors hidden sm:block">
+        <Link href="/login" className="text-sm font-medium hover:text-accent transition-colors hidden sm:block">
           Log in
-        </button>
-        <Link href="/generate" className="bg-white text-black px-4 py-2 rounded-full text-sm font-semibold hover:bg-accent transition-colors">
+        </Link>
+        <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full text-sm font-semibold hover:bg-accent transition-colors">
           Start Creating
         </Link>
       </div>

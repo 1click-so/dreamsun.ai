@@ -5,13 +5,13 @@ import Link from "next/link";
 import { Logo } from "./Logo";
 
 const NAV_ITEMS = [
-  { href: "/generate", label: "Image" },
-  { href: "/video", label: "Video" },
-  { href: "/shots", label: "Shot List" },
+  { href: "/generate", label: "Images" },
+  { href: "/video", label: "Videos" },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
+  const isShotsActive = pathname === "/shots";
 
   return (
     <nav className="flex items-center gap-4 border-b border-border px-5 py-2.5">
@@ -37,6 +37,21 @@ export function Navbar() {
             </Link>
           );
         })}
+
+        {/* Shots — hero feature, always accented */}
+        <Link
+          href="/shots"
+          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold tracking-wide transition ${
+            isShotsActive
+              ? "bg-accent/15 text-accent"
+              : "text-accent hover:bg-accent/10"
+          }`}
+        >
+          Shots
+          <span className="rounded bg-accent px-1 py-px text-[9px] font-bold uppercase leading-tight text-black">
+            New
+          </span>
+        </Link>
       </div>
     </nav>
   );

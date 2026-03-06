@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
-import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download } from "lucide-react";
+import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download, CloudUpload } from "lucide-react";
 import JSZip from "jszip";
 import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
@@ -55,6 +55,8 @@ function createShot(parsed?: ParsedShot): Shot {
     refImages: [],
     endImageUrl: null,
     endImageRef: null,
+    audioUrl: null,
+    audioRef: null,
     imageHistory: [],
     videoHistory: [],
     settings: {
@@ -106,10 +108,71 @@ function migrateShot(raw: Record<string, unknown>): Shot {
 
   if (!s.endImageUrl) s.endImageUrl = null;
   if (!s.endImageRef) s.endImageRef = null;
+  if (!s.audioUrl) s.audioUrl = null;
+  if (!s.audioRef) s.audioRef = null;
   if (!Array.isArray(s.imageHistory)) s.imageHistory = [];
   if (!Array.isArray(s.videoHistory)) s.videoHistory = [];
 
   return s;
+}
+
+// --- Scene types ---
+
+interface SceneSettings {
+  imageModelId: string;
+  videoModelId: string;
+  aspectRatio: string;
+  imageResolution: string;
+  numImages: number;
+  safetyChecker: boolean;
+  duration: number;
+  resolution: string;
+  generateAudio: boolean;
+  cameraFixed: boolean;
+  promptPrefix: string;
+  outputFolder: string;
+}
+
+interface Scene {
+  id: string;
+  name: string;
+  shots: Record<string, unknown>[]; // serialized Shot[]
+  settings: SceneSettings;
+  createdAt: number;
+  updatedAt: number;
+}
+
+const SCENES_KEY = "dreamsun_scenes";
+const ACTIVE_SCENE_KEY = "dreamsun_active_scene";
+
+function loadScenes(): Scene[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(SCENES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveScenes(scenes: Scene[]) {
+  try { localStorage.setItem(SCENES_KEY, JSON.stringify(scenes)); }
+  catch { /* quota */ }
+}
+
+function getDefaultSettings(): SceneSettings {
+  return {
+    imageModelId: "nano-banana-2",
+    videoModelId: "seedance-1-5-pro",
+    aspectRatio: "9:16",
+    imageResolution: "1k",
+    numImages: 1,
+    safetyChecker: false,
+    duration: 5,
+    resolution: "720p",
+    generateAudio: false,
+    cameraFixed: false,
+    promptPrefix: "",
+    outputFolder: "",
+  };
 }
 
 // --- localStorage helpers ---
@@ -148,61 +211,463 @@ function saveToStorage(key: string, value: unknown) {
 
 // Lightbox, Select, ShotCard, StoryboardCard imported from components
 
+// --- Scene Overview Component ---
+
+function SceneOverview({
+  scenes,
+  onOpenScene,
+  onCreateScene,
+  onDeleteScene,
+  onRenameScene,
+  onBackupAll,
+  backupStatus,
+}: {
+  scenes: Scene[];
+  onOpenScene: (id: string) => void;
+  onCreateScene: () => void;
+  onDeleteScene: (id: string) => void;
+  onRenameScene: (id: string, name: string) => void;
+  onBackupAll: () => void;
+  backupStatus: { running: boolean; done: number; total: number; failed: number } | null;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Navbar />
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              <span className="text-accent">Scenes</span>
+            </h1>
+            <p className="mt-1 text-sm text-muted">
+              {scenes.length} scene{scenes.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {backupStatus?.running ? (
+              <div className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-4 py-2 text-sm text-accent">
+                <CloudUpload size={15} className="animate-pulse" />
+                {backupStatus.done}/{backupStatus.total}
+                {backupStatus.failed > 0 && <span className="text-red-400">({backupStatus.failed} failed)</span>}
+              </div>
+            ) : (
+              <button
+                onClick={onBackupAll}
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition hover:border-accent/30 hover:text-foreground"
+                title="Download all fal.ai images/videos to permanent Supabase storage"
+              >
+                <CloudUpload size={15} />
+                Backup to Cloud
+              </button>
+            )}
+            <button
+              onClick={onCreateScene}
+              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:bg-accent-hover"
+            >
+              <Plus size={15} />
+              New Scene
+            </button>
+          </div>
+        </div>
+
+        {scenes.length === 0 ? (
+          <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-dashed border-border">
+            <div className="text-center">
+              <Film size={40} className="mx-auto mb-3 text-muted/30" />
+              <p className="mb-1 text-sm text-muted">No scenes yet</p>
+              <p className="mb-4 text-xs text-muted/50">Create your first scene to start producing</p>
+              <button
+                onClick={onCreateScene}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:bg-accent-hover"
+              >
+                Create Scene
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {scenes.map((scene) => {
+              const shotCount = scene.shots.length;
+              const imgDone = scene.shots.filter((s) => (s as Record<string, unknown>).imageStatus === "done").length;
+              const vidDone = scene.shots.filter((s) => (s as Record<string, unknown>).videoStatus === "done").length;
+              // Find first shot with an image for thumbnail
+              const thumbShot = scene.shots.find((s) => (s as Record<string, unknown>).imageUrl) as Record<string, unknown> | undefined;
+              const thumbUrl = thumbShot?.imageUrl as string | undefined;
+              const date = new Date(scene.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+              return (
+                <div
+                  key={scene.id}
+                  className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-accent/30 hover:shadow-lg"
+                >
+                  {/* Thumbnail */}
+                  <button
+                    onClick={() => onOpenScene(scene.id)}
+                    className="relative block aspect-video w-full overflow-hidden bg-background"
+                  >
+                    {thumbUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Film size={32} className="text-muted/20" />
+                      </div>
+                    )}
+                    {/* Overlay gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                    {/* Shot count badge */}
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-medium text-white/80 backdrop-blur-sm">
+                      <Film size={10} />
+                      {shotCount} shot{shotCount !== 1 ? "s" : ""}
+                    </div>
+                    {/* Stats badges */}
+                    <div className="absolute bottom-2 right-2 flex gap-1.5">
+                      {imgDone > 0 && (
+                        <span className="rounded-full bg-accent/80 px-2 py-0.5 text-[9px] font-bold text-black">
+                          {imgDone} img
+                        </span>
+                      )}
+                      {vidDone > 0 && (
+                        <span className="rounded-full bg-accent/80 px-2 py-0.5 text-[9px] font-bold text-black">
+                          {vidDone} vid
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Info */}
+                  <div className="flex flex-1 flex-col px-3 py-2.5">
+                    {editingId === scene.id ? (
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { onRenameScene(scene.id, editName.trim()); setEditingId(null); }
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        onBlur={() => { onRenameScene(scene.id, editName.trim()); setEditingId(null); }}
+                        className="mb-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        onClick={() => onOpenScene(scene.id)}
+                        className="mb-1 truncate text-left text-sm font-semibold text-foreground transition hover:text-accent"
+                      >
+                        {scene.name}
+                      </button>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-muted/50">{date}</span>
+                      <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        <button
+                          onClick={() => { setEditingId(scene.id); setEditName(scene.name); }}
+                          className="rounded p-1 text-muted/50 transition hover:bg-surface-hover hover:text-foreground"
+                          title="Rename"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <path d="M8.5 2.5l3 3-7 7H1.5v-3z" />
+                          </svg>
+                        </button>
+                        {deleteConfirm === scene.id ? (
+                          <button
+                            onClick={() => { onDeleteScene(scene.id); setDeleteConfirm(null); }}
+                            className="rounded px-1.5 py-0.5 text-[9px] font-medium text-destructive transition hover:bg-destructive/10"
+                          >
+                            Confirm
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(scene.id)}
+                            className="rounded p-1 text-muted/50 transition hover:bg-surface-hover hover:text-destructive"
+                            title="Delete"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M2 4h10M5 4V2.5h4V4M3 4l.7 8.1c.1.8.7 1.4 1.5 1.4h3.6c.8 0 1.4-.6 1.5-1.4L11 4" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Main Page (with scene routing) ---
+
 export default function ShotsPage() {
-  // --- Settings (all persisted to localStorage) ---
-  const [outputFolder, setOutputFolder] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem(STORAGE_KEYS.folder) || "";
+  // --- Scene management ---
+  const [scenes, setScenes] = useState<Scene[]>(() => {
+    const loaded = loadScenes();
+    // Migrate: if no scenes exist but old shots do, create a scene from them
+    if (loaded.length === 0 && typeof window !== "undefined") {
+      try {
+        const oldShots = localStorage.getItem(STORAGE_KEYS.shots);
+        if (oldShots) {
+          const parsed = JSON.parse(oldShots);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const migrated: Scene = {
+              id: `scene_${Date.now()}`,
+              name: "Untitled Scene",
+              shots: parsed,
+              settings: {
+                imageModelId: localStorage.getItem(STORAGE_KEYS.imageModel) || "nano-banana-2",
+                videoModelId: localStorage.getItem(STORAGE_KEYS.videoModel) || "seedance-1-5-pro",
+                aspectRatio: loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16"),
+                imageResolution: loadFromStorage(STORAGE_KEYS.imageResolution, "1k"),
+                numImages: loadFromStorage(STORAGE_KEYS.numImages, 1),
+                safetyChecker: loadFromStorage(STORAGE_KEYS.safetyChecker, false),
+                duration: loadFromStorage(STORAGE_KEYS.duration, 5),
+                resolution: loadFromStorage(STORAGE_KEYS.resolution, "720p"),
+                generateAudio: loadFromStorage(STORAGE_KEYS.generateAudio, false),
+                cameraFixed: loadFromStorage(STORAGE_KEYS.cameraFixed, false),
+                promptPrefix: localStorage.getItem(STORAGE_KEYS.promptPrefix) || "",
+                outputFolder: localStorage.getItem(STORAGE_KEYS.folder) || "",
+              },
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+            saveScenes([migrated]);
+            try { localStorage.setItem(ACTIVE_SCENE_KEY, migrated.id); } catch {}
+            return [migrated];
+          }
+        }
+      } catch {}
+    }
+    return loaded;
   });
-  const [promptPrefix, setPromptPrefix] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem(STORAGE_KEYS.promptPrefix) || "";
+  const [activeSceneId, setActiveSceneId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(ACTIVE_SCENE_KEY) || null;
   });
+
+  const activeScene = scenes.find((s) => s.id === activeSceneId) ?? null;
+
+  // Scene CRUD
+  const createScene = () => {
+    const scene: Scene = {
+      id: `scene_${Date.now()}`,
+      name: `Scene ${scenes.length + 1}`,
+      shots: [],
+      settings: getDefaultSettings(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const updated = [scene, ...scenes];
+    setScenes(updated);
+    saveScenes(updated);
+    setActiveSceneId(scene.id);
+    try { localStorage.setItem(ACTIVE_SCENE_KEY, scene.id); } catch {}
+  };
+
+  const deleteScene = (id: string) => {
+    const updated = scenes.filter((s) => s.id !== id);
+    setScenes(updated);
+    saveScenes(updated);
+    if (activeSceneId === id) {
+      setActiveSceneId(null);
+      try { localStorage.removeItem(ACTIVE_SCENE_KEY); } catch {}
+    }
+  };
+
+  const renameScene = (id: string, name: string) => {
+    if (!name) return;
+    const updated = scenes.map((s) => s.id === id ? { ...s, name, updatedAt: Date.now() } : s);
+    setScenes(updated);
+    saveScenes(updated);
+  };
+
+  const openScene = (id: string) => {
+    setActiveSceneId(id);
+    try { localStorage.setItem(ACTIVE_SCENE_KEY, id); } catch {}
+  };
+
+  const closeScene = () => {
+    setActiveSceneId(null);
+    try { localStorage.removeItem(ACTIVE_SCENE_KEY); } catch {}
+  };
+
+  // --- Backup all generations to Supabase ---
+  const [backupStatus, setBackupStatus] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null);
+
+  const backupAllToCloud = useCallback(async () => {
+    // Collect all fal.ai URLs from ALL sources
+    type Item = { type: "image" | "video"; url: string; prompt?: string; modelId?: string; modelName?: string; shotNumber?: string; sceneName?: string };
+    const items: Item[] = [];
+    const seen = new Set<string>(); // deduplicate URLs
+
+    const addItem = (item: Item) => {
+      if (!item.url || seen.has(item.url) || item.url.includes("supabase.co")) return;
+      seen.add(item.url);
+      items.push(item);
+    };
+
+    // 1. Shots/Scenes — images, videos, and their histories
+    for (const scene of scenes) {
+      for (const raw of scene.shots) {
+        const shot = raw as Record<string, unknown>;
+        const num = String(shot.number ?? "");
+        const imgPrompt = String(shot.imagePrompt ?? "");
+        const vidPrompt = String(shot.videoPrompt ?? "");
+
+        if (shot.imageUrl && typeof shot.imageUrl === "string")
+          addItem({ type: "image", url: String(shot.imageUrl), prompt: imgPrompt, modelId: scene.settings.imageModelId, shotNumber: num, sceneName: scene.name });
+        if (shot.videoUrl && typeof shot.videoUrl === "string")
+          addItem({ type: "video", url: String(shot.videoUrl), prompt: vidPrompt, modelId: scene.settings.videoModelId, shotNumber: num, sceneName: scene.name });
+        if (Array.isArray(shot.imageHistory))
+          for (const e of shot.imageHistory as { url?: string }[])
+            if (e.url) addItem({ type: "image", url: e.url, prompt: imgPrompt, modelId: scene.settings.imageModelId, shotNumber: num, sceneName: scene.name });
+        if (Array.isArray(shot.videoHistory))
+          for (const e of shot.videoHistory as { url?: string }[])
+            if (e.url) addItem({ type: "video", url: e.url, prompt: vidPrompt, modelId: scene.settings.videoModelId, shotNumber: num, sceneName: scene.name });
+      }
+    }
+
+    // 2. Image generation history (/generate page)
+    try {
+      const raw = localStorage.getItem("dreamsun_gen_history");
+      if (raw) {
+        const history = JSON.parse(raw) as { imageUrl?: string; allImageUrls?: string[]; model?: string; prompt?: string; seed?: number; settings?: { modelId?: string } }[];
+        for (const entry of history) {
+          const modelId = entry.settings?.modelId || entry.model || "unknown";
+          if (entry.imageUrl)
+            addItem({ type: "image", url: entry.imageUrl, prompt: entry.prompt, modelId, modelName: entry.model });
+          if (Array.isArray(entry.allImageUrls))
+            for (const url of entry.allImageUrls)
+              addItem({ type: "image", url, prompt: entry.prompt, modelId, modelName: entry.model });
+        }
+      }
+    } catch { /* ignore parse errors */ }
+
+    if (items.length === 0) {
+      alert("Nothing to backup — no fal.ai URLs found.");
+      return;
+    }
+
+    setBackupStatus({ running: true, done: 0, total: items.length, failed: 0 });
+
+    // Process in batches of 3 to avoid overwhelming the server
+    const BATCH = 3;
+    let done = 0;
+    let failed = 0;
+
+    for (let i = 0; i < items.length; i += BATCH) {
+      const batch = items.slice(i, i + BATCH);
+      try {
+        const res = await fetch("/api/migrate-generations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: batch }),
+        });
+        if (res.ok) {
+          const result = await res.json();
+          done += result.migrated + result.skipped;
+          failed += result.failed;
+        } else {
+          failed += batch.length;
+        }
+      } catch {
+        failed += batch.length;
+      }
+      setBackupStatus({ running: true, done, total: items.length, failed });
+    }
+
+    setBackupStatus({ running: false, done, total: items.length, failed });
+    if (failed === 0) {
+      alert(`Backup complete! ${done} files saved to cloud.`);
+    } else {
+      alert(`Backup done. ${done} saved, ${failed} failed.`);
+    }
+  }, [scenes]);
+
+  // Callback for ShotListEditor to save scene data back
+  const onSceneSave = useCallback((shots: Shot[], settings: SceneSettings) => {
+    if (!activeSceneId) return;
+    setScenes((prev) => {
+      const updated = prev.map((sc) =>
+        sc.id === activeSceneId
+          ? {
+              ...sc,
+              shots: shots.map((s) => ({ ...s, refImages: [], endImageRef: null })) as unknown as Record<string, unknown>[],
+              settings,
+              updatedAt: Date.now(),
+            }
+          : sc
+      );
+      saveScenes(updated);
+      return updated;
+    });
+  }, [activeSceneId]);
+
+  if (!activeScene) {
+    return (
+      <SceneOverview
+        scenes={scenes}
+        onOpenScene={openScene}
+        onCreateScene={createScene}
+        onDeleteScene={deleteScene}
+        onRenameScene={renameScene}
+        onBackupAll={backupAllToCloud}
+        backupStatus={backupStatus}
+      />
+    );
+  }
+
+  return (
+    <ShotListEditor
+      key={activeScene.id}
+      scene={activeScene}
+      onBack={closeScene}
+      onSave={onSceneSave}
+    />
+  );
+}
+
+// --- Shot List Editor (the full shot list UI, scoped to one scene) ---
+
+function ShotListEditor({
+  scene,
+  onBack,
+  onSave,
+}: {
+  scene: Scene;
+  onBack: () => void;
+  onSave: (shots: Shot[], settings: SceneSettings) => void;
+}) {
+  // --- Settings (initialized from scene) ---
+  const [outputFolder, setOutputFolder] = useState(scene.settings.outputFolder);
+  const [promptPrefix, setPromptPrefix] = useState(scene.settings.promptPrefix);
   const [selectedImageModel, setSelectedImageModel] = useState<ModelConfig>(
     () => {
-      if (typeof window === "undefined") return MODELS.find((m) => m.id === "nano-banana-2") ?? MODELS[0];
-      const savedId = localStorage.getItem(STORAGE_KEYS.imageModel);
-      if (savedId) {
-        const found = MODELS.find((m) => m.id === savedId);
-        if (found) return found;
-      }
-      return MODELS.find((m) => m.id === "nano-banana-2") ?? MODELS[0];
+      const found = MODELS.find((m) => m.id === scene.settings.imageModelId);
+      return found ?? MODELS.find((m) => m.id === "nano-banana-2") ?? MODELS[0];
     }
   );
   const [selectedVideoModel, setSelectedVideoModel] =
     useState<VideoModelConfig>(() => {
-      if (typeof window === "undefined") return VIDEO_MODELS[0];
-      const savedId = localStorage.getItem(STORAGE_KEYS.videoModel);
-      if (savedId) {
-        const found = VIDEO_MODELS.find((m) => m.id === savedId);
-        if (found) return found;
-      }
-      return VIDEO_MODELS.find((m) => m.id === "seedance-1-5-pro") ?? VIDEO_MODELS[0];
+      const found = VIDEO_MODELS.find((m) => m.id === scene.settings.videoModelId);
+      return found ?? VIDEO_MODELS.find((m) => m.id === "seedance-1-5-pro") ?? VIDEO_MODELS[0];
     });
-  const [aspectRatio, setAspectRatio] = useState(() =>
-    loadFromStorage(STORAGE_KEYS.aspectRatio, "9:16")
-  );
-  const [imageResolution, setImageResolution] = useState(() =>
-    loadFromStorage<string>(STORAGE_KEYS.imageResolution, "1k")
-  );
-  const [numImages, setNumImages] = useState(() =>
-    loadFromStorage(STORAGE_KEYS.numImages, 1)
-  );
-  const [safetyChecker, setSafetyChecker] = useState(() =>
-    loadFromStorage(STORAGE_KEYS.safetyChecker, false)
-  );
-  const [duration, setDuration] = useState(() =>
-    loadFromStorage(STORAGE_KEYS.duration, 5)
-  );
-  const [resolution, setResolution] = useState(() =>
-    loadFromStorage<string>(STORAGE_KEYS.resolution, "720p")
-  );
-  const [generateAudio, setGenerateAudio] = useState(() =>
-    loadFromStorage(STORAGE_KEYS.generateAudio, false)
-  );
-  const [cameraFixed, setCameraFixed] = useState(() =>
-    loadFromStorage(STORAGE_KEYS.cameraFixed, false)
-  );
+  const [aspectRatio, setAspectRatio] = useState(scene.settings.aspectRatio);
+  const [imageResolution, setImageResolution] = useState(scene.settings.imageResolution);
+  const [numImages, setNumImages] = useState(scene.settings.numImages);
+  const [safetyChecker, setSafetyChecker] = useState(scene.settings.safetyChecker);
+  const [duration, setDuration] = useState(scene.settings.duration);
+  const [resolution, setResolution] = useState(scene.settings.resolution);
+  const [generateAudio, setGenerateAudio] = useState(scene.settings.generateAudio);
+  const [cameraFixed, setCameraFixed] = useState(scene.settings.cameraFixed);
 
   // --- View mode ---
   const [viewMode, setViewMode] = useState<"list" | "storyboard">(() =>
@@ -219,10 +684,9 @@ export default function ShotsPage() {
   const [charRefs, setCharRefs] = useState<UploadedRef[]>([]);
   const charRefInput = useRef<HTMLInputElement>(null);
 
-  // --- Shots (persisted to localStorage, with migration for old format) ---
+  // --- Shots (initialized from scene, auto-saved back) ---
   const [shots, setShots] = useState<Shot[]>(() => {
-    const raw = loadFromStorage<Record<string, unknown>[]>(STORAGE_KEYS.shots, []);
-    return raw.map(migrateShot);
+    return scene.shots.map(migrateShot);
   });
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -234,12 +698,35 @@ export default function ShotsPage() {
   const [modalEndFrame, setModalEndFrame] = useState<UploadedRef | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string } | null>(null);
 
-  // --- Persist state changes to localStorage ---
+  // --- Auto-save to scene on changes ---
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shotsRef = useRef(shots);
+  shotsRef.current = shots;
+
+  // Collect current settings into a SceneSettings object
+  const getCurrentSettings = useCallback((): SceneSettings => ({
+    imageModelId: selectedImageModel.id,
+    videoModelId: selectedVideoModel.id,
+    aspectRatio,
+    imageResolution,
+    numImages,
+    safetyChecker,
+    duration,
+    resolution,
+    generateAudio,
+    cameraFixed,
+    promptPrefix,
+    outputFolder,
+  }), [selectedImageModel.id, selectedVideoModel.id, aspectRatio, imageResolution, numImages, safetyChecker, duration, resolution, generateAudio, cameraFixed, promptPrefix, outputFolder]);
+
+  // Debounced auto-save: triggers 1s after last change
   useEffect(() => {
-    // Save shots without refImages/endImageRef previews (ObjectURLs aren't valid across sessions)
-    const serializable = shots.map((s) => ({ ...s, refImages: [], endImageRef: null }));
-    saveToStorage(STORAGE_KEYS.shots, serializable);
-  }, [shots]);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      onSave(shotsRef.current, getCurrentSettings());
+    }, 1000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [shots, getCurrentSettings, onSave]);
 
   // --- Batch progress ---
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -255,7 +742,6 @@ export default function ShotsPage() {
 
   const handleOutputFolderChange = (val: string) => {
     setOutputFolder(val);
-    localStorage.setItem(STORAGE_KEYS.folder, val);
   };
 
   const handleParse = () => {
@@ -773,6 +1259,29 @@ export default function ShotsPage() {
           };
         })
       );
+
+      // Persist images to Supabase (fire-and-forget)
+      for (const url of allUrls) {
+        fetch("/api/persist-generation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "image",
+            url,
+            prompt: shot.imagePrompt,
+            modelId: model.id,
+            modelName: model.name,
+            requestId: data.requestId,
+            width: data.width,
+            height: data.height,
+            aspectRatio: shotAR,
+            resolution: imageResolution,
+            settings: { ...shot.settings.image, modelId: model.id },
+            referenceImageUrls: allRefs.length > 0 ? allRefs : null,
+            shotNumber: shot.number,
+          }),
+        }).catch((err) => console.error("[persist] Shot image failed:", err));
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         updateShot(shot.id, { imageStatus: "pending", error: "Cancelled" });
@@ -881,8 +1390,17 @@ export default function ShotsPage() {
   };
 
   // --- Single Shot Animation (reusable) ---
+  // Calls fal.ai directly from the browser via proxy — no Vercel timeout limit.
   const animateSingleShot = async (shot: Shot) => {
-    if (!shot.imageUrl) return;
+    const shotVideoModelId = shot.settings.video.modelId ?? selectedVideoModel.id;
+    const model = VIDEO_MODELS.find((m) => m.id === shotVideoModelId) ?? selectedVideoModel;
+
+    // Audio-to-video models need audio; image-to-video models need image
+    if (model.requiresAudio) {
+      if (!shot.audioUrl) return;
+    } else {
+      if (!shot.imageUrl) return;
+    }
 
     const abortKey = `vid_${shot.id}`;
     abortControllers.current[abortKey]?.abort();
@@ -895,65 +1413,109 @@ export default function ShotsPage() {
     const shotDuration = shot.settings.video.duration ?? duration;
     const shotAspectRatio = shot.settings.video.aspectRatio ?? aspectRatio;
     const shotResolution = shot.settings.video.resolution ?? resolution;
-    const shotVideoModelId = shot.settings.video.modelId ?? selectedVideoModel.id;
 
     try {
-      const animateBody: Record<string, unknown> = {
-        videoModelId: shotVideoModelId,
-        prompt: shot.videoPrompt,
-        imageUrl: shot.imageUrl,
-        duration: shotDuration,
-        aspectRatio: shotAspectRatio,
-        shotNumber: shot.number,
-        outputFolder: outputFolder || undefined,
+      // Build input using model's param mapping (same logic as API route)
+      const input: Record<string, unknown> = {
+        [model.params.prompt]: shot.videoPrompt || "",
+        [model.params.duration]: typeof shotDuration === "number" ? shotDuration : Number(shotDuration),
       };
 
-      // End image (last frame)
-      if (shot.endImageUrl && shot.endImageUrl.startsWith("https://")) {
-        animateBody.endImageUrl = shot.endImageUrl;
+      // Image URL — required for image-to-video, optional for audio-to-video
+      if (shot.imageUrl) {
+        input[model.params.imageUrl] = shot.imageUrl;
       }
 
-      // Resolution
-      if (shotResolution) {
-        animateBody.resolution = shotResolution;
+      // Audio URL for audio-to-video models
+      if (shot.audioUrl && model.params.audioUrl) {
+        input[model.params.audioUrl] = shot.audioUrl;
+      }
+
+      // End image (last frame)
+      if (shot.endImageUrl && shot.endImageUrl.startsWith("https://") && model.params.endImageUrl) {
+        input[model.params.endImageUrl] = shot.endImageUrl;
+      }
+
+      if (shotAspectRatio && model.params.aspectRatio) {
+        input[model.params.aspectRatio] = shotAspectRatio;
+      }
+
+      if (shotResolution && model.params.resolution) {
+        input[model.params.resolution] = shotResolution;
       }
 
       // Camera fixed — per-shot overrides global
-      animateBody.cameraFixed = shot.settings.video.cameraFixed ?? cameraFixed;
-
-      // Generate audio — per-shot overrides global, global defaults to off
-      animateBody.generateAudio = shot.settings.video.generateAudio ?? generateAudio;
-
-      // Video negative prompt
-      if (shot.videoNegativePrompt) {
-        animateBody.negativePrompt = shot.videoNegativePrompt;
+      const useCameraFixed = shot.settings.video.cameraFixed ?? cameraFixed;
+      if (useCameraFixed && model.supportsCameraFixed) {
+        input.camera_fixed = true;
       }
 
-      const res = await fetch("/api/animate-shot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(animateBody),
-        signal: controller.signal,
+      // Generate audio — per-shot overrides global
+      const useGenerateAudio = shot.settings.video.generateAudio ?? generateAudio;
+      if (useGenerateAudio === false && model.supportsGenerateAudio) {
+        input.generate_audio = false;
+      }
+
+      // Extra model defaults (negative_prompt, cfg_scale, etc.)
+      if (model.extraInput) {
+        Object.assign(input, model.extraInput);
+      }
+
+      // Per-shot overrides
+      if (shot.videoNegativePrompt && model.supportsNegativePrompt) {
+        input.negative_prompt = shot.videoNegativePrompt;
+      }
+
+      // Call fal.ai directly through proxy — browser polls, no serverless timeout
+      const result = await fal.subscribe(model.endpoint, {
+        input,
+        logs: true,
       });
 
-      const text = await res.text();
-      let data: Record<string, unknown>;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        updateShot(shot.id, {
-          videoStatus: "error",
-          error: `Server error (${res.status}): ${text.slice(0, 200)}`,
-        });
+      // Check if cancelled during generation
+      if (controller.signal.aborted) {
+        updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
         return;
       }
 
-      if (!res.ok) {
-        updateShot(shot.id, {
-          videoStatus: "error",
-          error: (data.error as string) || "Animation failed",
-        });
+      const data = result.data as Record<string, unknown>;
+
+      // Video models return { video: { url } } or { video_url }
+      let videoUrl: string | null = null;
+      if (data.video && typeof data.video === "object") {
+        const video = data.video as Record<string, unknown>;
+        videoUrl = video.url as string;
+      } else if (typeof data.video_url === "string") {
+        videoUrl = data.video_url;
+      }
+
+      if (!videoUrl) {
+        updateShot(shot.id, { videoStatus: "error", error: "No video generated" });
         return;
+      }
+
+      // Save locally if outputFolder set (fire-and-forget, don't block)
+      let localPath: string | null = null;
+      if (outputFolder && shot.number != null) {
+        try {
+          const paddedNum = String(shot.number).padStart(3, "0");
+          const genNum = (shot.videoHistory?.length ?? 0) + 1;
+          const saveRes = await fetch("/api/save-local", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: videoUrl,
+              outputFolder,
+              fileName: `video-shot-${paddedNum}_${genNum}.mp4`,
+            }),
+          });
+          if (saveRes.ok) {
+            const saveData = await saveRes.json();
+            localPath = saveData.localPath ?? null;
+          }
+        } catch {
+          // Non-critical — video URL still works
+        }
       }
 
       setShots((prev) =>
@@ -963,22 +1525,51 @@ export default function ShotsPage() {
           return {
             ...s,
             videoStatus: "done" as ShotStatus,
-            videoUrl: data.videoUrl as string,
-            localVideoPath: data.localPath as string | null,
+            videoUrl,
+            localVideoPath: localPath,
             error: null,
-            videoHistory: [data.videoUrl as string, ...prevVideos],
+            videoHistory: [videoUrl as string, ...prevVideos],
           };
         })
       );
+
+      // Persist to Supabase (fire-and-forget)
+      fetch("/api/persist-generation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "video",
+          url: videoUrl,
+          prompt: shot.videoPrompt,
+          modelId: model.id,
+          modelName: model.name,
+          requestId: result.requestId,
+          duration: shotDuration,
+          aspectRatio: shotAspectRatio,
+          resolution: shotResolution,
+          settings: { ...shot.settings.video, modelId: model.id },
+          sourceImageUrl: shot.imageUrl,
+          sourceAudioUrl: shot.audioUrl,
+          shotNumber: shot.number,
+        }),
+      }).catch((err) => console.error("[persist] Video failed:", err));
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
+      if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
         return;
       }
-      updateShot(shot.id, {
-        videoStatus: "error",
-        error: err instanceof Error ? err.message : "Network error",
-      });
+      let message = "Animation failed";
+      if (err && typeof err === "object") {
+        const e = err as Record<string, unknown>;
+        if (e.body && typeof e.body === "object") {
+          const body = e.body as Record<string, unknown>;
+          if (typeof body.detail === "string") message = body.detail;
+          else if (typeof body.message === "string") message = body.message;
+        } else if (typeof e.message === "string") {
+          message = e.message;
+        }
+      }
+      updateShot(shot.id, { videoStatus: "error", error: message });
     } finally {
       delete abortControllers.current[abortKey];
     }
@@ -1112,39 +1703,43 @@ export default function ShotsPage() {
   };
 
   // --- Auto-hide header on scroll down, show on scroll up ---
-  // Requires ~30px of sustained upward scrolling to reveal (not a single flick)
+  // Hide instantly on any scroll down. Show only after 600px sustained scroll up.
   const headerRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
-  const upDistance = useRef(0);
+  const scrollUpAnchor = useRef(0); // where the upward scroll began
   const [headerVisible, setHeaderVisible] = useState(true);
 
   useEffect(() => {
-    const UP_THRESHOLD = 30; // px of cumulative upward scroll needed to show
+    const UP_THRESHOLD = 600;
     const onScroll = () => {
+      // Fewer than 5 shots — always keep header visible
+      if (shots.length < 5) {
+        setHeaderVisible(true);
+        return;
+      }
+
       const y = window.scrollY;
-      const delta = y - lastScrollY.current;
+      const prev = lastScrollY.current;
 
       if (y < 80) {
-        // Near the top — always show
         setHeaderVisible(true);
-        upDistance.current = 0;
-      } else if (delta < 0) {
-        // Scrolling up — accumulate distance
-        upDistance.current += Math.abs(delta);
-        if (upDistance.current >= UP_THRESHOLD) {
+        scrollUpAnchor.current = y;
+      } else if (y > prev) {
+        // Scrolling down — hide instantly, reset anchor
+        setHeaderVisible(false);
+        scrollUpAnchor.current = y;
+      } else if (y < prev) {
+        // Scrolling up — check distance from anchor
+        if (scrollUpAnchor.current - y >= UP_THRESHOLD) {
           setHeaderVisible(true);
         }
-      } else if (delta > 5) {
-        // Scrolling down — hide and reset accumulator
-        upDistance.current = 0;
-        setHeaderVisible(false);
       }
 
       lastScrollY.current = y;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [shots.length]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1156,13 +1751,27 @@ export default function ShotsPage() {
       >
       <Navbar />
       {/* Page Header */}
-      <header className="flex items-center justify-between border-b border-border px-6 py-2.5">
-        <h1 className="text-lg font-semibold tracking-tight">
-          <span className="text-accent">Shot</span> List Production
-        </h1>
-        <span className="text-xs text-muted">
-          {shots.length} shot{shots.length !== 1 ? "s" : ""}
-        </span>
+      <header className="border-b border-border px-6 py-2.5">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              // Flush pending save immediately before leaving
+              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+              onSave(shotsRef.current, getCurrentSettings());
+              onBack();
+            }}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted transition hover:bg-surface hover:text-foreground"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 2L4 7l5 5" />
+            </svg>
+            Scenes
+          </button>
+          <div className="h-4 w-px bg-border" />
+          <h1 className="text-lg font-semibold tracking-tight">
+            <span className="text-accent">{scene.name}</span>
+          </h1>
+        </div>
       </header>
 
       {/* Command Bar */}
@@ -1300,7 +1909,6 @@ export default function ShotsPage() {
                         const m = MODELS.find((m) => m.id === id);
                         if (m) {
                           setSelectedImageModel(m);
-                          localStorage.setItem(STORAGE_KEYS.imageModel, m.id);
                           resetAllShotImageSettings("modelId");
                         }
                       }}
@@ -1320,7 +1928,6 @@ export default function ShotsPage() {
                             key={ratio}
                             onClick={() => {
                               setAspectRatio(ratio);
-                              saveToStorage(STORAGE_KEYS.aspectRatio, ratio);
                               resetAllShotImageSettings("aspectRatio");
                             }}
                             className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
@@ -1346,7 +1953,6 @@ export default function ShotsPage() {
                             key={res}
                             onClick={() => {
                               setImageResolution(res);
-                              saveToStorage(STORAGE_KEYS.imageResolution, res);
                             }}
                             className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium uppercase transition ${
                               imageResolution === res
@@ -1371,7 +1977,6 @@ export default function ShotsPage() {
                             key={n}
                             onClick={() => {
                               setNumImages(n);
-                              saveToStorage(STORAGE_KEYS.numImages, n);
                             }}
                             className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
                               numImages === n
@@ -1394,7 +1999,6 @@ export default function ShotsPage() {
                         onClick={() => {
                           const next = !safetyChecker;
                           setSafetyChecker(next);
-                          saveToStorage(STORAGE_KEYS.safetyChecker, next);
                           resetAllShotImageSettings("safetyChecker");
                         }}
                         className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
@@ -1424,12 +2028,10 @@ export default function ShotsPage() {
                         const m = VIDEO_MODELS.find((m) => m.id === id);
                         if (m) {
                           setSelectedVideoModel(m);
-                          localStorage.setItem(STORAGE_KEYS.videoModel, m.id);
                           resetAllShotVideoSettings("modelId");
                           if (!m.durations.includes(duration)) {
                             const newDur = m.defaultDuration;
                             setDuration(newDur);
-                            saveToStorage(STORAGE_KEYS.duration, newDur);
                             resetAllShotVideoSettings("duration");
                           }
                         }
@@ -1448,7 +2050,6 @@ export default function ShotsPage() {
                             key={d}
                             onClick={() => {
                               setDuration(d);
-                              saveToStorage(STORAGE_KEYS.duration, d);
                               resetAllShotVideoSettings("duration");
                             }}
                             className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
@@ -1473,7 +2074,6 @@ export default function ShotsPage() {
                               key={res}
                               onClick={() => {
                                 setResolution(res);
-                                saveToStorage(STORAGE_KEYS.resolution, res);
                                 resetAllShotVideoSettings("resolution");
                               }}
                               className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
@@ -1497,7 +2097,6 @@ export default function ShotsPage() {
                           onClick={() => {
                             const next = !generateAudio;
                             setGenerateAudio(next);
-                            saveToStorage(STORAGE_KEYS.generateAudio, next);
                             resetAllShotVideoSettings("generateAudio");
                           }}
                           className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
@@ -1519,7 +2118,6 @@ export default function ShotsPage() {
                           onClick={() => {
                             const next = !cameraFixed;
                             setCameraFixed(next);
-                            saveToStorage(STORAGE_KEYS.cameraFixed, next);
                             resetAllShotVideoSettings("cameraFixed");
                           }}
                           className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
@@ -1610,7 +2208,6 @@ export default function ShotsPage() {
                 value={promptPrefix}
                 onChange={(e) => {
                   setPromptPrefix(e.target.value);
-                  localStorage.setItem(STORAGE_KEYS.promptPrefix, e.target.value);
                 }}
                 placeholder="e.g. The same donkey with the same animated characteristics. Do not modify the animation style..."
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
@@ -1633,7 +2230,7 @@ export default function ShotsPage() {
         </h2>
         <div className="h-px flex-1 bg-border" />
       </div>
-      <div className={viewMode === "storyboard" ? "relative px-6 pb-4" : "px-6 pb-4"}>
+      <div className={viewMode === "storyboard" ? "relative px-6 pb-[50vh]" : "px-6 pb-[50vh]"}>
         {shots.length === 0 ? (
           <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed border-border">
             <div className="text-center text-muted">

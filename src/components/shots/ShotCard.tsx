@@ -222,38 +222,40 @@ export function ShotCard({
         {/* BENTO: Image Controls */}
         <div className="flex flex-col border-r border-border p-3 space-y-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Image</span>
-          <TaggableTextarea
-            value={shot.imagePrompt}
-            onChange={(v) => onUpdate({ imagePrompt: v })}
-            rows={3}
-            placeholder="Image prompt... (@ to reference images)"
-            className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
-            images={tagImages}
-          />
-          {imageSupportsNeg && !shot.imageNegativePrompt && (
-            <button
-              onClick={() => onUpdate({ imageNegativePrompt: " " })}
-              className="flex items-center gap-1 self-start text-[10px] text-muted/60 transition hover:text-destructive"
-            >
-              <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-muted/10 text-[9px] font-bold leading-none">−</span>
-              Negative
-            </button>
-          )}
-          {imageSupportsNeg && shot.imageNegativePrompt && (
-            <div className="relative">
-              <textarea
-                value={shot.imageNegativePrompt.trim()}
-                onChange={(e) => onUpdate({ imageNegativePrompt: e.target.value })}
-                rows={2}
-                placeholder="no blur, no artifacts, no distortion..."
-                className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
-              />
+          <div>
+            <TaggableTextarea
+              value={shot.imagePrompt}
+              onChange={(v) => onUpdate({ imagePrompt: v })}
+              rows={3}
+              placeholder="Image prompt... (@ to reference images)"
+              className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+              images={tagImages}
+            />
+            {imageSupportsNeg && !shot.imageNegativePrompt && (
               <button
-                onClick={() => onUpdate({ imageNegativePrompt: "" })}
-                className="absolute right-1.5 top-1.5 text-[9px] text-muted/40 hover:text-destructive"
-              >✕</button>
-            </div>
-          )}
+                onClick={() => onUpdate({ imageNegativePrompt: " " })}
+                className="mt-1 flex items-center gap-1 text-[10px] text-muted/60 transition hover:text-destructive"
+              >
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-muted/10 text-[9px] font-bold leading-none">−</span>
+                Negative
+              </button>
+            )}
+            {imageSupportsNeg && shot.imageNegativePrompt && (
+              <div className="relative mt-1">
+                <textarea
+                  value={shot.imageNegativePrompt.trim()}
+                  onChange={(e) => onUpdate({ imageNegativePrompt: e.target.value })}
+                  rows={2}
+                  placeholder="no blur, no artifacts, no distortion..."
+                  className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                />
+                <button
+                  onClick={() => onUpdate({ imageNegativePrompt: "" })}
+                  className="absolute right-1.5 top-1.5 text-[9px] text-muted/40 hover:text-destructive"
+                >✕</button>
+              </div>
+            )}
+          </div>
           {/* Row 1: References + Generations */}
           <div className="grid grid-cols-2 gap-2">
             {/* References column */}
@@ -344,34 +346,36 @@ export function ShotCard({
         {/* BENTO: Video Controls */}
         <div className="flex flex-col border-r border-border p-3 space-y-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Video</span>
-          <textarea value={shot.videoPrompt}
-            onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
-            rows={3} placeholder="Video/motion prompt..."
-            className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
-          {videoSupportsNeg && !shot.videoNegativePrompt && (
-            <button
-              onClick={() => onUpdate({ videoNegativePrompt: " " })}
-              className="flex items-center gap-1 self-start text-[10px] text-muted/60 transition hover:text-destructive"
-            >
-              <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-muted/10 text-[9px] font-bold leading-none">−</span>
-              Negative
-            </button>
-          )}
-          {videoSupportsNeg && shot.videoNegativePrompt && (
-            <div className="relative">
-              <textarea
-                value={shot.videoNegativePrompt.trim()}
-                onChange={(e) => onUpdate({ videoNegativePrompt: e.target.value })}
-                rows={2}
-                placeholder="blur, distort, low quality..."
-                className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
-              />
+          <div>
+            <textarea value={shot.videoPrompt}
+              onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
+              rows={3} placeholder="Video/motion prompt..."
+              className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
+            {videoSupportsNeg && !shot.videoNegativePrompt && (
               <button
-                onClick={() => onUpdate({ videoNegativePrompt: "" })}
-                className="absolute right-1.5 top-1.5 text-[9px] text-muted/40 hover:text-destructive"
-              >✕</button>
-            </div>
-          )}
+                onClick={() => onUpdate({ videoNegativePrompt: " " })}
+                className="mt-1 flex items-center gap-1 text-[10px] text-muted/60 transition hover:text-destructive"
+              >
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-muted/10 text-[9px] font-bold leading-none">−</span>
+                Negative
+              </button>
+            )}
+            {videoSupportsNeg && shot.videoNegativePrompt && (
+              <div className="relative mt-1">
+                <textarea
+                  value={shot.videoNegativePrompt.trim()}
+                  onChange={(e) => onUpdate({ videoNegativePrompt: e.target.value })}
+                  rows={2}
+                  placeholder="blur, distort, low quality..."
+                  className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                />
+                <button
+                  onClick={() => onUpdate({ videoNegativePrompt: "" })}
+                  className="absolute right-1.5 top-1.5 text-[9px] text-muted/40 hover:text-destructive"
+                >✕</button>
+              </div>
+            )}
+          </div>
           {/* Row: Settings + Video Generations (mirrors Image's References + Generations) */}
           <div className="grid grid-cols-2 gap-2">
             {/* Settings column (mirrors References column) */}
@@ -472,12 +476,57 @@ export function ShotCard({
               )}
             </div>
           )}
+          {/* Audio upload for audio-to-video models */}
+          {effVideoModel.requiresAudio && (
+            <div>
+              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Audio (2-20s)</span>
+              {shot.audioUrl ? (
+                <div className="flex items-center gap-2">
+                  <audio src={shot.audioUrl} controls className="h-7 flex-1" style={{ maxWidth: 180 }} />
+                  <button onClick={() => onUpdate({ audioUrl: null, audioRef: null })}
+                    className="text-[9px] text-muted hover:text-destructive">✕</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => (document.getElementById(`audio-${shot.id}`) as HTMLInputElement)?.click()}
+                    className="flex h-8 items-center gap-1.5 rounded border border-dashed border-border px-2 text-[10px] text-muted transition hover:border-accent/40 hover:text-accent"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M8 2v8M5 7l3 3 3-3" /><path d="M2 12h12" />
+                    </svg>
+                    Upload audio
+                  </button>
+                  {shot.audioRef?.uploading && <div className="h-3 w-3 animate-spin rounded-full border border-accent border-t-transparent" />}
+                </div>
+              )}
+              <input id={`audio-${shot.id}`} type="file" accept="audio/*" className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  onUpdate({ audioRef: { id: `audio_${Date.now()}`, preview: "", url: null, uploading: true } });
+                  try {
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    const res = await fetch("/api/upload", { method: "POST", body: formData });
+                    const data = await res.json();
+                    if (data.url) onUpdate({ audioUrl: data.url, audioRef: { id: `audio_${Date.now()}`, preview: "", url: data.url, uploading: false } });
+                    else onUpdate({ audioRef: null });
+                  } catch (err) {
+                    console.error("[ShotCard] Audio upload failed:", err);
+                    onUpdate({ audioRef: null });
+                  }
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          )}
           {/* Animate button */}
           <div className="mt-auto pt-2">
             {isVideoBusy ? (
               <Button variant="destructive" size="xs" onClick={onCancelVideo}>Cancel</Button>
             ) : (
-              <Button variant="secondary" size="xs" onClick={onAnimateShot} disabled={!canAnimate}>
+              <Button variant="secondary" size="xs" onClick={onAnimateShot} disabled={!canAnimate && !effVideoModel.requiresAudio}>
                 {shot.videoStatus === "done" ? "Re-animate" : "Animate"}
               </Button>
             )}
