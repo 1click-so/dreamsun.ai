@@ -525,10 +525,29 @@ export default function ShotsPage() {
         // Migrate localStorage scenes to Supabase
         setScenes(localScenes);
         setScenesLoaded(true);
-        await bulkSaveScenesToDB(localScenes);
-        // Clear localStorage after successful migration
-        try { localStorage.removeItem(SCENES_KEY); } catch {}
-        console.log(`[scenes] Migrated ${localScenes.length} scene(s) from localStorage to Supabase`);
+        try {
+          const res = await fetch("/api/scenes", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenes: localScenes.map((s) => ({
+                id: s.id,
+                name: s.name,
+                settings: s.settings,
+                shots: s.shots,
+              })),
+            }),
+          });
+          if (res.ok) {
+            // Only clear localStorage after confirmed save
+            try { localStorage.removeItem(SCENES_KEY); } catch {}
+            console.log(`[scenes] Migrated ${localScenes.length} scene(s) from localStorage to Supabase`);
+          } else {
+            console.error("[scenes] Migration save failed:", await res.text());
+          }
+        } catch (err) {
+          console.error("[scenes] Migration save failed:", err);
+        }
       } else {
         setScenesLoaded(true);
       }
