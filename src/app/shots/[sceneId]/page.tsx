@@ -65,6 +65,11 @@ export default function SceneShotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Remember this scene as the last active one
+  useEffect(() => {
+    try { localStorage.setItem("dreamsun_last_scene", sceneId); } catch {}
+  }, [sceneId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -94,6 +99,8 @@ export default function SceneShotsPage() {
   }, [sceneId]);
 
   const onBack = useCallback(() => {
+    // Clear last scene so /shots shows the overview
+    try { localStorage.removeItem("dreamsun_last_scene"); } catch {}
     router.push("/shots");
   }, [router]);
 

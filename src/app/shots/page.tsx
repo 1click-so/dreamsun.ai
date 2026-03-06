@@ -440,11 +440,23 @@ function SceneOverview({
 
 // --- Main Page (with scene routing) ---
 
+const LAST_SCENE_KEY = "dreamsun_last_scene";
+
 export default function ShotsPage() {
   const router = useRouter();
   // --- Scene management (Supabase-backed) ---
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [scenesLoaded, setScenesLoaded] = useState(false);
+
+  // Redirect to last active scene if one exists
+  useEffect(() => {
+    try {
+      const lastScene = localStorage.getItem(LAST_SCENE_KEY);
+      if (lastScene) {
+        router.replace(`/shots/${lastScene}`);
+      }
+    } catch {}
+  }, [router]);
 
   // Load scenes from Supabase on mount, migrate localStorage if needed
   useEffect(() => {
@@ -551,6 +563,9 @@ export default function ShotsPage() {
   const deleteScene = (id: string) => {
     setScenes((prev) => prev.filter((s) => s.id !== id));
     deleteSceneFromDB(id);
+    try {
+      if (localStorage.getItem(LAST_SCENE_KEY) === id) localStorage.removeItem(LAST_SCENE_KEY);
+    } catch {}
   };
 
   const renameScene = (id: string, name: string) => {
