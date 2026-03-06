@@ -7,7 +7,7 @@ const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/reset-password"];
 // Exact paths that are public (landing page)
 const PUBLIC_EXACT = ["/"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public routes
