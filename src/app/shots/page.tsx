@@ -627,10 +627,12 @@ export function ShotListEditor({
   scene,
   onBack,
   onSave,
+  onRename,
 }: {
   scene: Scene;
   onBack: () => void;
   onSave: (shots: Shot[], settings: SceneSettings) => void;
+  onRename?: (name: string) => void;
 }) {
   // --- Settings (initialized from scene) ---
   const [outputFolder, setOutputFolder] = useState(scene.settings.outputFolder);
@@ -1755,7 +1757,23 @@ export function ShotListEditor({
           </button>
           <div className="h-4 w-px bg-border" />
           <h1 className="text-lg font-semibold tracking-tight">
-            <span className="text-accent">{scene.name}</span>
+            {onRename ? (
+              <input
+                type="text"
+                defaultValue={scene.name}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v && v !== scene.name) onRename(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                className="bg-transparent text-accent outline-none border-b border-transparent focus:border-accent/30 w-auto min-w-[3ch]"
+                style={{ width: `${Math.max(scene.name.length, 3)}ch` }}
+              />
+            ) : (
+              <span className="text-accent">{scene.name}</span>
+            )}
           </h1>
         </div>
       </header>

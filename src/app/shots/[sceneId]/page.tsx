@@ -116,6 +116,13 @@ export default function SceneShotsPage() {
     saveSceneToDB(updated);
   }, [scene]);
 
+  const onRename = useCallback((name: string) => {
+    if (!scene) return;
+    const updated: Scene = { ...scene, name, updatedAt: Date.now() };
+    setScene(updated);
+    saveSceneToDB(updated);
+  }, [scene]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground">
@@ -164,6 +171,7 @@ export default function SceneShotsPage() {
       scene={scene}
       onBack={onBack}
       onSave={onSave}
+      onRename={onRename}
     />
   );
 }
