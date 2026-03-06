@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
 import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download } from "lucide-react";
@@ -119,7 +120,7 @@ function migrateShot(raw: Record<string, unknown>): Shot {
 
 // --- Scene types ---
 
-interface SceneSettings {
+export interface SceneSettings {
   imageModelId: string;
   videoModelId: string;
   aspectRatio: string;
@@ -134,7 +135,7 @@ interface SceneSettings {
   outputFolder: string;
 }
 
-interface Scene {
+export interface Scene {
   id: string;
   name: string;
   shots: Record<string, unknown>[]; // serialized Shot[]
@@ -143,7 +144,6 @@ interface Scene {
   updatedAt: number;
 }
 
-const ACTIVE_SCENE_KEY = "dreamsun_active_scene";
 const SCENES_KEY = "dreamsun_scenes"; // legacy localStorage key for migration
 
 // --- Supabase scene persistence ---
@@ -164,7 +164,7 @@ async function fetchScenesFromDB(): Promise<Scene[]> {
   } catch { return []; }
 }
 
-async function saveSceneToDB(scene: Scene) {
+export async function saveSceneToDB(scene: Scene) {
   try {
     await fetch("/api/scenes", {
       method: "POST",
@@ -441,13 +441,10 @@ function SceneOverview({
 // --- Main Page (with scene routing) ---
 
 export default function ShotsPage() {
+  const router = useRouter();
   // --- Scene management (Supabase-backed) ---
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [scenesLoaded, setScenesLoaded] = useState(false);
-  const [activeSceneId, setActiveSceneId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(ACTIVE_SCENE_KEY) || null;
-  });
 
   // Load scenes from Supabase on mount, migrate localStorage if needed
   useEffect(() => {
@@ -536,8 +533,6 @@ export default function ShotsPage() {
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeScene = scenes.find((s) => s.id === activeSceneId) ?? null;
-
   // Scene CRUD — optimistic UI + async Supabase save
   const createScene = () => {
     const scene: Scene = {
@@ -548,62 +543,29 @@ export default function ShotsPage() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    const updated = [scene, ...scenes];
-    setScenes(updated);
-    setActiveSceneId(scene.id);
-    try { localStorage.setItem(ACTIVE_SCENE_KEY, scene.id); } catch {}
+    setScenes((prev) => [scene, ...prev]);
     saveSceneToDB(scene);
+    router.push(`/shots/${scene.id}`);
   };
 
   const deleteScene = (id: string) => {
-    const updated = scenes.filter((s) => s.id !== id);
-    setScenes(updated);
-    if (activeSceneId === id) {
-      setActiveSceneId(null);
-      try { localStorage.removeItem(ACTIVE_SCENE_KEY); } catch {}
-    }
+    setScenes((prev) => prev.filter((s) => s.id !== id));
     deleteSceneFromDB(id);
   };
 
   const renameScene = (id: string, name: string) => {
     if (!name) return;
-    const updated = scenes.map((s) => s.id === id ? { ...s, name, updatedAt: Date.now() } : s);
-    setScenes(updated);
-    const scene = updated.find((s) => s.id === id);
-    if (scene) saveSceneToDB(scene);
-  };
-
-  const openScene = (id: string) => {
-    setActiveSceneId(id);
-    try { localStorage.setItem(ACTIVE_SCENE_KEY, id); } catch {}
-  };
-
-  const closeScene = () => {
-    setActiveSceneId(null);
-    try { localStorage.removeItem(ACTIVE_SCENE_KEY); } catch {}
-  };
-
-
-  // Callback for ShotListEditor to save scene data back
-  const onSceneSave = useCallback((shots: Shot[], settings: SceneSettings) => {
-    if (!activeSceneId) return;
     setScenes((prev) => {
-      const updated = prev.map((sc) =>
-        sc.id === activeSceneId
-          ? {
-              ...sc,
-              shots: shots.map((s) => ({ ...s, refImages: [], endImageRef: null })) as unknown as Record<string, unknown>[],
-              settings,
-              updatedAt: Date.now(),
-            }
-          : sc
-      );
-      // Save to Supabase
-      const scene = updated.find((s) => s.id === activeSceneId);
+      const updated = prev.map((s) => s.id === id ? { ...s, name, updatedAt: Date.now() } : s);
+      const scene = updated.find((s) => s.id === id);
       if (scene) saveSceneToDB(scene);
       return updated;
     });
-  }, [activeSceneId]);
+  };
+
+  const openScene = (id: string) => {
+    router.push(`/shots/${id}`);
+  };
 
   if (!scenesLoaded) {
     return (
@@ -633,31 +595,20 @@ export default function ShotsPage() {
     );
   }
 
-  if (!activeScene) {
-    return (
-      <SceneOverview
-        scenes={scenes}
-        onOpenScene={openScene}
-        onCreateScene={createScene}
-        onDeleteScene={deleteScene}
-        onRenameScene={renameScene}
-      />
-    );
-  }
-
   return (
-    <ShotListEditor
-      key={activeScene.id}
-      scene={activeScene}
-      onBack={closeScene}
-      onSave={onSceneSave}
+    <SceneOverview
+      scenes={scenes}
+      onOpenScene={openScene}
+      onCreateScene={createScene}
+      onDeleteScene={deleteScene}
+      onRenameScene={renameScene}
     />
   );
 }
 
 // --- Shot List Editor (the full shot list UI, scoped to one scene) ---
 
-function ShotListEditor({
+export function ShotListEditor({
   scene,
   onBack,
   onSave,
