@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase-server";
 
 export async function POST(req: NextRequest) {
   try {
+    // Get authenticated user
+    const authClient = await createClient();
+    const { data: { user } } = await authClient.auth.getUser();
+
     const body = await req.json();
     const {
       type,        // "image" | "video"
@@ -72,6 +77,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from("generations")
       .insert({
+        user_id: user?.id || null,
         type,
         url: permanentUrl,
         prompt: prompt || null,

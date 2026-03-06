@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase-server";
 
 interface MigrationItem {
   type: "image" | "video";
@@ -18,6 +19,10 @@ export async function POST(req: NextRequest) {
     if (!items?.length) {
       return NextResponse.json({ error: "No items to migrate" }, { status: 400 });
     }
+
+    // Get authenticated user
+    const authClient = await createClient();
+    const { data: { user } } = await authClient.auth.getUser();
 
     const results: { url: string; permanentUrl: string; error?: string }[] = [];
 
@@ -60,6 +65,7 @@ export async function POST(req: NextRequest) {
 
         // Save to generations table
         await supabase.from("generations").insert({
+          user_id: user?.id || null,
           type: item.type,
           url: permanentUrl,
           prompt: item.prompt || null,
