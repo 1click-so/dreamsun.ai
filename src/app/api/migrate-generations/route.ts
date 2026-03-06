@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase-server";
 
 interface MigrationItem {
@@ -14,15 +13,18 @@ interface MigrationItem {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { items } = (await req.json()) as { items: MigrationItem[] };
 
     if (!items?.length) {
       return NextResponse.json({ error: "No items to migrate" }, { status: 400 });
     }
-
-    // Get authenticated user
-    const authClient = await createClient();
-    const { data: { user } } = await authClient.auth.getUser();
 
     const results: { url: string; permanentUrl: string; error?: string }[] = [];
 
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
         const storagePath = `${item.type}s/${fileId}.${ext}`;
 
         // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from("generations")
           .upload(storagePath, buffer, { contentType, upsert: true });
 
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
 
         // Save to generations table
         await supabase.from("generations").insert({
-          user_id: user?.id || null,
+          user_id: user.id,
           type: item.type,
           url: permanentUrl,
           prompt: item.prompt || null,
