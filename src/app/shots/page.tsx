@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
-import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download, CloudUpload } from "lucide-react";
+import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download } from "lucide-react";
 import JSZip from "jszip";
 import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
@@ -271,16 +271,12 @@ function SceneOverview({
   onCreateScene,
   onDeleteScene,
   onRenameScene,
-  onBackupAll,
-  backupStatus,
 }: {
   scenes: Scene[];
   onOpenScene: (id: string) => void;
   onCreateScene: () => void;
   onDeleteScene: (id: string) => void;
   onRenameScene: (id: string, name: string) => void;
-  onBackupAll: () => void;
-  backupStatus: { running: boolean; done: number; total: number; failed: number } | null;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -300,22 +296,6 @@ function SceneOverview({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {backupStatus?.running ? (
-              <div className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-4 py-2 text-sm text-accent">
-                <CloudUpload size={15} className="animate-pulse" />
-                {backupStatus.done}/{backupStatus.total}
-                {backupStatus.failed > 0 && <span className="text-red-400">({backupStatus.failed} failed)</span>}
-              </div>
-            ) : (
-              <button
-                onClick={onBackupAll}
-                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition hover:border-accent/30 hover:text-foreground"
-                title="Download all fal.ai images/videos to permanent Supabase storage"
-              >
-                <CloudUpload size={15} />
-                Backup to Cloud
-              </button>
-            )}
             <button
               onClick={onCreateScene}
               className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:bg-accent-hover"
@@ -602,98 +582,6 @@ export default function ShotsPage() {
     try { localStorage.removeItem(ACTIVE_SCENE_KEY); } catch {}
   };
 
-  // --- Backup all generations to Supabase ---
-  const [backupStatus, setBackupStatus] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null);
-
-  const backupAllToCloud = useCallback(async () => {
-    // Collect all fal.ai URLs from ALL sources
-    type Item = { type: "image" | "video"; url: string; prompt?: string; modelId?: string; modelName?: string; shotNumber?: string; sceneName?: string };
-    const items: Item[] = [];
-    const seen = new Set<string>(); // deduplicate URLs
-
-    const addItem = (item: Item) => {
-      if (!item.url || seen.has(item.url) || item.url.includes("supabase.co")) return;
-      seen.add(item.url);
-      items.push(item);
-    };
-
-    // 1. Shots/Scenes — images, videos, and their histories
-    for (const scene of scenes) {
-      for (const raw of scene.shots) {
-        const shot = raw as Record<string, unknown>;
-        const num = String(shot.number ?? "");
-        const imgPrompt = String(shot.imagePrompt ?? "");
-        const vidPrompt = String(shot.videoPrompt ?? "");
-
-        if (shot.imageUrl && typeof shot.imageUrl === "string")
-          addItem({ type: "image", url: String(shot.imageUrl), prompt: imgPrompt, modelId: scene.settings.imageModelId, shotNumber: num, sceneName: scene.name });
-        if (shot.videoUrl && typeof shot.videoUrl === "string")
-          addItem({ type: "video", url: String(shot.videoUrl), prompt: vidPrompt, modelId: scene.settings.videoModelId, shotNumber: num, sceneName: scene.name });
-        if (Array.isArray(shot.imageHistory))
-          for (const e of shot.imageHistory as { url?: string }[])
-            if (e.url) addItem({ type: "image", url: e.url, prompt: imgPrompt, modelId: scene.settings.imageModelId, shotNumber: num, sceneName: scene.name });
-        if (Array.isArray(shot.videoHistory))
-          for (const e of shot.videoHistory as { url?: string }[])
-            if (e.url) addItem({ type: "video", url: e.url, prompt: vidPrompt, modelId: scene.settings.videoModelId, shotNumber: num, sceneName: scene.name });
-      }
-    }
-
-    // 2. Image generation history (/generate page)
-    try {
-      const raw = localStorage.getItem("dreamsun_gen_history");
-      if (raw) {
-        const history = JSON.parse(raw) as { imageUrl?: string; allImageUrls?: string[]; model?: string; prompt?: string; seed?: number; settings?: { modelId?: string } }[];
-        for (const entry of history) {
-          const modelId = entry.settings?.modelId || entry.model || "unknown";
-          if (entry.imageUrl)
-            addItem({ type: "image", url: entry.imageUrl, prompt: entry.prompt, modelId, modelName: entry.model });
-          if (Array.isArray(entry.allImageUrls))
-            for (const url of entry.allImageUrls)
-              addItem({ type: "image", url, prompt: entry.prompt, modelId, modelName: entry.model });
-        }
-      }
-    } catch { /* ignore parse errors */ }
-
-    if (items.length === 0) {
-      alert("Nothing to backup — no fal.ai URLs found.");
-      return;
-    }
-
-    setBackupStatus({ running: true, done: 0, total: items.length, failed: 0 });
-
-    // Process in batches of 3 to avoid overwhelming the server
-    const BATCH = 3;
-    let done = 0;
-    let failed = 0;
-
-    for (let i = 0; i < items.length; i += BATCH) {
-      const batch = items.slice(i, i + BATCH);
-      try {
-        const res = await fetch("/api/migrate-generations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: batch }),
-        });
-        if (res.ok) {
-          const result = await res.json();
-          done += result.migrated + result.skipped;
-          failed += result.failed;
-        } else {
-          failed += batch.length;
-        }
-      } catch {
-        failed += batch.length;
-      }
-      setBackupStatus({ running: true, done, total: items.length, failed });
-    }
-
-    setBackupStatus({ running: false, done, total: items.length, failed });
-    if (failed === 0) {
-      alert(`Backup complete! ${done} files saved to cloud.`);
-    } else {
-      alert(`Backup done. ${done} saved, ${failed} failed.`);
-    }
-  }, [scenes]);
 
   // Callback for ShotListEditor to save scene data back
   const onSceneSave = useCallback((shots: Shot[], settings: SceneSettings) => {
@@ -735,8 +623,6 @@ export default function ShotsPage() {
         onCreateScene={createScene}
         onDeleteScene={deleteScene}
         onRenameScene={renameScene}
-        onBackupAll={backupAllToCloud}
-        backupStatus={backupStatus}
       />
     );
   }
