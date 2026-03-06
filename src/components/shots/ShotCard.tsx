@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Shot, ShotStatus, ImageSettings, VideoSettings, UploadedRef } from "@/types/shots";
 import type { ModelConfig } from "@/lib/models";
 import type { VideoModelConfig } from "@/lib/video-models";
@@ -38,6 +38,37 @@ interface ShotCardProps {
   onVideoSettingsChange: (updates: Partial<VideoSettings>) => void;
   onDropOnFirst: (url: string) => void;
   onDropOnLast: (url: string) => void;
+}
+
+/** Video that only loads when scrolled into view */
+function LazyVideo({ src, className, style }: { src: string; className?: string; style?: React.CSSProperties }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); io.disconnect(); } },
+      { rootMargin: "200px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <video
+      ref={ref}
+      src={visible ? src : undefined}
+      autoPlay={visible}
+      loop
+      muted
+      playsInline
+      preload="none"
+      className={className}
+      style={style}
+    />
+  );
 }
 
 const statusColors: Record<ShotStatus, string> = {
@@ -275,7 +306,7 @@ export function ShotCard({
                 {refImages.map((ref, i) => (
                   <div key={ref.id} className="relative h-14 w-14 shrink-0 overflow-hidden rounded border border-border" draggable onDragStart={(e) => ref.url && handleDragStart(e, ref.url)}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={ref.preview} alt="Ref" className="h-full w-full object-cover" />
+                    <img src={ref.preview} alt="Ref" loading="lazy" className="h-full w-full object-cover" />
                     {ref.uploading && <div className="absolute inset-0 flex items-center justify-center bg-background/60"><div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" /></div>}
                     <button onClick={() => onRefRemove(ref.id)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
                     <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 font-mono text-[7px] font-bold leading-tight text-accent">@{masterRefOffset + i + 1}</span>
@@ -295,7 +326,7 @@ export function ShotCard({
                     <div key={i} draggable onDragStart={(e) => handleDragStart(e, url)} className="relative shrink-0 cursor-grab">
                       <button onClick={() => onOpenLightbox(url, "image")} className="block">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`Generation ${i + 1}`}
+                        <img src={url} alt={`Generation ${i + 1}`} loading="lazy"
                           className={`h-16 rounded border object-cover transition hover:border-accent ${
                             url === shot.imageUrl ? "border-accent" : "border-border/50"
                           }`}
@@ -545,7 +576,7 @@ export function ShotCard({
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.imageUrl!)}>
                 <button onClick={() => onOpenLightbox(shot.imageUrl!, "image")} className="block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={shot.imageUrl} alt={`Shot ${shot.number}`}
+                  <img src={shot.imageUrl} alt={`Shot ${shot.number}`} loading="lazy"
                     className="rounded-md border border-border object-cover transition hover:border-muted cursor-grab"
                     style={{ width: outputW, height: outputH }} />
                 </button>
@@ -587,7 +618,7 @@ export function ShotCard({
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.endImageUrl ?? endFrameSrc)}>
                 <button onClick={() => onOpenLightbox(endFrameSrc, "image")} className="block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={endFrameSrc} alt="End frame"
+                  <img src={endFrameSrc} alt="End frame" loading="lazy"
                     className="rounded-md border border-border object-cover transition hover:border-muted cursor-grab"
                     style={{ width: outputW, height: outputH }} />
                 </button>
@@ -613,12 +644,8 @@ export function ShotCard({
             <span className="mb-1 block text-[9px] font-medium uppercase tracking-wider text-muted">Video</span>
             {shot.videoUrl ? (
               <div className="group relative cursor-pointer" onClick={() => onOpenLightbox(shot.videoUrl!, "video")}>
-                <video
+                <LazyVideo
                   src={shot.videoUrl}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
                   className="rounded-md border border-border object-cover transition hover:border-muted"
                   style={{ width: vidOutputW, height: vidOutputH }}
                 />

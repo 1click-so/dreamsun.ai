@@ -188,6 +188,7 @@ export function StoryboardCard({
               loop
               muted
               playsInline
+              preload="metadata"
               className="w-full rounded-t-lg object-cover cursor-pointer"
               style={{ aspectRatio: `${arW}/${arH}`, maxHeight: "360px" }}
               onClick={() => onOpenLightbox(shot.videoUrl!, "video")}
@@ -244,7 +245,7 @@ export function StoryboardCard({
           <div className="group relative" draggable onDragStart={(e) => handleDragStart(e, shot.imageUrl!)}>
             <button onClick={() => onOpenLightbox(shot.imageUrl!, "image")} className="block w-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={shot.imageUrl} alt={`Shot ${shot.number}`}
+              <img src={shot.imageUrl} alt={`Shot ${shot.number}`} loading="lazy"
                 className="w-full rounded-t-lg object-cover cursor-grab" style={{ aspectRatio: `${arW}/${arH}`, maxHeight: "360px" }} />
             </button>
             <button onClick={() => onUpdate({ imageUrl: null, imageStatus: "pending" as ShotStatus })}
@@ -323,7 +324,7 @@ export function StoryboardCard({
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, "last")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={endFrameSrc} alt="Last" className="h-full w-full object-cover" />
+            <img src={endFrameSrc} alt="Last" loading="lazy" className="h-full w-full object-cover" />
             <button onClick={onEndFrameRemove}
               className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-black/70 text-[7px] text-white/80 hover:text-white">x</button>
           </div>
@@ -417,7 +418,7 @@ export function StoryboardCard({
               {refImages.map((ref, i) => (
                 <div key={ref.id} className="relative h-6 w-6 overflow-hidden rounded border border-border">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={ref.preview} alt="Ref" className="h-full w-full object-cover" />
+                  <img src={ref.preview} alt="Ref" loading="lazy" className="h-full w-full object-cover" />
                   <button onClick={() => onRefRemove(ref.id)} className="absolute -right-0.5 -top-0.5 rounded-full bg-background/80 px-0.5 text-[7px] text-muted hover:text-foreground">x</button>
                   <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-0.5 font-mono text-[6px] font-bold leading-tight text-accent">@{masterRefOffset + i + 1}</span>
                 </div>
@@ -485,7 +486,7 @@ export function StoryboardCard({
               {endFrameSrc ? (
                 <div className="relative h-6 w-6 overflow-hidden rounded border border-accent/30">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={endFrameSrc} alt="End" className="h-full w-full object-cover" />
+                  <img src={endFrameSrc} alt="End" loading="lazy" className="h-full w-full object-cover" />
                   <button onClick={onEndFrameRemove} className="absolute -right-0.5 -top-0.5 rounded-full bg-background/80 px-0.5 text-[7px] text-muted hover:text-foreground">x</button>
                 </div>
               ) : (

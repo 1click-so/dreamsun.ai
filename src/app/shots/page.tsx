@@ -10,6 +10,7 @@ import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { Lightbox } from "@/components/shots/Lightbox";
 import { ShotCard } from "@/components/shots/ShotCard";
 import { StoryboardCard } from "@/components/shots/StoryboardCard";
@@ -343,7 +344,7 @@ function SceneOverview({
                   >
                     {thumbUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={thumbUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center">
                         <Film size={32} className="text-muted/20" />
@@ -608,8 +609,25 @@ export default function ShotsPage() {
     return (
       <div className="min-h-screen bg-background text-foreground">
         <Navbar />
-        <div className="flex min-h-[400px] items-center justify-center">
-          <div className="text-sm text-muted animate-pulse">Loading scenes...</div>
+        <div className="mx-auto max-w-5xl px-6 py-10">
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <Skeleton className="h-7 w-24" />
+              <Skeleton className="mt-2 h-4 w-16" />
+            </div>
+            <Skeleton className="h-9 w-28 rounded-lg" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="overflow-hidden rounded-xl border border-border bg-surface">
+                <Skeleton className="aspect-video w-full rounded-none" />
+                <div className="p-3">
+                  <Skeleton className="mb-2 h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
