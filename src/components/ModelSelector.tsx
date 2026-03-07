@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import type { ModelConfig } from "@/lib/models";
 import type { ModelPricing } from "@/hooks/usePricing";
 
 export function CreditIcon({ size = 10 }: { size?: number }) {
@@ -33,15 +32,33 @@ function CreditBadge({ credits, discount, promoLabel }: { credits: number; disco
   );
 }
 
+/** Minimal model shape accepted by the selector. Both image and video models can satisfy this. */
+export interface SelectorModel {
+  id: string;
+  name: string;
+  description?: string;
+  /** Provider name — used for icon letter fallback and trigger subtitle */
+  provider?: string;
+  /** Override icon letter (defaults to first char of provider) */
+  iconLetter?: string;
+  /** Override icon color classes (defaults to PROVIDER_COLORS lookup) */
+  iconColors?: string;
+  tags?: string[];
+  featured?: boolean;
+  badges?: string[];
+  /** Group label for sectioning — models with same group appear under a shared header */
+  group?: string;
+}
+
 const PROVIDER_COLORS: Record<string, string> = {
   Google: "bg-blue-500/20 text-blue-400",
   xAI: "bg-orange-500/20 text-orange-400",
   "Black Forest Labs": "bg-purple-500/20 text-purple-400",
 };
 
-function ProviderIcon({ provider }: { provider?: string }) {
-  const colors = PROVIDER_COLORS[provider ?? ""] ?? "bg-accent/20 text-accent-text";
-  const letter = provider?.[0] ?? "?";
+function ProviderIcon({ model }: { model: SelectorModel }) {
+  const colors = model.iconColors ?? PROVIDER_COLORS[model.provider ?? ""] ?? "bg-accent/20 text-accent-text";
+  const letter = model.iconLetter ?? model.provider?.[0] ?? "?";
   return (
     <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${colors}`}>
       {letter}
@@ -58,26 +75,46 @@ function TagBadge({ label }: { label: string }) {
 }
 
 interface ModelSelectorProps {
-  models: ModelConfig[];
+  models: SelectorModel[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   pricing?: Record<string, ModelPricing>;
+  /** "multi" = checkbox multi-select (default), "single" = select one and close */
+  mode?: "single" | "multi";
+  /** Panel title */
+  title?: string;
+  /** Panel subtitle */
+  subtitle?: string;
 }
 
-export function ModelSelector({ models, selectedIds, onChange, pricing }: ModelSelectorProps) {
+export function ModelSelector({
+  models, selectedIds, onChange, pricing,
+  mode = "multi",
+  title,
+  subtitle,
+}: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [mounted, setMounted] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState({ top: 0, sidebarRight: 0 });
 
   useEffect(() => setMounted(true), []);
 
-  // Position: panel starts at the right edge of the sidebar, top-aligned with trigger
+  // Clear search on close, focus on open
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    } else {
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
+  }, [open]);
+
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const triggerRect = triggerRef.current.getBoundingClientRect();
-    // Find the sidebar (closest aside ancestor)
     const sidebar = triggerRef.current.closest("aside");
     const sidebarRight = sidebar ? sidebar.getBoundingClientRect().right : triggerRect.right;
     setPos({ top: triggerRect.top, sidebarRight });
@@ -121,31 +158,71 @@ export function ModelSelector({ models, selectedIds, onChange, pricing }: ModelS
   const selectedModels = models.filter((m) => selectedIds.includes(m.id));
   const label =
     selectedModels.length === 0
-      ? "Select models"
+      ? "Select model"
       : selectedModels.length === 1
         ? selectedModels[0].name
         : `${selectedModels.length} models`;
 
-  const toggle = (id: string) => {
-    const next = selectedIds.includes(id)
-      ? selectedIds.filter((x) => x !== id)
-      : [...selectedIds, id];
-    if (next.length === 0) return;
-    onChange(next);
+  const handleSelect = (id: string) => {
+    if (mode === "single") {
+      onChange([id]);
+      setOpen(false);
+    } else {
+      const next = selectedIds.includes(id)
+        ? selectedIds.filter((x) => x !== id)
+        : [...selectedIds, id];
+      if (next.length === 0) return;
+      onChange(next);
+    }
   };
 
-  const featured = models.filter((m) => m.featured);
-  const lora = models.filter((m) => m.loras && m.loras.length > 0);
-  const other = models.filter((m) => !m.featured && !(m.loras && m.loras.length > 0));
+  // Filter models by search query
+  const filteredModels = useMemo(() => {
+    if (!search.trim()) return models;
+    const q = search.toLowerCase();
+    return models.filter((m) =>
+      m.name.toLowerCase().includes(q) ||
+      m.provider?.toLowerCase().includes(q) ||
+      m.description?.toLowerCase().includes(q) ||
+      m.group?.toLowerCase().includes(q) ||
+      m.tags?.some((t) => t.toLowerCase().includes(q))
+    );
+  }, [models, search]);
+
+  // Build sections from group field
+  const sections = useMemo(() => {
+    const result: { label?: string; models: SelectorModel[] }[] = [];
+    const hasGroups = filteredModels.some((m) => m.group);
+    if (hasGroups) {
+      const groupOrder: string[] = [];
+      const groupMap = new Map<string, SelectorModel[]>();
+      for (const m of filteredModels) {
+        const g = m.group ?? "";
+        if (!groupMap.has(g)) {
+          groupOrder.push(g);
+          groupMap.set(g, []);
+        }
+        groupMap.get(g)!.push(m);
+      }
+      for (const g of groupOrder) {
+        result.push({ label: g || undefined, models: groupMap.get(g)! });
+      }
+    } else {
+      result.push({ label: undefined, models: filteredModels });
+    }
+    return result;
+  }, [filteredModels]);
 
   const availableWidth = typeof window !== "undefined" ? window.innerWidth - pos.sidebarRight - 24 : 600;
   const availableHeight = typeof window !== "undefined" ? window.innerHeight - pos.top - 24 : 500;
+
+  const panelTitle = title ?? "Choose Model";
+  const panelSubtitle = subtitle ?? (mode === "multi" ? "Select one or more for parallel generation" : "Select a model");
 
   const panel = (
     <AnimatePresence>
       {open && (
         <>
-          {/* Scrim over gallery */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -155,7 +232,6 @@ export function ModelSelector({ models, selectedIds, onChange, pricing }: ModelS
             onClick={() => setOpen(false)}
           />
 
-          {/* Panel over the gallery area */}
           <motion.div
             ref={panelRef}
             initial={{ opacity: 0, x: -16, scale: 0.97 }}
@@ -175,42 +251,68 @@ export function ModelSelector({ models, selectedIds, onChange, pricing }: ModelS
               style={{ maxHeight: Math.min(availableHeight, 560), overflowY: "auto" }}
             >
               {/* Header */}
-              <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-border bg-surface px-4 py-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Choose Model</h3>
-                  <p className="mt-0.5 text-[10px] text-muted">Select one or more for parallel generation</p>
-                </div>
-                {selectedIds.length > 1 && (
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent-text">
-                      {selectedIds.length} selected
-                    </span>
-                    <button
-                      onClick={() => onChange([selectedIds[0]])}
-                      className="text-[10px] text-muted transition hover:text-foreground"
-                    >
-                      Reset
-                    </button>
+              <div className="sticky top-0 z-10 rounded-t-2xl border-b border-border bg-surface">
+                <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">{panelTitle}</h3>
+                    <p className="mt-0.5 text-[10px] text-muted">{panelSubtitle}</p>
                   </div>
-                )}
+                  {mode === "multi" && selectedIds.length > 1 && (
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent-text">
+                        {selectedIds.length} selected
+                      </span>
+                      <button
+                        onClick={() => onChange([selectedIds[0]])}
+                        className="text-[10px] text-muted transition hover:text-foreground"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Search */}
+                <div className="px-3 pb-2.5">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 focus-within:border-accent/40">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted">
+                      <circle cx="6" cy="6" r="4.5" />
+                      <path d="M9.5 9.5L13 13" />
+                    </svg>
+                    <input
+                      ref={searchRef}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search models..."
+                      className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted"
+                    />
+                    {search && (
+                      <button onClick={() => setSearch("")} className="shrink-0 text-muted transition hover:text-foreground">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M2 2l6 6M8 2l-6 6" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Model list */}
               <div className="flex-1 px-1 py-1">
-                {featured.length > 0 && (
-                  <ModelSection label="Featured" models={featured} selectedIds={selectedIds} onToggle={toggle} pricing={pricing} />
-                )}
-                {lora.length > 0 && (
-                  <ModelSection label="Custom LoRA" models={lora} selectedIds={selectedIds} onToggle={toggle} pricing={pricing} />
-                )}
-                {other.length > 0 && (
-                  <ModelSection
-                    label={featured.length > 0 || lora.length > 0 ? "Other" : undefined}
-                    models={other}
-                    selectedIds={selectedIds}
-                    onToggle={toggle}
-                    pricing={pricing}
-                  />
+                {filteredModels.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <p className="text-xs text-muted">No models match &ldquo;{search}&rdquo;</p>
+                  </div>
+                ) : (
+                  sections.map((section, i) => (
+                    <ModelSection
+                      key={section.label ?? `section-${i}`}
+                      label={section.label}
+                      models={section.models}
+                      selectedIds={selectedIds}
+                      onSelect={handleSelect}
+                      pricing={pricing}
+                    />
+                  ))
                 )}
               </div>
 
@@ -238,11 +340,11 @@ export function ModelSelector({ models, selectedIds, onChange, pricing }: ModelS
         className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition hover:border-accent/30 focus:border-accent"
       >
         {selectedModels.length === 1 && (
-          <ProviderIcon provider={selectedModels[0].provider} />
+          <ProviderIcon model={selectedModels[0]} />
         )}
         <div className="min-w-0 flex-1">
           <span className="block truncate text-xs font-medium text-foreground">{label}</span>
-          {selectedModels.length === 1 && (
+          {selectedModels.length === 1 && selectedModels[0].provider && (
             <span className="block truncate text-[10px] text-muted">{selectedModels[0].provider}</span>
           )}
         </div>
@@ -278,13 +380,13 @@ function ModelSection({
   label,
   models,
   selectedIds,
-  onToggle,
+  onSelect,
   pricing,
 }: {
   label?: string;
-  models: ModelConfig[];
+  models: SelectorModel[];
   selectedIds: string[];
-  onToggle: (id: string) => void;
+  onSelect: (id: string) => void;
   pricing?: Record<string, ModelPricing>;
 }) {
   return (
@@ -300,7 +402,7 @@ function ModelSection({
         return (
           <button
             key={m.id}
-            onClick={() => onToggle(m.id)}
+            onClick={() => onSelect(m.id)}
             className={`group flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${
               checked ? "bg-accent/8" : "hover:bg-surface-hover"
             }`}
@@ -319,7 +421,7 @@ function ModelSection({
             </span>
 
             {/* Provider icon */}
-            <ProviderIcon provider={m.provider} />
+            <ProviderIcon model={m} />
 
             {/* Info */}
             <div className="min-w-0 flex-1">
@@ -347,9 +449,11 @@ function ModelSection({
                   />
                 )}
               </div>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
-                {m.description}
-              </p>
+              {m.description && (
+                <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+                  {m.description}
+                </p>
+              )}
               {m.tags && m.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {m.tags.map((tag) => <TagBadge key={tag} label={tag} />)}

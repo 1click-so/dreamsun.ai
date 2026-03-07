@@ -18,7 +18,7 @@ export function Footer() {
         <div>
           <h4 className="font-semibold mb-4">Product</h4>
           <ul className="space-y-3 text-white/50 text-sm">
-            <li><Link href="/generate" className="hover:text-accent transition-colors">Image Gen</Link></li>
+            <li><Link href="/images" className="hover:text-accent transition-colors">Image Gen</Link></li>
             <li><Link href="/video" className="hover:text-accent transition-colors">Video Gen</Link></li>
             <li><Link href="#" className="hover:text-accent transition-colors">API</Link></li>
             <li><Link href="#pricing" className="hover:text-accent transition-colors">Pricing</Link></li>

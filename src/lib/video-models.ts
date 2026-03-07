@@ -1,8 +1,13 @@
+export type VideoModelType = "image-to-video" | "motion-control";
+
 export interface VideoModelConfig {
   id: string;
   name: string;
+  description: string;
   endpoint: string;
-  costPer5Sec: string;
+  /** Model type — determines which UI settings are shown */
+  type: VideoModelType;
+  costPerSec: string;
   defaultDuration: number;
   /** Allowed duration values in seconds */
   durations: number[];
@@ -14,13 +19,19 @@ export interface VideoModelConfig {
     imageUrl: string;
     endImageUrl?: string;
     audioUrl?: string;
+    videoUrl?: string;
+    characterOrientation?: string;
     prompt: string;
-    duration: string;
+    duration?: string;
     aspectRatio?: string;
     resolution?: string;
   };
   /** Whether this model requires audio input */
   requiresAudio?: boolean;
+  /** Whether this model requires a reference video (motion control) */
+  requiresVideo?: boolean;
+  /** Available character orientations (motion control) */
+  characterOrientations?: string[];
   /** Whether model supports negative_prompt */
   supportsNegativePrompt: boolean;
   /** Whether model supports cfg_scale (0-2) */
@@ -29,18 +40,21 @@ export interface VideoModelConfig {
   supportsCameraFixed: boolean;
   /** Whether model supports generate_audio */
   supportsGenerateAudio: boolean;
-  /** Whether duration param must be sent as string (Kling) vs number (LTX/Seedance) */
-  durationIsString?: boolean;
+  /** Whether model supports keep_original_sound (motion control) */
+  supportsKeepOriginalSound?: boolean;
   /** Extra params always sent with this model */
   extraInput?: Record<string, unknown>;
 }
 
 export const VIDEO_MODELS: VideoModelConfig[] = [
+  // ===== Image-to-Video =====
   {
     id: "kling-2-6-pro",
     name: "Kling 2.6 Pro",
+    description: "Reliable image-to-video with negative prompt and CFG control.",
     endpoint: "fal-ai/kling-video/v2.6/pro/image-to-video",
-    costPer5Sec: "~$0.35",
+    type: "image-to-video",
+    costPerSec: "$0.07",
     defaultDuration: 5,
     durations: [5, 10],
     aspectRatios: ["16:9", "9:16", "1:1"],
@@ -65,8 +79,10 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: "kling-3-standard",
     name: "Kling 3.0 Standard",
+    description: "Latest Kling generation. First + last frame support, 3-15s duration.",
     endpoint: "fal-ai/kling-video/v3/standard/image-to-video",
-    costPer5Sec: "~$0.84",
+    type: "image-to-video",
+    costPerSec: "$0.168",
     defaultDuration: 5,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     aspectRatios: ["16:9", "9:16", "1:1"],
@@ -91,8 +107,10 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: "kling-3-pro",
     name: "Kling 3.0 Pro",
+    description: "Highest quality Kling. First + last frame, audio generation, 3-15s.",
     endpoint: "fal-ai/kling-video/v3/pro/image-to-video",
-    costPer5Sec: "~$1.12",
+    type: "image-to-video",
+    costPerSec: "$0.224",
     defaultDuration: 5,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     aspectRatios: ["16:9", "9:16", "1:1"],
@@ -117,8 +135,10 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: "seedance-1-5-pro",
     name: "Seedance 1.5 Pro",
+    description: "ByteDance's model. Camera lock, up to 1080p, affordable per-second pricing.",
     endpoint: "fal-ai/bytedance/seedance/v1.5/pro/image-to-video",
-    costPer5Sec: "~$0.26",
+    type: "image-to-video",
+    costPerSec: "$0.052",
     defaultDuration: 5,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12],
     aspectRatios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
@@ -140,8 +160,10 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: "ltx-2-3",
     name: "LTX 2.3",
+    description: "Lightricks image-to-video. Up to 2160p resolution with audio.",
     endpoint: "fal-ai/ltx-2.3/image-to-video",
-    costPer5Sec: "~$0.30",
+    type: "image-to-video",
+    costPerSec: "$0.06",
     defaultDuration: 6,
     durations: [6, 8, 10],
     aspectRatios: ["auto", "16:9", "9:16"],
@@ -163,8 +185,10 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: "ltx-2-3-fast",
     name: "LTX 2.3 Fast",
+    description: "Fast Lightricks variant. Up to 20s duration, lowest cost per second.",
     endpoint: "fal-ai/ltx-2.3/image-to-video/fast",
-    costPer5Sec: "~$0.20",
+    type: "image-to-video",
+    costPerSec: "$0.04",
     defaultDuration: 6,
     durations: [6, 8, 10, 12, 14, 16, 18, 20],
     aspectRatios: ["auto", "16:9", "9:16"],
@@ -186,8 +210,10 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
   {
     id: "ltx-2-3-audio",
     name: "LTX 2.3 Audio-to-Video",
+    description: "Sync video generation to an audio track. Image + audio input.",
     endpoint: "fal-ai/ltx-2.3/audio-to-video",
-    costPer5Sec: "~$0.50",
+    type: "image-to-video",
+    costPerSec: "$0.10",
     defaultDuration: 6,
     durations: [6, 8, 10],
     aspectRatios: ["auto", "16:9", "9:16"],
@@ -207,8 +233,163 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     supportsCameraFixed: false,
     supportsGenerateAudio: false,
   },
+
+  // ===== Motion Control =====
+  {
+    id: "kling-2-6-mc-standard",
+    name: "Kling 2.6 Standard",
+    description: "Affordable motion transfer. Copy movement from any reference video.",
+    endpoint: "fal-ai/kling-video/v2.6/standard/motion-control",
+    type: "motion-control",
+    costPerSec: "$0.07",
+    defaultDuration: 10,
+    durations: [],
+    aspectRatios: [],
+    resolutions: [],
+    defaultResolution: "",
+    params: {
+      imageUrl: "image_url",
+      videoUrl: "video_url",
+      characterOrientation: "character_orientation",
+      prompt: "prompt",
+    },
+    requiresVideo: true,
+    characterOrientations: ["video", "image"],
+    supportsNegativePrompt: false,
+    supportsCfgScale: false,
+    supportsCameraFixed: false,
+    supportsGenerateAudio: false,
+    supportsKeepOriginalSound: true,
+  },
+  {
+    id: "kling-2-6-mc-pro",
+    name: "Kling 2.6 Pro",
+    description: "Pro motion transfer with keep-audio support. Higher fidelity.",
+    endpoint: "fal-ai/kling-video/v2.6/pro/motion-control",
+    type: "motion-control",
+    costPerSec: "$0.14",
+    defaultDuration: 10,
+    durations: [],
+    aspectRatios: [],
+    resolutions: [],
+    defaultResolution: "",
+    params: {
+      imageUrl: "image_url",
+      videoUrl: "video_url",
+      characterOrientation: "character_orientation",
+      prompt: "prompt",
+    },
+    requiresVideo: true,
+    characterOrientations: ["video", "image"],
+    supportsNegativePrompt: false,
+    supportsCfgScale: false,
+    supportsCameraFixed: false,
+    supportsGenerateAudio: false,
+    supportsKeepOriginalSound: true,
+  },
+  {
+    id: "kling-3-mc-standard",
+    name: "Kling 3.0 Standard",
+    description: "Latest Kling motion control. Facial consistency via elements.",
+    endpoint: "fal-ai/kling-video/v3/standard/motion-control",
+    type: "motion-control",
+    costPerSec: "$0.126",
+    defaultDuration: 10,
+    durations: [],
+    aspectRatios: [],
+    resolutions: [],
+    defaultResolution: "",
+    params: {
+      imageUrl: "image_url",
+      videoUrl: "video_url",
+      characterOrientation: "character_orientation",
+      prompt: "prompt",
+    },
+    requiresVideo: true,
+    characterOrientations: ["video", "image"],
+    supportsNegativePrompt: false,
+    supportsCfgScale: false,
+    supportsCameraFixed: false,
+    supportsGenerateAudio: false,
+    supportsKeepOriginalSound: true,
+  },
+  {
+    id: "kling-3-mc-pro",
+    name: "Kling 3.0 Pro",
+    description: "Highest quality motion transfer. Facial elements, keep audio, up to 30s.",
+    endpoint: "fal-ai/kling-video/v3/pro/motion-control",
+    type: "motion-control",
+    costPerSec: "$0.168",
+    defaultDuration: 10,
+    durations: [],
+    aspectRatios: [],
+    resolutions: [],
+    defaultResolution: "",
+    params: {
+      imageUrl: "image_url",
+      videoUrl: "video_url",
+      characterOrientation: "character_orientation",
+      prompt: "prompt",
+    },
+    requiresVideo: true,
+    characterOrientations: ["video", "image"],
+    supportsNegativePrompt: false,
+    supportsCfgScale: false,
+    supportsCameraFixed: false,
+    supportsGenerateAudio: false,
+    supportsKeepOriginalSound: true,
+  },
 ];
 
 export function getVideoModelById(id: string): VideoModelConfig | undefined {
   return VIDEO_MODELS.find((m) => m.id === id);
+}
+
+/** Image-to-video models (non-audio) for Create mode */
+export function getCreateModels(): VideoModelConfig[] {
+  return VIDEO_MODELS.filter((m) => m.type === "image-to-video" && !m.requiresAudio);
+}
+
+/** Motion control models */
+export function getMotionControlModels(): VideoModelConfig[] {
+  return VIDEO_MODELS.filter((m) => m.type === "motion-control");
+}
+
+const VIDEO_PROVIDER_MAP: Record<string, { letter: string; colors: string; provider: string }> = {
+  kling: { letter: "K", colors: "bg-orange-500/20 text-orange-400", provider: "Kling" },
+  seedance: { letter: "S", colors: "bg-purple-500/20 text-purple-400", provider: "ByteDance" },
+  ltx: { letter: "L", colors: "bg-blue-500/20 text-blue-400", provider: "Lightricks" },
+};
+
+/** Convert video models to SelectorModel[] for the shared ModelSelector component */
+export function videoModelsToSelectorItems(models: VideoModelConfig[]) {
+  return models.map((m) => {
+    const prefix = Object.keys(VIDEO_PROVIDER_MAP).find((p) => m.id.startsWith(p));
+    const meta = prefix ? VIDEO_PROVIDER_MAP[prefix] : { letter: "?", colors: "bg-accent/20 text-accent-text", provider: undefined };
+
+    const tags: string[] = [];
+
+    if (m.type === "image-to-video") {
+      if (m.durations.length > 0) tags.push(`${m.durations[0]}-${m.durations[m.durations.length - 1]}s`);
+      if (m.resolutions.length > 0) tags.push(`up to ${m.resolutions[m.resolutions.length - 1]}`);
+      if (m.supportsCameraFixed) tags.push("camera lock");
+      if (m.supportsGenerateAudio) tags.push("audio");
+      if (m.params.endImageUrl) tags.push("last frame");
+    } else {
+      tags.push("motion transfer");
+      if (m.characterOrientations?.includes("video")) tags.push("up to 30s");
+      if (m.supportsKeepOriginalSound) tags.push("keep audio");
+    }
+
+    return {
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      provider: meta.provider,
+      iconLetter: meta.letter,
+      iconColors: meta.colors,
+      tags,
+      group: m.type === "image-to-video" ? "Create" : "Motion Control",
+    };
+  });
 }

@@ -68,7 +68,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.5 }}
           className="flex flex-col sm:flex-row items-center gap-4"
         >
-          <Link href="/generate" className="h-14 px-8 rounded-full bg-accent text-black font-semibold text-lg flex items-center gap-2 hover:scale-105 transition-transform">
+          <Link href="/images" className="h-14 px-8 rounded-full bg-accent text-black font-semibold text-lg flex items-center gap-2 hover:scale-105 transition-transform">
             Generate Now <ArrowRight size={20} />
           </Link>
           <button className="h-14 px-8 rounded-full glass text-white font-semibold text-lg flex items-center gap-2 hover:bg-white/10 transition-colors">

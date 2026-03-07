@@ -19,6 +19,9 @@ export async function POST(req: NextRequest) {
       imageUrl,
       endImageUrl,
       audioUrl,
+      videoUrl,
+      characterOrientation,
+      keepOriginalSound,
       duration,
       aspectRatio,
       resolution,
@@ -44,21 +47,40 @@ export async function POST(req: NextRequest) {
     }
 
     // Build input using model's param mapping
-    const durationVal = duration || model.defaultDuration;
     const input: Record<string, unknown> = {
       [model.params.imageUrl]: imageUrl,
       [model.params.prompt]: prompt || "",
-      [model.params.duration]: typeof durationVal === "number" ? durationVal : Number(durationVal),
     };
+
+    // Duration — only for models that have it (not motion control)
+    if (model.params.duration) {
+      const durationVal = duration || model.defaultDuration;
+      input[model.params.duration] = typeof durationVal === "number" ? durationVal : Number(durationVal);
+    }
 
     // Audio URL for audio-to-video models
     if (audioUrl && model.params.audioUrl) {
       input[model.params.audioUrl] = audioUrl;
     }
 
-    // End image (last frame)
+    // End image (last frame) for image-to-video
     if (endImageUrl && model.params.endImageUrl) {
       input[model.params.endImageUrl] = endImageUrl;
+    }
+
+    // Reference video for motion control
+    if (videoUrl && model.params.videoUrl) {
+      input[model.params.videoUrl] = videoUrl;
+    }
+
+    // Character orientation for motion control
+    if (characterOrientation && model.params.characterOrientation) {
+      input[model.params.characterOrientation] = characterOrientation;
+    }
+
+    // Keep original sound for motion control
+    if (keepOriginalSound !== undefined && model.supportsKeepOriginalSound) {
+      input.keep_original_sound = keepOriginalSound;
     }
 
     if (aspectRatio && model.params.aspectRatio) {
@@ -100,15 +122,15 @@ export async function POST(req: NextRequest) {
     const data = result.data as Record<string, unknown>;
 
     // Video models return { video: { url } } or { video_url }
-    let videoUrl: string | null = null;
+    let resultVideoUrl: string | null = null;
     if (data.video && typeof data.video === "object") {
       const video = data.video as Record<string, unknown>;
-      videoUrl = video.url as string;
+      resultVideoUrl = video.url as string;
     } else if (typeof data.video_url === "string") {
-      videoUrl = data.video_url;
+      resultVideoUrl = data.video_url;
     }
 
-    if (!videoUrl) {
+    if (!resultVideoUrl) {
       return NextResponse.json(
         { error: "No video generated" },
         { status: 500 }
@@ -137,7 +159,7 @@ export async function POST(req: NextRequest) {
         const fileName = `${prefix}_${nextGen}.mp4`;
         const filePath = join(outputFolder, fileName);
 
-        const vidRes = await fetch(videoUrl);
+        const vidRes = await fetch(resultVideoUrl);
         const buffer = Buffer.from(await vidRes.arrayBuffer());
         await writeFile(filePath, buffer);
 
@@ -148,7 +170,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      videoUrl,
+      videoUrl: resultVideoUrl,
       model: model.name,
       requestId: result.requestId,
       localPath,

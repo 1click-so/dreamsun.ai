@@ -26,7 +26,7 @@ function LoginForm() {
   const router = useRouter();
   const supabase = createClient();
 
-  const next = searchParams.get("next") ?? "/generate";
+  const next = searchParams.get("next") ?? "/images";
 
   function switchMode(to: Mode) {
     setMode(to);

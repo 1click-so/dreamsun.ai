@@ -1,12 +1,1129 @@
+"use client";
+
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { fal } from "@fal-ai/client";
+import { type VideoModelConfig, VIDEO_MODELS, getCreateModels, getMotionControlModels, videoModelsToSelectorItems } from "@/lib/video-models";
+import { loadStorage, saveStorage } from "@/lib/storage";
 import { Navbar } from "@/components/Navbar";
+import { Toggle } from "@/components/ui/Toggle";
+import { ModelSelector } from "@/components/ModelSelector";
+import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
+import { GalleryGrid } from "@/components/generate/GalleryGrid";
+import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
+import { MediaLightbox } from "@/components/generate/MediaLightbox";
+import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion } from "@/components/generate/Icons";
+import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
+import { useGenerations, type Generation } from "@/hooks/useGenerations";
+import { usePricing } from "@/hooks/usePricing";
+import { generationToResult, type GenerationResult, type UploadedImage } from "@/types/generations";
+
+fal.config({ proxyUrl: "/api/fal/proxy" });
+
+// --- Storage keys ---
+
+const STORAGE_KEYS = {
+  videoModel: "dreamsun_vid_model",
+  mcModel: "dreamsun_vid_mc_model",
+  duration: "dreamsun_vid_duration",
+  aspectRatio: "dreamsun_vid_ratio",
+  resolution: "dreamsun_vid_resolution",
+  cameraFixed: "dreamsun_vid_camera_fixed",
+  generateAudio: "dreamsun_vid_gen_audio",
+  gallerySize: "dreamsun_vid_gallery_size",
+  charOrientation: "dreamsun_vid_char_orient",
+} as const;
+
+// --- Video modes ---
+
+type VideoMode = "create" | "motion";
+
+const VIDEO_MODES: ModeConfig[] = [
+  {
+    id: "create",
+    label: "Create",
+    icon: <IconVideo size={12} />,
+    description: "Image to video generation",
+    ready: true,
+  },
+  {
+    id: "motion",
+    label: "Motion Control",
+    icon: <IconMotion size={12} />,
+    description: "Transfer motion from reference video",
+    ready: true,
+  },
+];
+
+// --- Helpers ---
+
+let imageIdCounter = 0;
+let batchIdCounter = 0;
+
+// --- Upload zone (image or video) ---
+
+function UploadZone({ file, onRemove, onUpload, inputRef, label, dragOver, setDragOver, onDrop, accept, isVideo, compact }: {
+  file: UploadedImage | null;
+  onRemove: () => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  label: string;
+  dragOver: boolean;
+  setDragOver: (v: boolean) => void;
+  onDrop: (e: React.DragEvent) => void;
+  accept?: string;
+  isVideo?: boolean;
+  compact?: boolean;
+}) {
+  const h = compact ? "h-24" : "h-32";
+  return (
+    <div className={compact ? "min-w-0 flex-1" : ""}>
+      <SectionLabel>{label}</SectionLabel>
+      <div
+        className={`relative rounded-lg transition ${dragOver ? "ring-1 ring-accent/30" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+        onDrop={(e) => { setDragOver(false); onDrop(e); }}
+      >
+        {file ? (
+          <div className={`group relative ${h} w-full overflow-hidden rounded-lg border border-border`}>
+            {isVideo ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video src={file.preview} className="h-full w-full object-cover" muted />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={file.preview} alt={label} className="h-full w-full object-cover" />
+            )}
+            {file.uploading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              </div>
+            )}
+            <button
+              onClick={onRemove}
+              className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover:opacity-100"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M2 4h10M5 4V2.5h4V4M3 4l.7 8.1c.1.8.7 1.4 1.5 1.4h3.6c.8 0 1.4-.6 1.5-1.4L11 4" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => inputRef.current?.click()}
+            className={`flex ${h} w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed transition ${
+              dragOver
+                ? "border-accent bg-accent/10 text-accent-text"
+                : "border-border text-muted hover:border-accent/40 hover:text-accent"
+            }`}
+          >
+            <svg width={compact ? "18" : "24"} height={compact ? "18" : "24"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span className="text-[10px] font-medium">
+              {dragOver ? (isVideo ? "Drop video" : "Drop image") : (isVideo ? "Upload or drag video" : "Upload or drag")}
+            </span>
+          </button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept ?? "image/png,image/jpeg,image/webp"}
+        onChange={onUpload}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+// --- Page ---
 
 export default function VideoPage() {
+  const [activeMode, setActiveMode] = useState<VideoMode>("create");
+
+  // Model — separate for each mode
+  const [createModelId, setCreateModelId] = useState(() =>
+    loadStorage(STORAGE_KEYS.videoModel, "seedance-1-5-pro")
+  );
+  const [mcModelId, setMcModelId] = useState(() =>
+    loadStorage(STORAGE_KEYS.mcModel, "kling-3-mc-standard")
+  );
+
+  // Create mode settings
+  const [duration, setDuration] = useState(() =>
+    loadStorage(STORAGE_KEYS.duration, 5)
+  );
+  const [aspectRatio, setAspectRatio] = useState(() =>
+    loadStorage(STORAGE_KEYS.aspectRatio, "16:9")
+  );
+  const [resolution, setResolution] = useState(() =>
+    loadStorage(STORAGE_KEYS.resolution, "720p")
+  );
+  const [cameraFixed, setCameraFixed] = useState(() =>
+    loadStorage(STORAGE_KEYS.cameraFixed, false)
+  );
+  const [generateAudio, setGenerateAudio] = useState(() =>
+    loadStorage(STORAGE_KEYS.generateAudio, false)
+  );
+
+  // Motion control settings
+  const [charOrientation, setCharOrientation] = useState<string>(() =>
+    loadStorage(STORAGE_KEYS.charOrientation, "video")
+  );
+  const [keepOriginalSound, setKeepOriginalSound] = useState(true);
+
+  // Generation state
+  const [prompt, setPrompt] = useState("");
+  const [negativePrompt, setNegativePrompt] = useState("");
+  const [negativeOpen, setNegativeOpen] = useState(false);
+  const [firstFrame, setFirstFrame] = useState<UploadedImage | null>(null);
+  const [lastFrame, setLastFrame] = useState<UploadedImage | null>(null);
+  const [refVideo, setRefVideo] = useState<UploadedImage | null>(null);
+  const [generatingSlots, setGeneratingSlots] = useState<{ modelName: string; modelId: string; slotId: string }[]>([]);
+  const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Gallery state
+  const [galleryFilter, setGalleryFilter] = useState<GalleryFilter>("videos");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [galleryRowHeight, setGalleryRowHeight] = useState(() =>
+    loadStorage(STORAGE_KEYS.gallerySize, 1.0)
+  );
+  const [selectedResult, setSelectedResult] = useState<GenerationResult | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showEditPrompt, setShowEditPrompt] = useState(false);
+  const [editPromptValue, setEditPromptValue] = useState("");
+  const [firstDragOver, setFirstDragOver] = useState(false);
+  const [lastDragOver, setLastDragOver] = useState(false);
+  const [refVideoDragOver, setRefVideoDragOver] = useState(false);
+  const [promptBarDragOver, setPromptBarDragOver] = useState(false);
+
+  const firstInputRef = useRef<HTMLInputElement>(null);
+  const lastInputRef = useRef<HTMLInputElement>(null);
+  const refVideoInputRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  // Supabase generations
+  const {
+    generations: dbGenerations,
+    loading: generationsLoading,
+    addGenerations: addDbGenerations,
+    toggleFavorite: dbToggleFavorite,
+    deleteGeneration: dbDeleteGeneration,
+  } = useGenerations();
+
+  const history = useMemo(
+    () => dbGenerations.map(generationToResult),
+    [dbGenerations]
+  );
+
+  const { pricing } = usePricing();
+
+  const isGenerating = generatingSlots.length > 0;
+
+  // Model lists — selector shows ALL models, grouped by type
+  const createModels = useMemo(() => getCreateModels(), []);
+  const mcModels = useMemo(() => getMotionControlModels(), []);
+  const allSelectorItems = useMemo(() => videoModelsToSelectorItems(VIDEO_MODELS), []);
+
+  const selectedModelId = activeMode === "create" ? createModelId : mcModelId;
+  const activeModels = activeMode === "create" ? createModels : mcModels;
+  const currentModel = activeModels.find((m) => m.id === selectedModelId) ?? activeModels[0];
+
+  // Create mode: does current model support last frame?
+  const supportsLastFrame = activeMode === "create" && !!currentModel.params.endImageUrl;
+
+  // Ensure selected model is valid for current mode
+  useEffect(() => {
+    if (activeMode === "create" && !createModels.find((m) => m.id === createModelId)) {
+      setCreateModelId(createModels[0].id);
+    }
+    if (activeMode === "motion" && !mcModels.find((m) => m.id === mcModelId)) {
+      setMcModelId(mcModels[0].id);
+    }
+  }, [activeMode, createModelId, mcModelId, createModels, mcModels]);
+
+  // Ensure duration is valid for current model
+  useEffect(() => {
+    if (currentModel.durations.length > 0 && !currentModel.durations.includes(duration)) {
+      setDuration(currentModel.defaultDuration);
+    }
+  }, [currentModel, duration]);
+
+  // Ensure aspect ratio is valid
+  useEffect(() => {
+    if (currentModel.aspectRatios.length > 0 && !currentModel.aspectRatios.includes(aspectRatio)) {
+      setAspectRatio(currentModel.aspectRatios[0]);
+    }
+  }, [currentModel, aspectRatio]);
+
+  // Ensure resolution is valid
+  useEffect(() => {
+    if (currentModel.resolutions.length > 0 && !currentModel.resolutions.includes(resolution)) {
+      setResolution(currentModel.defaultResolution);
+    }
+  }, [currentModel, resolution]);
+
+  // Filter gallery
+  let filteredHistory = history;
+  if (galleryFilter === "loved") {
+    filteredHistory = filteredHistory.filter((r) => r.favorited);
+  } else if (galleryFilter === "videos") {
+    filteredHistory = filteredHistory.filter((r) => r.type === "video");
+  } else if (galleryFilter === "images") {
+    filteredHistory = filteredHistory.filter((r) => !r.type || r.type === "image");
+  } else if (galleryFilter === "audio") {
+    filteredHistory = filteredHistory.filter((r) => r.type === "audio");
+  }
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filteredHistory = filteredHistory.filter((r) =>
+      r.prompt?.toLowerCase().includes(q) ||
+      r.model.toLowerCase().includes(q)
+    );
+  }
+
+  const latestBatch = currentBatchId
+    ? filteredHistory.filter((r) => r.batchId === currentBatchId)
+    : [];
+
+  // --- Image upload handlers ---
+
+  const uploadImage = useCallback(async (file: File, setter: (img: UploadedImage | null) => void) => {
+    const id = `img_${++imageIdCounter}`;
+    const preview = URL.createObjectURL(file);
+    setter({ id, preview, url: null, uploading: true });
+    try {
+      const url = await fal.storage.upload(file);
+      setter({ id, preview, url, uploading: false });
+    } catch (err) {
+      setter(null);
+      setError(`Upload failed: ${err instanceof Error ? err.message : "Network error"}`);
+    }
+  }, []);
+
+  const handleFirstUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadImage(file, setFirstFrame);
+    if (firstInputRef.current) firstInputRef.current.value = "";
+  }, [uploadImage]);
+
+  const handleLastUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadImage(file, setLastFrame);
+    if (lastInputRef.current) lastInputRef.current.value = "";
+  }, [uploadImage]);
+
+  const handleImageDrop = useCallback(async (e: React.DragEvent, setter: (img: UploadedImage | null) => void) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const imageUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (imageUrl && imageUrl.startsWith("http") && /\.(png|jpe?g|webp)/i.test(imageUrl)) {
+      const id = `img_${++imageIdCounter}`;
+      setter({ id, preview: imageUrl, url: imageUrl, uploading: false });
+      return;
+    }
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      uploadImage(file, setter);
+    }
+  }, [uploadImage]);
+
+  const handlePromptBarDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setPromptBarDragOver(false);
+
+    const imageUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (imageUrl && imageUrl.startsWith("http") && /\.(png|jpe?g|webp)/i.test(imageUrl)) {
+      const id = `img_${++imageIdCounter}`;
+      setFirstFrame({ id, preview: imageUrl, url: imageUrl, uploading: false });
+      return;
+    }
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      uploadImage(file, setFirstFrame);
+    }
+  }, [uploadImage]);
+
+  // --- Generation ---
+
+  const handleGenerate = async (overridePrompt?: string) => {
+    const usedPrompt = overridePrompt ?? prompt;
+    if (!firstFrame?.url) {
+      setError("Reference image is required");
+      return;
+    }
+    if (activeMode === "motion" && !refVideo?.url) {
+      setError("Reference video is required for motion control");
+      return;
+    }
+
+    setError(null);
+    setShowEditPrompt(false);
+
+    const batchId = `batch_${++batchIdCounter}`;
+    setCurrentBatchId(batchId);
+
+    const slotId = `slot_${++batchIdCounter}`;
+    setGeneratingSlots((prev) => [{ modelName: currentModel.name, modelId: currentModel.id, slotId }, ...prev]);
+
+    if (galleryRef.current) galleryRef.current.scrollTop = 0;
+
+    try {
+      const body: Record<string, unknown> = {
+        videoModelId: currentModel.id,
+        prompt: usedPrompt.trim(),
+        imageUrl: firstFrame.url,
+      };
+
+      if (activeMode === "create") {
+        // Create mode — image-to-video
+        body.duration = duration;
+        if (currentModel.aspectRatios.length > 0) body.aspectRatio = aspectRatio;
+        if (currentModel.resolutions.length > 0) body.resolution = resolution;
+        if (currentModel.supportsCameraFixed) body.cameraFixed = cameraFixed;
+        if (currentModel.supportsGenerateAudio) body.generateAudio = generateAudio;
+        if (supportsLastFrame && lastFrame?.url) body.endImageUrl = lastFrame.url;
+        if (negativePrompt.trim() && currentModel.supportsNegativePrompt) body.negativePrompt = negativePrompt.trim();
+      } else {
+        // Motion control — reference video + character orientation
+        body.videoUrl = refVideo!.url;
+        body.characterOrientation = charOrientation;
+        if (currentModel.supportsKeepOriginalSound) body.keepOriginalSound = keepOriginalSound;
+      }
+
+      const res = await fetch("/api/animate-shot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Video generation failed");
+
+      if (!data.videoUrl) throw new Error("No video URL returned");
+
+      // Persist to Supabase
+      try {
+        const refUrls = [firstFrame.url];
+        if (activeMode === "create" && lastFrame?.url) refUrls.push(lastFrame.url);
+        if (activeMode === "motion" && refVideo?.url) refUrls.push(refVideo.url);
+
+        const settings: Record<string, unknown> = { modelId: currentModel.id, mode: activeMode };
+        if (activeMode === "create") {
+          Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
+        } else {
+          Object.assign(settings, { charOrientation, keepOriginalSound });
+        }
+
+        const persistRes = await fetch("/api/persist-generation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "video",
+            url: data.videoUrl,
+            prompt: usedPrompt.trim(),
+            modelId: currentModel.id,
+            modelName: currentModel.name,
+            seed: 0,
+            requestId: data.requestId,
+            width: null,
+            height: null,
+            duration: activeMode === "create" ? duration : null,
+            aspectRatio: activeMode === "create" ? aspectRatio : null,
+            resolution: activeMode === "create" && currentModel.resolutions.length > 0 ? resolution : null,
+            settings,
+            sourceImageUrl: firstFrame.url,
+            referenceImageUrls: refUrls,
+            batchId,
+          }),
+        });
+        const persistData = await persistRes.json();
+
+        addDbGenerations([{
+          id: persistData.id,
+          type: "video",
+          url: persistData.url ?? data.videoUrl,
+          width: null,
+          height: null,
+          duration: activeMode === "create" ? duration : null,
+          prompt: usedPrompt.trim(),
+          negative_prompt: activeMode === "create" && negativePrompt.trim() ? negativePrompt.trim() : null,
+          model_id: currentModel.id,
+          model_name: currentModel.name,
+          seed: null,
+          request_id: data.requestId,
+          aspect_ratio: activeMode === "create" ? aspectRatio : null,
+          resolution: activeMode === "create" && currentModel.resolutions.length > 0 ? resolution : null,
+          settings,
+          batch_id: batchId,
+          favorited: false,
+          created_at: new Date().toISOString(),
+          scene_id: null,
+          shot_number: null,
+          project_id: null,
+          source_image_url: firstFrame.url,
+          reference_image_urls: refUrls,
+        }]);
+      } catch (e) {
+        console.error("[persist] video failed:", e);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Video generation failed");
+    } finally {
+      setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
+    }
+  };
+
+  const handleRegenerate = () => {
+    const firstResult = latestBatch[0] ?? history.find((r) => r.type === "video");
+    if (firstResult?.prompt) {
+      handleGenerate(firstResult.prompt);
+    } else {
+      handleGenerate();
+    }
+  };
+
+  const handleEdit = () => {
+    setShowEditPrompt(!showEditPrompt);
+    setEditPromptValue("");
+  };
+
+  const handleEditSubmit = () => {
+    if (!editPromptValue.trim()) return;
+    handleGenerate(editPromptValue.trim());
+  };
+
+  const toggleFavorite = (requestId: string) => {
+    const gen = history.find((r) => r.requestId === requestId);
+    if (gen?.id) dbToggleFavorite(gen.id);
+    setSelectedResult((prev) =>
+      prev && prev.requestId === requestId ? { ...prev, favorited: !prev.favorited } : prev
+    );
+  };
+
+  const deleteVideo = (requestId: string) => {
+    const gen = history.find((r) => r.requestId === requestId);
+    if (gen?.id) dbDeleteGeneration(gen.id);
+    setSelectedResult((prev) => (prev && prev.requestId === requestId ? null : prev));
+  };
+
+  const handleDownload = async (r: GenerationResult) => {
+    try {
+      const res = await fetch(r.imageUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = r.type === "video" ? "mp4" : "png";
+      a.download = `dreamsun-${r.model.replace(/\s+/g, "-").toLowerCase()}-${r.requestId || Date.now()}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(r.imageUrl, "_blank");
+    }
+  };
+
+  const handleCopyUrl = (r: GenerationResult) => {
+    navigator.clipboard.writeText(r.imageUrl);
+    setCopiedId(r.requestId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Video upload handler (motion control)
+  const handleRefVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadImage(file, setRefVideo);
+    if (refVideoInputRef.current) refVideoInputRef.current.value = "";
+  }, [uploadImage]);
+
+  const handleVideoDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const videoUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (videoUrl && videoUrl.startsWith("http") && /\.(mp4|mov|webm|m4v)/i.test(videoUrl)) {
+      const id = `img_${++imageIdCounter}`;
+      setRefVideo({ id, preview: videoUrl, url: videoUrl, uploading: false });
+      return;
+    }
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("video/")) {
+      uploadImage(file, setRefVideo);
+    }
+  }, [uploadImage]);
+
+  // Model change — auto-switch mode if model is from the other group
+  const handleModelChange = (ids: string[]) => {
+    const id = ids[0];
+    const model = VIDEO_MODELS.find((m) => m.id === id);
+    if (!model) return;
+
+    if (model.type === "image-to-video") {
+      setCreateModelId(id);
+      saveStorage(STORAGE_KEYS.videoModel, id);
+      if (activeMode !== "create") setActiveMode("create");
+    } else {
+      setMcModelId(id);
+      saveStorage(STORAGE_KEYS.mcModel, id);
+      if (activeMode !== "motion") setActiveMode("motion");
+    }
+  };
+
+  // Keyboard shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (firstFrame?.url && !firstFrame.uploading) handleGenerate();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt, isGenerating, firstFrame]);
+
+  const hasAnyContent = history.length > 0 || isGenerating || generationsLoading;
+  const canGenerate = activeMode === "create"
+    ? firstFrame?.url && !firstFrame.uploading && !isGenerating
+    : firstFrame?.url && !firstFrame.uploading && refVideo?.url && !refVideo.uploading && !isGenerating;
+
+  const slotAspectRatio = (() => {
+    const [w, h] = aspectRatio.split(":").map(Number);
+    return w && h ? w / h : 16 / 9;
+  })();
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex h-screen flex-col bg-background text-foreground">
       <Navbar />
-      <main className="flex items-center justify-center px-6 py-24">
-        <p className="text-sm text-muted">Coming soon</p>
-      </main>
+
+      <div className="flex min-h-0 flex-1">
+        {/* ================================================================
+            LEFT SIDEBAR
+            ================================================================ */}
+        <aside className="hidden w-[28%] min-w-[280px] max-w-[400px] shrink-0 flex-col border-r border-border lg:flex">
+          {/* Mode bar — fixed at top */}
+          <div className="border-b border-border px-2 py-2">
+            <ModeBar modes={VIDEO_MODES} active={activeMode} onChange={(id) => setActiveMode(id as VideoMode)} columns={2} />
+          </div>
+
+          {/* Scrollable settings area */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-5">
+              {/* Model — always shown */}
+              <div>
+                <SectionLabel>Model</SectionLabel>
+                <ModelSelector
+                  models={allSelectorItems}
+                  selectedIds={[selectedModelId]}
+                  onChange={handleModelChange}
+                  pricing={pricing}
+                  mode="single"
+                  title="Choose Video Model"
+                  subtitle="Select a model — switching groups changes mode automatically"
+                />
+              </div>
+
+              {/* ========================
+                  CREATE MODE SETTINGS
+                  ======================== */}
+              {activeMode === "create" && (
+                <>
+                  {/* First + Last Frame — horizontal when both shown */}
+                  {supportsLastFrame ? (
+                    <div className="flex gap-3">
+                      <UploadZone
+                        file={firstFrame}
+                        onRemove={() => { if (firstFrame) URL.revokeObjectURL(firstFrame.preview); setFirstFrame(null); }}
+                        onUpload={handleFirstUpload}
+                        inputRef={firstInputRef}
+                        label="First Frame"
+                        dragOver={firstDragOver}
+                        setDragOver={setFirstDragOver}
+                        onDrop={(e) => handleImageDrop(e, setFirstFrame)}
+                        compact
+                      />
+                      <UploadZone
+                        file={lastFrame}
+                        onRemove={() => { if (lastFrame) URL.revokeObjectURL(lastFrame.preview); setLastFrame(null); }}
+                        onUpload={handleLastUpload}
+                        inputRef={lastInputRef}
+                        label="Last Frame"
+                        dragOver={lastDragOver}
+                        setDragOver={setLastDragOver}
+                        onDrop={(e) => handleImageDrop(e, setLastFrame)}
+                        compact
+                      />
+                    </div>
+                  ) : (
+                    <UploadZone
+                      file={firstFrame}
+                      onRemove={() => { if (firstFrame) URL.revokeObjectURL(firstFrame.preview); setFirstFrame(null); }}
+                      onUpload={handleFirstUpload}
+                      inputRef={firstInputRef}
+                      label="First Frame"
+                      dragOver={firstDragOver}
+                      setDragOver={setFirstDragOver}
+                      onDrop={(e) => handleImageDrop(e, setFirstFrame)}
+                    />
+                  )}
+
+                  {/* Duration */}
+                  {currentModel.durations.length > 0 && (
+                    <div>
+                      <SectionLabel>Duration</SectionLabel>
+                      <div className="flex flex-wrap gap-1.5">
+                        {currentModel.durations.map((d) => (
+                          <PillButton
+                            key={d}
+                            active={duration === d}
+                            onClick={() => {
+                              setDuration(d);
+                              saveStorage(STORAGE_KEYS.duration, d);
+                            }}
+                          >
+                            {d}s
+                          </PillButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aspect Ratio */}
+                  {currentModel.aspectRatios.length > 0 && (
+                    <div>
+                      <SectionLabel>Aspect Ratio</SectionLabel>
+                      <div className="flex flex-wrap gap-1.5">
+                        {currentModel.aspectRatios.map((ratio) => (
+                          <PillButton
+                            key={ratio}
+                            active={aspectRatio === ratio}
+                            onClick={() => {
+                              setAspectRatio(ratio);
+                              saveStorage(STORAGE_KEYS.aspectRatio, ratio);
+                            }}
+                          >
+                            {ratio}
+                          </PillButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resolution */}
+                  {currentModel.resolutions.length > 0 && (
+                    <div>
+                      <SectionLabel>Resolution</SectionLabel>
+                      <div className="flex gap-1.5">
+                        {currentModel.resolutions.map((r) => (
+                          <PillButton
+                            key={r}
+                            active={resolution === r}
+                            onClick={() => {
+                              setResolution(r);
+                              saveStorage(STORAGE_KEYS.resolution, r);
+                            }}
+                            className="flex-1"
+                          >
+                            {r}
+                          </PillButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Camera Fixed toggle */}
+                  {currentModel.supportsCameraFixed && (
+                    <Toggle
+                      checked={cameraFixed}
+                      onChange={(v) => {
+                        setCameraFixed(v);
+                        saveStorage(STORAGE_KEYS.cameraFixed, v);
+                      }}
+                      label="Lock Camera"
+                      size="sm"
+                      className="w-full"
+                    />
+                  )}
+
+                  {/* Generate Audio toggle */}
+                  {currentModel.supportsGenerateAudio && (
+                    <Toggle
+                      checked={generateAudio}
+                      onChange={(v) => {
+                        setGenerateAudio(v);
+                        saveStorage(STORAGE_KEYS.generateAudio, v);
+                      }}
+                      label="Generate Audio"
+                      size="sm"
+                      className="w-full"
+                    />
+                  )}
+
+                  {/* Negative Prompt */}
+                  {currentModel.supportsNegativePrompt && (
+                    <div>
+                      <button
+                        onClick={() => setNegativeOpen(!negativeOpen)}
+                        className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-wider text-foreground/60 transition hover:text-foreground"
+                      >
+                        Negative Prompt
+                        <IconChevron open={negativeOpen} />
+                      </button>
+                      {negativeOpen && (
+                        <textarea
+                          value={negativePrompt}
+                          onChange={(e) => setNegativePrompt(e.target.value)}
+                          placeholder="What to avoid..."
+                          rows={3}
+                          className="mt-2 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition placeholder:text-muted focus:border-accent"
+                        />
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ========================
+                  MOTION CONTROL SETTINGS
+                  ======================== */}
+              {activeMode === "motion" && (
+                <>
+                  {/* Reference Video + Character Image — horizontal */}
+                  <div className="flex gap-3">
+                    <UploadZone
+                      file={refVideo}
+                      onRemove={() => { if (refVideo) URL.revokeObjectURL(refVideo.preview); setRefVideo(null); }}
+                      onUpload={handleRefVideoUpload}
+                      inputRef={refVideoInputRef}
+                      label="Reference Video"
+                      dragOver={refVideoDragOver}
+                      setDragOver={setRefVideoDragOver}
+                      onDrop={handleVideoDrop}
+                      accept="video/mp4,video/quicktime,video/webm,video/x-m4v"
+                      isVideo
+                      compact
+                    />
+                    <UploadZone
+                      file={firstFrame}
+                      onRemove={() => { if (firstFrame) URL.revokeObjectURL(firstFrame.preview); setFirstFrame(null); }}
+                      onUpload={handleFirstUpload}
+                      inputRef={firstInputRef}
+                      label="Character Image"
+                      dragOver={firstDragOver}
+                      setDragOver={setFirstDragOver}
+                      onDrop={(e) => handleImageDrop(e, setFirstFrame)}
+                      compact
+                    />
+                  </div>
+
+                  {/* Scene Source */}
+                  {currentModel.characterOrientations && currentModel.characterOrientations.length > 0 && (
+                    <div>
+                      <SectionLabel>Scene Source</SectionLabel>
+                      <div className="flex gap-1.5">
+                        {currentModel.characterOrientations.map((orient) => (
+                          <PillButton
+                            key={orient}
+                            active={charOrientation === orient}
+                            onClick={() => {
+                              setCharOrientation(orient);
+                              saveStorage(STORAGE_KEYS.charOrientation, orient);
+                            }}
+                            className="flex-1 capitalize"
+                          >
+                            {orient}
+                          </PillButton>
+                        ))}
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-muted">
+                        {charOrientation === "video"
+                          ? "Background from motion video (max 30s)"
+                          : "Background from character image (max 10s)"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Keep Original Sound */}
+                  {currentModel.supportsKeepOriginalSound && (
+                    <Toggle
+                      checked={keepOriginalSound}
+                      onChange={setKeepOriginalSound}
+                      label="Keep Original Sound"
+                      size="sm"
+                      className="w-full"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* ================================================================
+            RIGHT SIDE — Gallery
+            ================================================================ */}
+        <main ref={galleryRef} className="relative hidden min-w-0 flex-1 flex-col lg:flex">
+          {!hasAnyContent ? (
+            <div className="flex flex-1 items-center justify-center pb-32">
+              {generationsLoading ? (
+                <div className="w-full p-4">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse rounded-lg bg-surface"
+                        style={{ aspectRatio: 16 / 9 }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-surface">
+                    <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted/50">
+                      <rect x="2" y="3" width="16" height="14" rx="3" />
+                      <path d="M8 7l5 3-5 3V7z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-muted/60">
+                    Your videos will appear here
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-muted/50">
+                    Upload a first frame image and hit Generate
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col">
+              {/* Gallery toolbar */}
+              <GalleryToolbar
+                totalCount={history.length}
+                filteredCount={filteredHistory.length}
+                galleryFilter={galleryFilter}
+                onFilterChange={setGalleryFilter}
+                galleryRowHeight={galleryRowHeight}
+                onRowHeightChange={setGalleryRowHeight}
+                gallerySizeStorageKey={STORAGE_KEYS.gallerySize}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+              />
+
+              {/* Gallery content */}
+              <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 pb-28">
+                {generationsLoading && history.length === 0 ? (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse rounded-lg bg-surface"
+                        style={{ aspectRatio: 16 / 9 }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <GalleryGrid
+                    results={filteredHistory}
+                    latestBatchId={currentBatchId}
+                    generatingSlots={generatingSlots}
+                    isGenerating={isGenerating}
+                    showEditPrompt={showEditPrompt}
+                    editPromptValue={editPromptValue}
+                    setEditPromptValue={setEditPromptValue}
+                    error={error}
+                    copiedId={copiedId}
+                    targetRowHeight={galleryRowHeight}
+                    slotAspectRatio={slotAspectRatio}
+                    onRegenerate={handleRegenerate}
+                    onEdit={handleEdit}
+                    onEditSubmit={handleEditSubmit}
+                    setShowEditPrompt={setShowEditPrompt}
+                    onDownload={handleDownload}
+                    onCopyUrl={handleCopyUrl}
+                    onClickImage={setSelectedResult}
+                    onFavorite={toggleFavorite}
+                    onDelete={deleteVideo}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================
+              FLOATING PROMPT BAR
+              ============================================================ */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-6 pb-5">
+            <div
+              className={`pointer-events-auto w-full max-w-2xl rounded-2xl border bg-background backdrop-blur-xl transition-all duration-300 ${
+                promptBarDragOver
+                  ? "border-accent shadow-[0_0_32px_rgba(161,252,223,0.15)]"
+                  : "border-border/60 shadow-xl shadow-black/10 focus-within:border-accent/40 focus-within:shadow-[0_0_24px_rgba(161,252,223,0.06)]"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setPromptBarDragOver(true); }}
+              onDragLeave={() => setPromptBarDragOver(false)}
+              onDrop={handlePromptBarDrop}
+            >
+              {/* Frame thumbnails in prompt bar */}
+              {(firstFrame || (activeMode === "motion" && refVideo)) && (
+                <div className="flex items-center gap-2 px-4 pt-3">
+                  {firstFrame && (
+                    <div className="group/ref relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={firstFrame.preview} alt="Reference" className="h-full w-full object-cover" />
+                      {firstFrame.uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                          <div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => { if (firstFrame) URL.revokeObjectURL(firstFrame.preview); setFirstFrame(null); }}
+                        className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover/ref:opacity-100"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M1 1l6 6M7 1l-6 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {activeMode === "create" && supportsLastFrame && lastFrame && (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted/40">
+                        <path d="M4 6h4M6.5 4l2 2-2 2" />
+                      </svg>
+                      <div className="group/ref relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={lastFrame.preview} alt="Last frame" className="h-full w-full object-cover" />
+                        <button
+                          onClick={() => { if (lastFrame) URL.revokeObjectURL(lastFrame.preview); setLastFrame(null); }}
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover/ref:opacity-100"
+                        >
+                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <path d="M1 1l6 6M7 1l-6 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {activeMode === "motion" && refVideo && (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted/40">
+                        <path d="M4 6h4M6.5 4l2 2-2 2" />
+                      </svg>
+                      <div className="group/ref relative h-10 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60">
+                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                        <video src={refVideo.preview} className="h-full w-full object-cover" muted />
+                        {refVideo.uploading && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                            <div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" />
+                          </div>
+                        )}
+                        <button
+                          onClick={() => { if (refVideo) URL.revokeObjectURL(refVideo.preview); setRefVideo(null); }}
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover/ref:opacity-100"
+                        >
+                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <path d="M1 1l6 6M7 1l-6 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  <span className="text-[9px] text-muted/40">{currentModel.name}</span>
+                </div>
+              )}
+
+              {/* Textarea */}
+              <textarea
+                ref={promptRef}
+                value={prompt}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 140) + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (canGenerate) handleGenerate();
+                  }
+                }}
+                placeholder={promptBarDragOver ? "Drop image as first frame..." : "Describe the video motion..."}
+                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted"
+                style={{ minHeight: "44px", maxHeight: "140px" }}
+              />
+
+              {/* Bottom bar */}
+              <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => firstInputRef.current?.click()}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/60 transition hover:border-accent/40 hover:text-accent"
+                    title="Add first frame"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M6 1v10M1 6h10" />
+                    </svg>
+                  </button>
+                  <span className="select-none text-[10px] text-muted/40">
+                    ↵ generate · ⇧↵ new line
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleGenerate()}
+                  disabled={!canGenerate}
+                  className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
+                    canGenerate
+                      ? "bg-accent text-black hover:bg-accent-hover"
+                      : "cursor-not-allowed bg-surface-hover text-muted/50"
+                  }`}
+                  title="Generate (Enter)"
+                >
+                  {isGenerating ? (
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                  ) : (
+                    <IconSparkle size={12} />
+                  )}
+                  Generate
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      {/* Lightbox */}
+      {selectedResult && (
+        <MediaLightbox
+          result={selectedResult}
+          onClose={() => setSelectedResult(null)}
+          onFavorite={() => toggleFavorite(selectedResult.requestId)}
+          onDownload={() => handleDownload(selectedResult)}
+          onCopyUrl={() => handleCopyUrl(selectedResult)}
+          onUseAsReference={() => {
+            const id = `img_${++imageIdCounter}`;
+            setFirstFrame({ id, preview: selectedResult.imageUrl, url: selectedResult.imageUrl, uploading: false });
+          }}
+          onDelete={() => deleteVideo(selectedResult.requestId)}
+          copied={copiedId === selectedResult.requestId}
+          onPrev={() => {
+            const idx = history.findIndex((r) => r.requestId === selectedResult.requestId);
+            if (idx < history.length - 1) setSelectedResult(history[idx + 1]);
+          }}
+          onNext={() => {
+            const idx = history.findIndex((r) => r.requestId === selectedResult.requestId);
+            if (idx > 0) setSelectedResult(history[idx - 1]);
+          }}
+          hasPrev={(() => { const idx = history.findIndex((r) => r.requestId === selectedResult.requestId); return idx < history.length - 1; })()}
+          hasNext={(() => { const idx = history.findIndex((r) => r.requestId === selectedResult.requestId); return idx > 0; })()}
+        />
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { Logo } from "./Logo";
 import { ProfileDropdown } from "./ProfileDropdown";
 
 const NAV_ITEMS = [
-  { href: "/generate", label: "Images" },
+  { href: "/images", label: "Images" },
   { href: "/video", label: "Videos" },
 ];
 
@@ -129,8 +129,18 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Right side — profile */}
-      <div className="relative ml-auto">
+      {/* Right side — credits + profile */}
+      <div className="relative ml-auto flex items-center gap-2">
+        <Link
+          href="/pricing"
+          className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted transition hover:border-accent/40 hover:text-accent"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1L14 5.5V10.5L8 15L2 10.5V5.5L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            <path d="M8 4.5L11 6.5V9.5L8 11.5L5 9.5V6.5L8 4.5Z" fill="currentColor" opacity="0.3" />
+          </svg>
+          Credits
+        </Link>
         <ProfileDropdown />
       </div>
     </nav>

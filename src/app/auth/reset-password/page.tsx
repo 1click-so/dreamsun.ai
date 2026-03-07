@@ -34,7 +34,7 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    router.push("/generate");
+    router.push("/images");
     router.refresh();
   }
 

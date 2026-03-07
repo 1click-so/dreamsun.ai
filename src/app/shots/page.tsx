@@ -1436,8 +1436,10 @@ export function ShotListEditor({
       // Build input using model's param mapping (same logic as API route)
       const input: Record<string, unknown> = {
         [model.params.prompt]: shot.videoPrompt || "",
-        [model.params.duration]: typeof shotDuration === "number" ? shotDuration : Number(shotDuration),
       };
+      if (model.params.duration) {
+        input[model.params.duration] = typeof shotDuration === "number" ? shotDuration : Number(shotDuration);
+      }
 
       // Image URL — required for image-to-video, optional for audio-to-video
       if (shot.imageUrl) {
@@ -2065,7 +2067,7 @@ export function ShotListEditor({
                     <label className="mb-1.5 block text-[10px] font-medium text-muted">Model</label>
                     <Select
                       value={selectedVideoModel.id}
-                      options={VIDEO_MODELS.map((m) => ({ value: m.id, label: m.name, detail: `${m.costPer5Sec}/5s` }))}
+                      options={VIDEO_MODELS.map((m) => ({ value: m.id, label: m.name, detail: `${m.costPerSec}/s` }))}
                       onChange={(id) => {
                         const m = VIDEO_MODELS.find((m) => m.id === id);
                         if (m) {

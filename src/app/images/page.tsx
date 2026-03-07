@@ -14,6 +14,8 @@ import { Toggle } from "@/components/ui/Toggle";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
 import { usePricing } from "@/hooks/usePricing";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
+import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
+import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
@@ -223,15 +225,6 @@ function IconSparkle({ size = 14 }: { size?: number }) {
 // --- Image Mode System ---
 
 type ImageMode = "create" | "upscale" | "edit" | "skin";
-type GalleryFilter = "all" | "images" | "loved" | "videos" | "audio";
-
-interface ModeConfig {
-  id: ImageMode;
-  label: string;
-  icon: React.ReactNode;
-  description: string;
-  ready: boolean;
-}
 
 const IMAGE_MODES: ModeConfig[] = [
   {
@@ -267,51 +260,6 @@ const IMAGE_MODES: ModeConfig[] = [
     ready: false,
   },
 ];
-
-function ModeBar({ active, onChange }: { active: ImageMode; onChange: (mode: ImageMode) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-1.5">
-      {IMAGE_MODES.map((mode) => (
-        <button
-          key={mode.id}
-          onClick={() => mode.ready ? onChange(mode.id) : undefined}
-          className={`group relative flex items-center gap-2 rounded-xl px-2.5 py-2 text-left transition ${
-            active === mode.id
-              ? "bg-accent/10 ring-1 ring-accent/25"
-              : mode.ready
-                ? "bg-surface hover:bg-surface-hover"
-                : "cursor-default bg-surface/50"
-          }`}
-          title={mode.ready ? mode.description : `${mode.label} — coming soon`}
-        >
-          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-            active === mode.id
-              ? "bg-accent/20 text-accent-text"
-              : mode.ready
-                ? "bg-surface-hover text-muted group-hover:text-foreground"
-                : "text-muted/25"
-          }`}>
-            {mode.icon}
-          </span>
-          <span className={`text-[11px] font-semibold leading-tight ${
-            active === mode.id
-              ? "text-accent-text"
-              : mode.ready
-                ? "text-foreground/70 group-hover:text-foreground"
-                : "text-muted/30"
-          }`}>
-            {mode.label}
-          </span>
-          {!mode.ready && (
-            <span className="absolute top-1.5 right-1.5 rounded-md bg-surface-hover px-1 py-px text-[7px] font-bold uppercase text-muted/40">
-              Soon
-            </span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // --- Gallery Image Card ---
 
@@ -560,7 +508,6 @@ export default function GeneratePage() {
     return stored > 10 ? 1.0 : stored;
   });
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [galleryFilter, setGalleryFilter] = useState<GalleryFilter>("images");
 
   // Characters
@@ -581,7 +528,13 @@ export default function GeneratePage() {
 
   // Derived
   const hasRefs = referenceImages.some((img) => img.url);
-  const selectableModels = getSelectableModels();
+  const selectableModels = useMemo(() =>
+    getSelectableModels().map((m) => ({
+      ...m,
+      group: m.featured ? "Featured" : m.loras?.length ? "Custom LoRA" : "Other",
+    })),
+    []
+  );
   const selectedModels = selectableModels.filter((m) => selectedModelIds.includes(m.id));
   const primaryModel = selectedModels[0] ?? selectableModels[0];
   const currentEffectiveModel =
@@ -1169,7 +1122,7 @@ export default function GeneratePage() {
         <aside className="hidden w-[28%] min-w-[280px] max-w-[400px] shrink-0 flex-col border-r border-border lg:flex">
           {/* Mode bar — fixed at top */}
           <div className="border-b border-border px-2 py-2">
-            <ModeBar active={activeMode} onChange={setActiveMode} />
+            <ModeBar modes={IMAGE_MODES} active={activeMode} onChange={(id) => setActiveMode(id as ImageMode)} columns={2} />
           </div>
 
           {/* Scrollable settings area */}
@@ -1454,21 +1407,7 @@ export default function GeneratePage() {
               )}
             </div>
             ) : (
-              /* Placeholder for upcoming modes */
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-hover text-muted">
-                  {IMAGE_MODES.find((m) => m.id === activeMode)?.icon}
-                </div>
-                <p className="text-sm font-semibold text-foreground">
-                  {IMAGE_MODES.find((m) => m.id === activeMode)?.label}
-                </p>
-                <p className="mt-1 text-[11px] text-muted">
-                  {IMAGE_MODES.find((m) => m.id === activeMode)?.description}
-                </p>
-                <span className="mt-3 rounded-full bg-accent/10 px-3 py-1 text-[10px] font-semibold text-accent-text">
-                  Coming soon
-                </span>
-              </div>
+              <ModeComingSoon mode={IMAGE_MODES.find((m) => m.id === activeMode)!} />
             )}
           </div>
 
@@ -1638,152 +1577,18 @@ export default function GeneratePage() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
-              {/* Gallery toolbar — Freepik-style filter bar */}
-              <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
-                {/* Left — count + placeholder for future actions */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-medium text-muted/50">
-                    {filteredHistory.length}{filteredHistory.length !== history.length ? `/${history.length}` : ""} {history.length === 1 ? "item" : "items"}
-                  </span>
-                </div>
-
-                {/* Right — filter group + size slider + search */}
-                <div className="flex items-center gap-2">
-                  {/* Format filter group — bordered pill container */}
-                  <div className="flex items-center rounded-lg border border-border/60 bg-surface/50">
-                    {([
-                      { id: "all" as GalleryFilter, label: "All", icon: (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-                          <rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1" />
-                          <rect x="8" y="1.5" width="4.5" height="4.5" rx="1" />
-                          <rect x="1.5" y="8" width="4.5" height="4.5" rx="1" />
-                          <rect x="8" y="8" width="4.5" height="4.5" rx="1" />
-                        </svg>
-                      )},
-                      { id: "images" as GalleryFilter, label: "Images", icon: (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="1.5" y="2" width="11" height="10" rx="1.5" />
-                          <circle cx="4.5" cy="5" r="1.2" />
-                          <path d="M1.5 10l3-3 2 2 3-3 3 3" />
-                        </svg>
-                      )},
-                      { id: "videos" as GalleryFilter, label: "Videos", icon: (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="1.5" y="2.5" width="8" height="9" rx="1.5" />
-                          <path d="M9.5 5.5l3-1.5v6l-3-1.5" />
-                        </svg>
-                      )},
-                      { id: "audio" as GalleryFilter, label: "Audio", icon: (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-                          <path d="M3 5.5v3M5.5 4v6M8 3v8M10.5 5v4" />
-                        </svg>
-                      )},
-                      { id: "loved" as GalleryFilter, label: "Loved", icon: (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill={galleryFilter === "loved" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.3">
-                          <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
-                        </svg>
-                      )},
-                    ]).map((f) => (
-                      <button
-                        key={f.id}
-                        onClick={() => setGalleryFilter(f.id)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium transition first:rounded-l-lg last:rounded-r-lg ${
-                          galleryFilter === f.id
-                            ? "bg-accent/12 text-accent-text"
-                            : "text-muted/60 hover:bg-surface-hover hover:text-foreground"
-                        }`}
-                        title={f.label}
-                      >
-                        {f.icon}
-                        <span className="hidden xl:inline">{f.label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Divider */}
-                  <div className="h-4 w-px bg-border/60" />
-
-                  {/* Size slider */}
-                  <div className="flex items-center gap-1.5">
-                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/50">
-                      <rect x="1" y="1" width="5" height="5" rx="1" />
-                      <rect x="8" y="1" width="5" height="5" rx="1" />
-                      <rect x="1" y="8" width="5" height="5" rx="1" />
-                      <rect x="8" y="8" width="5" height="5" rx="1" />
-                    </svg>
-                    <input
-                      type="range"
-                      min={0}
-                      max={5}
-                      step={1}
-                      value={[0.4, 0.6, 0.8, 1.0, 1.3, 1.7].indexOf(galleryRowHeight) !== -1
-                        ? [0.4, 0.6, 0.8, 1.0, 1.3, 1.7].indexOf(galleryRowHeight)
-                        : 3}
-                      onChange={(e) => {
-                        const scales = [0.4, 0.6, 0.8, 1.0, 1.3, 1.7];
-                        const v = scales[Number(e.target.value)];
-                        setGalleryRowHeight(v);
-                        saveStorage(STORAGE_KEYS.gallerySize, v);
-                      }}
-                      className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-border [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
-                    />
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/50">
-                      <rect x="1" y="1" width="5" height="5" rx="1" />
-                      <rect x="8" y="1" width="5" height="5" rx="1" />
-                      <rect x="1" y="8" width="5" height="5" rx="1" />
-                      <rect x="8" y="8" width="5" height="5" rx="1" />
-                    </svg>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="h-4 w-px bg-border/60" />
-
-                  {/* Search */}
-                  <div className="flex items-center">
-                    {searchOpen ? (
-                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1">
-                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-muted/50">
-                          <circle cx="6" cy="6" r="4.5" /><path d="M9.5 9.5L13 13" />
-                        </svg>
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search..."
-                          className="w-24 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              setSearchOpen(false);
-                              setSearchQuery("");
-                            }
-                          }}
-                        />
-                        {searchQuery && (
-                          <button
-                            onClick={() => setSearchQuery("")}
-                            className="text-muted/60 hover:text-foreground"
-                          >
-                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M1 1l6 6M7 1l-6 6" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setSearchOpen(true)}
-                        className="rounded-md p-1.5 text-muted/50 transition hover:bg-surface hover:text-foreground"
-                        title="Search"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <circle cx="6" cy="6" r="4.5" /><path d="M9.5 9.5L13 13" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Gallery toolbar */}
+              <GalleryToolbar
+                totalCount={history.length}
+                filteredCount={filteredHistory.length}
+                galleryFilter={galleryFilter}
+                onFilterChange={setGalleryFilter}
+                galleryRowHeight={galleryRowHeight}
+                onRowHeightChange={setGalleryRowHeight}
+                gallerySizeStorageKey={STORAGE_KEYS.gallerySize}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+              />
 
               {/* Gallery content — extra bottom padding for floating prompt bar */}
               <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 pb-28">
