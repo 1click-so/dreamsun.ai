@@ -115,7 +115,7 @@ body::before {
 
 ::selection {
   background: var(--color-accent);
-  color: #000;
+  color: var(--color-background);
 }
 
 /* Native form element accent */
@@ -170,8 +170,8 @@ textarea:focus {
    ================================================================ */
 
 @keyframes pulse-border {
-  0%, 100% { border-color: rgba(161, 252, 223, 0.2); }
-  50% { border-color: rgba(161, 252, 223, 0.6); }
+  0%, 100% { border-color: color-mix(in srgb, var(--color-accent) 20%, transparent); }
+  50% { border-color: color-mix(in srgb, var(--color-accent) 60%, transparent); }
 }
 
 .glow-border {
@@ -184,15 +184,15 @@ textarea:focus {
 
 /* Glassmorphism */
 .glass {
-  background: rgba(17, 17, 17, 0.6);
+  background: color-mix(in srgb, var(--color-background) 60%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--color-foreground) 10%, transparent);
 }
 
 /* Accent text gradient */
 .text-gradient {
-  background: linear-gradient(to right, #ffffff, var(--color-accent));
+  background: linear-gradient(to right, var(--color-foreground), var(--color-accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
