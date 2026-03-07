@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 
 export interface Generation {
@@ -29,70 +29,81 @@ export interface Generation {
   reference_image_urls: string[] | null;
 }
 
-export function useGenerations() {
-  const [generations, setGenerations] = useState<Generation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const fetchedRef = useRef(false);
+// Module-level cache — survives client-side navigation between pages
+let cache: Generation[] | null = null;
+let cachePromise: Promise<void> | null = null;
 
-  // Fetch all generations for the current user
-  useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-
+function fetchGenerations(): Promise<void> {
+  if (cachePromise) return cachePromise;
+  cachePromise = (async () => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      supabase
-        .from("generations")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("[useGenerations] fetch error:", error);
-          } else if (data) {
-            setGenerations(data as Generation[]);
-          }
-          setLoading(false);
-        });
+    const { data, error } = await supabase
+      .from("generations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      console.error("[useGenerations] fetch error:", error);
+      cache = [];
+    } else {
+      cache = (data as Generation[]) ?? [];
+    }
+  })();
+  return cachePromise;
+}
+
+export function useGenerations() {
+  const [generations, setGenerations] = useState<Generation[]>(cache ?? []);
+  const [loading, setLoading] = useState(!cache);
+
+  useEffect(() => {
+    if (cache) return;
+    fetchGenerations().then(() => {
+      setGenerations(cache ?? []);
+      setLoading(false);
+    });
+  }, []);
+
+  // Sync module cache helper
+  const updateCache = useCallback((updater: (prev: Generation[]) => Generation[]) => {
+    setGenerations((prev) => {
+      const next = updater(prev);
+      cache = next;
+      return next;
     });
   }, []);
 
   // Add a generation optimistically (called after generate completes)
   const addGeneration = useCallback((gen: Generation) => {
-    setGenerations((prev) => [gen, ...prev]);
-  }, []);
+    updateCache((prev) => [gen, ...prev]);
+  }, [updateCache]);
 
   // Add multiple at once
   const addGenerations = useCallback((gens: Generation[]) => {
-    setGenerations((prev) => [...gens, ...prev]);
-  }, []);
+    updateCache((prev) => [...gens, ...prev]);
+  }, [updateCache]);
 
   // Toggle favorite — optimistic + persist
   const toggleFavorite = useCallback((id: string) => {
-    setGenerations((prev) =>
+    updateCache((prev) =>
       prev.map((g) => (g.id === id ? { ...g, favorited: !g.favorited } : g))
     );
-    // Persist to Supabase
     const supabase = createClient();
-    const gen = generations.find((g) => g.id === id);
+    const gen = cache?.find((g) => g.id === id);
     if (gen) {
       supabase
         .from("generations")
-        .update({ favorited: !gen.favorited })
+        .update({ favorited: gen.favorited })
         .eq("id", id)
         .then(({ error }) => {
           if (error) console.error("[useGenerations] favorite error:", error);
         });
     }
-  }, [generations]);
+  }, [updateCache]);
 
   // Delete — optimistic + persist
   const deleteGeneration = useCallback((id: string) => {
-    setGenerations((prev) => prev.filter((g) => g.id !== id));
+    updateCache((prev) => prev.filter((g) => g.id !== id));
     const supabase = createClient();
     supabase
       .from("generations")
@@ -101,7 +112,7 @@ export function useGenerations() {
       .then(({ error }) => {
         if (error) console.error("[useGenerations] delete error:", error);
       });
-  }, []);
+  }, [updateCache]);
 
   return {
     generations,
