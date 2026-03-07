@@ -37,6 +37,7 @@ export function Gallery() {
                 src={src}
                 alt="Gallery"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                loading="lazy"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-500" />
@@ -53,6 +54,7 @@ export function Gallery() {
                 src={src}
                 alt="Gallery"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                loading="lazy"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-500" />

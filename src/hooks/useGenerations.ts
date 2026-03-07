@@ -114,6 +114,21 @@ export function useGenerations() {
       });
   }, [updateCache]);
 
+  // Bulk delete — optimistic + persist
+  const deleteGenerations = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    updateCache((prev) => prev.filter((g) => !idSet.has(g.id)));
+    const supabase = createClient();
+    supabase
+      .from("generations")
+      .delete()
+      .in("id", ids)
+      .then(({ error }) => {
+        if (error) console.error("[useGenerations] bulk delete error:", error);
+      });
+  }, [updateCache]);
+
   return {
     generations,
     loading,
@@ -121,6 +136,7 @@ export function useGenerations() {
     addGenerations,
     toggleFavorite,
     deleteGeneration,
+    deleteGenerations,
     setGenerations,
   };
 }

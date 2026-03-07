@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "motion/react";
 import { Logo } from "./Logo";
 import { ProfileDropdown } from "./ProfileDropdown";
 
@@ -14,47 +13,10 @@ const NAV_ITEMS = [
 function NavBlobs() {
   return (
     <div className="pointer-events-none absolute inset-y-0 left-0 w-[65%] overflow-hidden">
-      {/* Core blob — centered exactly on logo (left-2 = ~20px, matching px-5 padding) */}
-      <motion.div
-        className="absolute left-2 -top-10 h-36 w-56 rounded-full bg-accent/[0.15] blur-3xl"
-        animate={{
-          x: [0, 10, -6, 0],
-          y: [0, 8, -4, 0],
-          scale: [1, 1.15, 0.93, 1],
-        }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-      />
-      {/* Secondary blob — just right of logo, reinforces epicenter */}
-      <motion.div
-        className="absolute left-8 -bottom-6 h-28 w-44 rounded-full bg-accent/[0.1] blur-3xl"
-        animate={{
-          x: [0, -10, 8, 0],
-          y: [0, -6, 5, 0],
-          scale: [1, 0.88, 1.12, 1],
-        }}
-        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-      />
-      {/* Mid blob — covers Images / Videos buttons */}
-      <motion.div
-        className="absolute left-48 -top-6 h-28 w-48 rounded-full bg-accent/[0.07] blur-3xl"
-        animate={{
-          x: [0, -8, 6, 0],
-          y: [0, -5, 4, 0],
-          scale: [1, 0.9, 1.1, 1],
-        }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
-      />
-      {/* Far blob — behind SHOTS and beyond */}
-      <motion.div
-        className="absolute left-[340px] -bottom-4 h-24 w-44 rounded-full bg-accent/[0.05] blur-3xl"
-        animate={{
-          x: [0, 8, -12, 0],
-          y: [0, 4, -2, 0],
-          scale: [1, 1.1, 0.9, 1],
-        }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 3 }}
-      />
-      {/* Fade-out mask — full strength first 30%, then dissolves */}
+      <div className="nav-blob-1 absolute left-2 -top-10 h-36 w-56 rounded-full bg-accent/[0.15] blur-3xl" />
+      <div className="nav-blob-2 absolute left-8 -bottom-6 h-28 w-44 rounded-full bg-accent/[0.1] blur-3xl" />
+      <div className="nav-blob-3 absolute left-48 -top-6 h-28 w-48 rounded-full bg-accent/[0.07] blur-3xl" />
+      <div className="nav-blob-4 absolute left-[340px] -bottom-4 h-24 w-44 rounded-full bg-accent/[0.05] blur-3xl" />
       <div className="absolute inset-0 bg-gradient-to-r from-transparent from-30% to-background" />
     </div>
   );
@@ -66,10 +28,8 @@ export function Navbar() {
 
   return (
     <nav className="relative flex items-center gap-5 border-b border-border px-5 py-3">
-      {/* Living gradient blobs */}
       <NavBlobs />
 
-      {/* Logo */}
       <div className="relative">
         <Link href="/" className="flex items-center gap-2.5 transition hover:opacity-80">
           <Logo size={22} />
@@ -81,7 +41,6 @@ export function Navbar() {
 
       <span className="relative text-border">|</span>
 
-      {/* Nav items */}
       <div className="relative flex items-center gap-1.5">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href;
@@ -91,15 +50,9 @@ export function Navbar() {
                 href={item.href}
                 className="relative rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
               >
-                <AnimatePresence>
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-active"
-                      className="absolute inset-0 rounded-lg bg-accent/10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </AnimatePresence>
+                {isActive && (
+                  <span className="absolute inset-0 rounded-lg bg-accent/10 transition-all duration-200" />
+                )}
                 <span className={`relative ${isActive ? "text-accent-text" : "text-muted hover:text-foreground"}`}>
                   {item.label}
                 </span>
@@ -108,7 +61,6 @@ export function Navbar() {
           );
         })}
 
-        {/* Shots — premium feature */}
         <div>
           <Link
             href="/shots"
@@ -129,7 +81,6 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Right side — credits + profile */}
       <div className="relative ml-auto flex items-center gap-2">
         <Link
           href="/pricing"

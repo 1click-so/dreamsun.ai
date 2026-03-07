@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
         hostname: "ptmdsirqscorqmcrjqrk.supabase.co",
       },
     ],
+    minimumCacheTTL: 3600,
+  },
+  experimental: {
+    optimizeCss: true,
   },
 };
 

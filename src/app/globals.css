@@ -260,3 +260,58 @@ textarea:focus {
 .animate-marquee-reverse {
   animation: marquee-reverse 45s linear infinite;
 }
+
+/* ================================================================
+   NAV BLOBS — pure CSS replacements for motion/react
+   ================================================================ */
+
+@keyframes nav-blob-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(10px, 8px) scale(1.15); }
+  66% { transform: translate(-6px, -4px) scale(0.93); }
+}
+
+@keyframes nav-blob-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-10px, -6px) scale(0.88); }
+  66% { transform: translate(8px, 5px) scale(1.12); }
+}
+
+@keyframes nav-blob-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-8px, -5px) scale(0.9); }
+  66% { transform: translate(6px, 4px) scale(1.1); }
+}
+
+@keyframes nav-blob-4 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(8px, 4px) scale(1.1); }
+  66% { transform: translate(-12px, -2px) scale(0.9); }
+}
+
+.nav-blob-1 { animation: nav-blob-1 8s ease-in-out infinite; }
+.nav-blob-2 { animation: nav-blob-2 11s ease-in-out 2s infinite; }
+.nav-blob-3 { animation: nav-blob-3 10s ease-in-out 1.5s infinite; }
+.nav-blob-4 { animation: nav-blob-4 12s ease-in-out 3s infinite; }
+
+/* ================================================================
+   PANEL TRANSITIONS — CSS replacements for AnimatePresence
+   ================================================================ */
+
+@keyframes panel-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(-16px) scale(0.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.panel-backdrop {
+  animation: panel-backdrop-in 0.15s ease-out both;
+}
+
+.panel-slide {
+  animation: panel-slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

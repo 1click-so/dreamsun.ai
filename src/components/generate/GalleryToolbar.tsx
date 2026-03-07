@@ -4,6 +4,7 @@ import { useState } from "react";
 import { saveStorage } from "@/lib/storage";
 
 export type GalleryFilter = "all" | "images" | "loved" | "videos" | "audio";
+export type ViewMode = "grid" | "list";
 
 const ALL_FILTERS: GalleryFilter[] = ["all", "images", "videos", "audio", "loved"];
 
@@ -59,6 +60,13 @@ interface GalleryToolbarProps {
   gallerySizeStorageKey: string;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  // Select mode
+  selectMode?: boolean;
+  onToggleSelectMode?: () => void;
+  selectedCount?: number;
+  // View mode
+  viewMode?: ViewMode;
+  onViewModeChange?: (v: ViewMode) => void;
 }
 
 const SCALES = [0.4, 0.6, 0.8, 1.0, 1.3, 1.7];
@@ -73,6 +81,11 @@ export function GalleryToolbar({
   gallerySizeStorageKey,
   searchQuery,
   onSearchChange,
+  selectMode,
+  onToggleSelectMode,
+  selectedCount = 0,
+  viewMode = "grid",
+  onViewModeChange,
 }: GalleryToolbarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -80,14 +93,36 @@ export function GalleryToolbar({
 
   return (
     <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
-      {/* Left — count */}
+      {/* Left — count + select toggle */}
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-medium text-muted/50">
           {filteredCount}{filteredCount !== totalCount ? `/${totalCount}` : ""} {totalCount === 1 ? "item" : "items"}
         </span>
+
+        {/* Select mode toggle */}
+        {onToggleSelectMode && (
+          <>
+            <div className="h-3.5 w-px bg-border/60" />
+            <button
+              onClick={onToggleSelectMode}
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium transition ${
+                selectMode
+                  ? "bg-accent/12 text-accent-text"
+                  : "text-muted/60 hover:bg-surface-hover hover:text-foreground"
+              }`}
+              title={selectMode ? "Exit select mode" : "Select items"}
+            >
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1.5" y="1.5" width="11" height="11" rx="2" />
+                {selectMode && <path d="M4 7l2.5 2.5L10 5" />}
+              </svg>
+              {selectMode ? `${selectedCount} selected` : "Select"}
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Right — filter group + size slider + search */}
+      {/* Right — filter group + view mode + size slider + search */}
       <div className="flex items-center gap-2">
         {/* Format filter group */}
         <div className="flex items-center rounded-lg border border-border/60 bg-surface/50">
@@ -110,6 +145,40 @@ export function GalleryToolbar({
 
         {/* Divider */}
         <div className="h-4 w-px bg-border/60" />
+
+        {/* View mode toggle */}
+        {onViewModeChange && (
+          <div className="flex items-center rounded-lg border border-border/60 bg-surface/50">
+            <button
+              onClick={() => onViewModeChange("grid")}
+              className={`rounded-l-lg p-1.5 transition ${
+                viewMode === "grid" ? "bg-accent/12 text-accent-text" : "text-muted/50 hover:text-foreground"
+              }`}
+              title="Grid view"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <rect x="1" y="1" width="5" height="5" rx="1" />
+                <rect x="8" y="1" width="5" height="5" rx="1" />
+                <rect x="1" y="8" width="5" height="5" rx="1" />
+                <rect x="8" y="8" width="5" height="5" rx="1" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onViewModeChange("list")}
+              className={`rounded-r-lg p-1.5 transition ${
+                viewMode === "list" ? "bg-accent/12 text-accent-text" : "text-muted/50 hover:text-foreground"
+              }`}
+              title="List view"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                <path d="M1 3h12M1 7h12M1 11h12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Divider */}
+        {onViewModeChange && <div className="h-4 w-px bg-border/60" />}
 
         {/* Size slider */}
         <div className="flex items-center gap-1.5">

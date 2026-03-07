@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
 import type { ModelPricing } from "@/hooks/usePricing";
 
 export function CreditIcon({ size = 10 }: { size?: number }) {
@@ -219,26 +218,16 @@ export function ModelSelector({
   const panelTitle = title ?? "Choose Model";
   const panelSubtitle = subtitle ?? (mode === "multi" ? "Select one or more for parallel generation" : "Select a model");
 
-  const panel = (
-    <AnimatePresence>
-      {open && (
+  const panel = open ? (
         <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[9998] bg-black/20 backdrop-blur-[2px]"
+          <div
+            className="panel-backdrop fixed inset-0 z-[9998] bg-black/20 backdrop-blur-[2px]"
             onClick={() => setOpen(false)}
           />
 
-          <motion.div
+          <div
             ref={panelRef}
-            initial={{ opacity: 0, x: -16, scale: 0.97 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -16, scale: 0.97 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed z-[9999]"
+            className="panel-slide fixed z-[9999]"
             style={{
               top: pos.top,
               left: pos.sidebarRight + 12,
@@ -326,11 +315,9 @@ export function ModelSelector({
                 </button>
               </div>
             </div>
-          </motion.div>
+          </div>
         </>
-      )}
-    </AnimatePresence>
-  );
+  ) : null;
 
   return (
     <>

@@ -21,6 +21,9 @@ export function GalleryCard({
   onImageLoad,
   isLoaded,
   onMediaLoaded,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   result: GenerationResult;
   isFeatured: boolean;
@@ -35,6 +38,9 @@ export function GalleryCard({
   onImageLoad?: (url: string, w: number, h: number) => void;
   isLoaded?: boolean;
   onMediaLoaded?: (url: string) => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [localLoaded, setLocalLoaded] = useState(false);
@@ -45,19 +51,41 @@ export function GalleryCard({
     onMediaLoaded?.(result.imageUrl);
   }, [onMediaLoaded, result.imageUrl]);
 
+  const handleClick = selectMode ? (onToggleSelect ?? onClick) : onClick;
+
   return (
     <div
-      className="group relative h-full w-full cursor-pointer overflow-hidden rounded-lg"
+      className={`group relative h-full w-full cursor-pointer overflow-hidden rounded-lg transition-all ${
+        selectMode && selected ? "ring-2 ring-accent ring-offset-1 ring-offset-background" : ""
+      }`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={onClick}
-      draggable
+      onClick={handleClick}
+      draggable={!selectMode}
       onDragStart={(e) => {
+        if (selectMode) { e.preventDefault(); return; }
         e.dataTransfer.setData("text/uri-list", result.imageUrl);
         e.dataTransfer.setData("text/plain", result.imageUrl);
         e.dataTransfer.effectAllowed = "copy";
       }}
     >
+      {/* Select mode checkbox */}
+      {selectMode && (
+        <div className="absolute left-2 top-2 z-20">
+          <span
+            className={`flex h-5 w-5 items-center justify-center rounded-md border-[1.5px] transition ${
+              selected ? "border-accent bg-accent" : "border-white/60 bg-black/40 backdrop-blur-sm"
+            }`}
+          >
+            {selected && (
+              <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 5l2.5 2.5L8 3" />
+              </svg>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Skeleton placeholder until media loads */}
       {!loaded && (
         <div className="absolute inset-0 animate-pulse rounded-lg bg-surface" />
@@ -106,26 +134,30 @@ export function GalleryCard({
       )}
 
       {/* Model badge */}
-      <div className="absolute left-1.5 top-1.5 rounded-md bg-black/40 px-1.5 py-px text-[8px] font-medium text-white/60 backdrop-blur-sm transition-opacity group-hover:opacity-100 opacity-0">
-        {result.model.replace(/\s*\(Edit\)/i, "")}
-      </div>
+      {!selectMode && (
+        <div className="absolute left-1.5 top-1.5 rounded-md bg-black/40 px-1.5 py-px text-[8px] font-medium text-white/60 backdrop-blur-sm transition-opacity group-hover:opacity-100 opacity-0">
+          {result.model.replace(/\s*\(Edit\)/i, "")}
+        </div>
+      )}
 
       {/* Favorite heart */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onFavorite(); }}
-        className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full transition ${
-          result.favorited
-            ? "bg-black/50 text-red-400 opacity-100"
-            : `bg-black/40 text-white/60 hover:text-red-400 ${hovered ? "opacity-100" : "opacity-0"}`
-        }`}
-      >
-        <svg width="12" height="12" viewBox="0 0 14 14" fill={result.favorited ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
-          <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
-        </svg>
-      </button>
+      {!selectMode && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onFavorite(); }}
+          className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full transition ${
+            result.favorited
+              ? "bg-black/50 text-red-400 opacity-100"
+              : `bg-black/40 text-white/60 hover:text-red-400 ${hovered ? "opacity-100" : "opacity-0"}`
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill={result.favorited ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+            <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
+          </svg>
+        </button>
+      )}
 
-      {/* Hover overlay — actions */}
-      <div
+      {/* Hover overlay — actions (hidden in select mode) */}
+      {!selectMode && <div
         className={`absolute inset-x-0 bottom-0 flex items-center justify-end gap-0.5 rounded-b-lg bg-gradient-to-t from-black/60 to-transparent px-2 pb-2 pt-6 transition-opacity duration-200 ${
           hovered ? "opacity-100" : "opacity-0"
         }`}
@@ -151,7 +183,7 @@ export function GalleryCard({
             <path d="M2 4h10M5 4V2.5h4V4M3 4l.7 8.1c.1.8.7 1.4 1.5 1.4h3.6c.8 0 1.4-.6 1.5-1.4L11 4" />
           </svg>
         </button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -252,6 +284,10 @@ export interface GalleryGridProps {
   onClickImage: (r: GenerationResult) => void;
   onFavorite: (requestId: string) => void;
   onDelete: (requestId: string) => void;
+  // Select mode
+  selectMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (requestId: string) => void;
 }
 
 export function GalleryGrid({
@@ -275,6 +311,9 @@ export function GalleryGrid({
   onClickImage,
   onFavorite,
   onDelete,
+  selectMode,
+  selectedIds,
+  onToggleSelect,
 }: GalleryGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -457,6 +496,9 @@ export function GalleryGrid({
                         onImageLoad={onImageLoad}
                         isLoaded={loadedUrls.has(r.imageUrl)}
                         onMediaLoaded={markLoaded}
+                        selectMode={selectMode}
+                        selected={selectedIds?.has(r.requestId)}
+                        onToggleSelect={() => onToggleSelect?.(r.requestId)}
                       />
                     </div>
                   );

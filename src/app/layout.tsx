@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Outfit } from "next/font/google";
 import "./globals.css";
@@ -22,6 +22,12 @@ export const metadata: Metadata = {
   title: "DreamSun.ai — AI Image & Video Generator",
   description:
     "Artistic AI image and video generation platform for creatives.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({

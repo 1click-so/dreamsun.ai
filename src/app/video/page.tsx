@@ -9,7 +9,8 @@ import { Toggle } from "@/components/ui/Toggle";
 import { ModelSelector } from "@/components/ModelSelector";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
 import { GalleryGrid } from "@/components/generate/GalleryGrid";
-import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
+import { GalleryToolbar, type GalleryFilter, type ViewMode } from "@/components/generate/GalleryToolbar";
+import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { MediaLightbox } from "@/components/generate/MediaLightbox";
 import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion } from "@/components/generate/Icons";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
@@ -193,6 +194,10 @@ export default function VideoPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [editPromptValue, setEditPromptValue] = useState("");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [bulkDownloading, setBulkDownloading] = useState(false);
   const [firstDragOver, setFirstDragOver] = useState(false);
   const [lastDragOver, setLastDragOver] = useState(false);
   const [refVideoDragOver, setRefVideoDragOver] = useState(false);
@@ -211,6 +216,7 @@ export default function VideoPage() {
     addGenerations: addDbGenerations,
     toggleFavorite: dbToggleFavorite,
     deleteGeneration: dbDeleteGeneration,
+    deleteGenerations: dbDeleteGenerations,
   } = useGenerations();
 
   const history = useMemo(
@@ -533,6 +539,65 @@ export default function VideoPage() {
     setCopiedId(r.requestId);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // --- Bulk select handlers ---
+
+  const toggleSelect = useCallback((requestId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(requestId)) next.delete(requestId);
+      else next.add(requestId);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredHistory.map((r) => r.requestId)));
+  }, [filteredHistory]);
+
+  const deselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((prev) => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const bulkDownload = useCallback(async () => {
+    const items = filteredHistory.filter((r) => selectedIds.has(r.requestId));
+    if (items.length === 0) return;
+    setBulkDownloading(true);
+    for (const r of items) {
+      try {
+        const res = await fetch(r.imageUrl);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const ext = r.type === "video" ? "mp4" : "png";
+        a.download = `dreamsun-${r.model.replace(/\s+/g, "-").toLowerCase()}-${r.requestId || Date.now()}.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch {
+        window.open(r.imageUrl, "_blank");
+      }
+    }
+    setBulkDownloading(false);
+  }, [filteredHistory, selectedIds]);
+
+  const bulkDelete = useCallback(() => {
+    const items = filteredHistory.filter((r) => selectedIds.has(r.requestId));
+    const dbIds = items.map((r) => r.id).filter(Boolean) as string[];
+    if (dbIds.length === 0) return;
+    dbDeleteGenerations(dbIds);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setSelectedResult((prev) => (prev && selectedIds.has(prev.requestId) ? null : prev));
+  }, [filteredHistory, selectedIds, dbDeleteGenerations]);
 
   // Video upload handler (motion control)
   const handleRefVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -913,6 +978,11 @@ export default function VideoPage() {
                 gallerySizeStorageKey={STORAGE_KEYS.gallerySize}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                selectMode={selectMode}
+                onToggleSelectMode={toggleSelectMode}
+                selectedCount={selectedIds.size}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
               />
 
               {/* Gallery content */}
@@ -949,10 +1019,26 @@ export default function VideoPage() {
                     onClickImage={setSelectedResult}
                     onFavorite={toggleFavorite}
                     onDelete={deleteVideo}
+                    selectMode={selectMode}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
                   />
                 )}
               </div>
             </div>
+          )}
+
+          {/* Bulk action bar (select mode) */}
+          {selectMode && selectedIds.size > 0 && (
+            <BulkActionBar
+              selectedCount={selectedIds.size}
+              totalCount={filteredHistory.length}
+              onSelectAll={selectAll}
+              onDeselectAll={deselectAll}
+              onDownload={bulkDownload}
+              onDelete={bulkDelete}
+              downloading={bulkDownloading}
+            />
           )}
 
           {/* ============================================================
