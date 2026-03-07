@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import Image from "next/image";
 import type { Shot, ShotStatus, ImageSettings, VideoSettings, UploadedRef } from "@/types/shots";
 import type { ModelConfig } from "@/lib/models";
 import type { VideoModelConfig } from "@/lib/video-models";
@@ -8,6 +9,15 @@ import { VIDEO_MODELS } from "@/lib/video-models";
 import { getSelectableModels, getModelById, resolveModel } from "@/lib/models";
 import { Button } from "@/components/ui/Button";
 import { TaggableTextarea } from "@/components/ui/TaggableTextarea";
+import { extractLastFrameAndUpload } from "@/lib/extract-frame";
+
+/** Module-level cache of URLs that have already loaded — survives re-mounts */
+const _loadedUrlCache = new Set<string>();
+
+/** Helper: true when the src is a remote http(s) URL (not a blob: or data: URI) */
+function isRemoteUrl(src: string): boolean {
+  return src.startsWith("http://") || src.startsWith("https://");
+}
 
 interface ShotCardProps {
   shot: Shot;
@@ -16,6 +26,7 @@ interface ShotCardProps {
   globalAspectRatio: string;
   globalGenerateAudio: boolean;
   globalResolution: string;
+  globalCameraFixed: boolean;
   videoModel: VideoModelConfig;
   imageModel: ModelConfig;
   onUpdate: (updates: Partial<Shot>) => void;
@@ -38,15 +49,17 @@ interface ShotCardProps {
   onVideoSettingsChange: (updates: Partial<VideoSettings>) => void;
   onDropOnFirst: (url: string) => void;
   onDropOnLast: (url: string) => void;
+  onLastFrameToNext?: (frameUrl: string) => void;
 }
 
-/** Video that only loads when scrolled into view */
+/** Video that only loads when scrolled into view, with skeleton loader */
 function LazyVideo({ src, className, style }: { src: string; className?: string; style?: React.CSSProperties }) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const [loaded, setLoaded] = useState(() => _loadedUrlCache.has(src));
 
   useEffect(() => {
-    const el = ref.current;
+    const el = containerRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) { setVisible(true); io.disconnect(); } },
@@ -56,18 +69,58 @@ function LazyVideo({ src, className, style }: { src: string; className?: string;
     return () => io.disconnect();
   }, []);
 
+  const markLoaded = useCallback(() => {
+    _loadedUrlCache.add(src);
+    setLoaded(true);
+  }, [src]);
+
   return (
-    <video
-      ref={ref}
-      src={visible ? src : undefined}
-      autoPlay={visible}
-      loop
-      muted
-      playsInline
-      preload="none"
-      className={className}
-      style={style}
-    />
+    <div ref={containerRef} className="relative overflow-hidden" style={style}>
+      {!loaded && (
+        <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />
+      )}
+      <video
+        src={visible ? src : undefined}
+        autoPlay={visible}
+        loop
+        muted
+        playsInline
+        preload="none"
+        className={`h-full w-full ${className ?? ""} transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        onLoadedData={markLoaded}
+        onLoadedMetadata={markLoaded}
+      />
+    </div>
+  );
+}
+
+/** Small video thumbnail with skeleton loader */
+function VideoThumb({ url, isActive, aspectRatio, index, onClick }: {
+  url: string; isActive: boolean; aspectRatio: string; index: number; onClick: () => void;
+}) {
+  const [loaded, setLoaded] = useState(() => _loadedUrlCache.has(url));
+  const markLoaded = useCallback(() => { _loadedUrlCache.add(url); setLoaded(true); }, [url]);
+  return (
+    <div className="relative shrink-0 cursor-pointer" onClick={onClick}>
+      {!loaded && (
+        <div className="absolute inset-0 animate-pulse rounded-md bg-surface" style={{ aspectRatio }} />
+      )}
+      <video
+        src={url}
+        muted
+        playsInline
+        preload="metadata"
+        className={`h-16 rounded-md border object-cover transition hover:border-accent ${loaded ? "opacity-100" : "opacity-0"} ${
+          isActive ? "border-accent" : "border-border/50"
+        }`}
+        style={{ aspectRatio }}
+        onLoadedData={markLoaded}
+        onLoadedMetadata={markLoaded}
+        onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+        onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+      />
+      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[7px] leading-tight text-white/70">{index + 1}</span>
+    </div>
   );
 }
 
@@ -85,6 +138,7 @@ export function ShotCard({
   globalAspectRatio,
   globalGenerateAudio,
   globalResolution,
+  globalCameraFixed,
   videoModel,
   imageModel,
   onUpdate,
@@ -105,10 +159,46 @@ export function ShotCard({
   onVideoSettingsChange,
   onDropOnFirst,
   onDropOnLast,
+  onLastFrameToNext,
   onMoveUp,
   onMoveDown,
 }: ShotCardProps) {
   const [showSettings, setShowSettings] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const extractAbortRef = useRef<AbortController | null>(null);
+  const cancelExtract = useCallback(() => {
+    extractAbortRef.current?.abort();
+    extractAbortRef.current = null;
+    setExtracting(false);
+  }, []);
+
+  // Track loaded state for remote images (skeleton → reveal)
+  // Initialize from module-level cache so re-mounts don't flash
+  const [genLoaded, setGenLoaded] = useState<Record<number, boolean>>({});
+  const [firstLoaded, setFirstLoaded] = useState(() => !!shot.imageUrl && _loadedUrlCache.has(shot.imageUrl));
+  const [lastLoaded, setLastLoaded] = useState(() => {
+    const endSrc = shot.endImageUrl || shot.endImageRef?.preview;
+    return !!endSrc && _loadedUrlCache.has(endSrc);
+  });
+  const markGenLoaded = useCallback((i: number, url: string) => {
+    _loadedUrlCache.add(url);
+    setGenLoaded((prev) => ({ ...prev, [i]: true }));
+  }, []);
+  const markFirstLoaded = useCallback(() => {
+    if (shot.imageUrl) _loadedUrlCache.add(shot.imageUrl);
+    setFirstLoaded(true);
+  }, [shot.imageUrl]);
+  const markLastLoaded = useCallback((url: string) => {
+    _loadedUrlCache.add(url);
+    setLastLoaded(true);
+  }, []);
+
+  // Reset loaded flags when the underlying URL changes (only if new URL not already cached)
+  useEffect(() => { setFirstLoaded(!!shot.imageUrl && _loadedUrlCache.has(shot.imageUrl)); }, [shot.imageUrl]);
+  useEffect(() => {
+    const endSrc = shot.endImageUrl || shot.endImageRef?.preview;
+    setLastLoaded(!!endSrc && _loadedUrlCache.has(endSrc));
+  }, [shot.endImageUrl, shot.endImageRef?.preview]);
 
   // Suppress unused variable warning — statusColors kept for reference/future use
   void statusColors;
@@ -184,8 +274,25 @@ export function ShotCard({
     // Internal drag (URL from another shot)
     const url = e.dataTransfer.getData("text/plain");
     if (url) {
-      if (target === "first") onDropOnFirst(url);
-      else onDropOnLast(url);
+      // If dropping a video URL onto a frame slot, extract the last frame
+      if (/\.mp4($|\?)/i.test(url)) {
+        const ac = new AbortController();
+        extractAbortRef.current = ac;
+        try {
+          setExtracting(true);
+          const frameUrl = await extractLastFrameAndUpload(url, ac.signal);
+          if (target === "first") onDropOnFirst(frameUrl);
+          else onDropOnLast(frameUrl);
+        } catch (err) {
+          if ((err as Error).name !== "AbortError") console.error("[ShotCard] Video frame extraction failed:", err);
+        } finally {
+          extractAbortRef.current = null;
+          setExtracting(false);
+        }
+      } else {
+        if (target === "first") onDropOnFirst(url);
+        else onDropOnLast(url);
+      }
       return;
     }
     // External file drop (from computer)
@@ -209,11 +316,15 @@ export function ShotCard({
   const isBusy = isImageBusy || isVideoBusy;
 
   return (
-    <div className={`overflow-hidden rounded-lg border bg-surface transition-all ${
+    <div className={`relative overflow-hidden rounded-xl border bg-surface transition-all ${
       isBusy ? "border-accent/50 glow-border"
       : shot.imageStatus === "error" || shot.videoStatus === "error" ? "border-destructive/30"
       : "border-border"
     }`}>
+      {/* Subtle card shimmer when generating/animating */}
+      {isBusy && (
+        <div className="pointer-events-none absolute inset-0 z-[1] -translate-x-full animate-[shimmer_2.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.03] to-transparent" />
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5">
         <div className="shrink-0 flex items-center gap-1">
@@ -235,14 +346,14 @@ export function ShotCard({
           placeholder="Shot title"
           className="min-w-0 flex-1 bg-transparent text-base font-semibold text-foreground outline-none placeholder:text-muted/30" />
         {isBusy && (
-          <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-accent">
+          <span className="shimmer-text flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-accent">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
             {isImageBusy ? "Generating..." : "Animating..."}
           </span>
         )}
         {shot.error && <span className="shrink-0 text-[11px] text-destructive">{shot.error}</span>}
         <button onClick={() => setShowSettings(!showSettings)}
-          className={`shrink-0 rounded-md border px-2.5 py-1 text-[10px] font-medium transition ${hasOverrides ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:border-accent/30"}`}
+          className={`shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-medium transition ${hasOverrides ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:border-accent/30"}`}
         >{showSettings ? "Less" : "More"}</button>
         <button onClick={onRemove} className="shrink-0 text-[11px] text-muted hover:text-destructive">delete</button>
       </div>
@@ -267,7 +378,7 @@ export function ShotCard({
                 onClick={() => onUpdate({ imageNegativePrompt: " " })}
                 className="mt-1 flex items-center gap-1 text-[10px] text-muted/60 transition hover:text-destructive"
               >
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-muted/10 text-[9px] font-bold leading-none">−</span>
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-md bg-muted/10 text-[9px] font-bold leading-none">−</span>
                 Negative
               </button>
             )}
@@ -304,16 +415,20 @@ export function ShotCard({
               <span className="mb-1 block text-[9px] font-medium uppercase text-muted">References</span>
               <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                 {refImages.map((ref, i) => (
-                  <div key={ref.id} className="relative h-14 w-14 shrink-0 overflow-hidden rounded border border-border" draggable onDragStart={(e) => ref.url && handleDragStart(e, ref.url)}>
+                  <div key={ref.id} className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border" draggable onDragStart={(e) => ref.url && handleDragStart(e, ref.url)}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={ref.preview} alt="Ref" loading="lazy" className="h-full w-full object-cover" />
+                    <img src={ref.preview} alt="Ref" loading="lazy"
+                      className="h-full w-full object-cover"
+                      onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = "1"; _loadedUrlCache.add(ref.preview); }}
+                      style={{ opacity: _loadedUrlCache.has(ref.preview) ? 1 : 0, transition: "opacity 0.2s" }} />
+                    {!_loadedUrlCache.has(ref.preview) && !ref.uploading && <div className="absolute inset-0 animate-pulse bg-surface" />}
                     {ref.uploading && <div className="absolute inset-0 flex items-center justify-center bg-background/60"><div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" /></div>}
                     <button onClick={() => onRefRemove(ref.id)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
                     <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 font-mono text-[7px] font-bold leading-tight text-accent">@{masterRefOffset + i + 1}</span>
                   </div>
                 ))}
                 <button onClick={() => (document.getElementById(`shot-ref-${shot.id}`) as HTMLInputElement)?.click()}
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-dashed border-border text-[11px] text-muted hover:border-accent/50 hover:text-accent">+</button>
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-[11px] text-muted hover:border-accent/50 hover:text-accent">+</button>
                 <input id={`shot-ref-${shot.id}`} ref={refInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={onRefUpload} className="hidden" />
               </div>
             </div>
@@ -322,19 +437,26 @@ export function ShotCard({
               <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Generations{history.length > 0 ? ` (${history.length})` : ""}</span>
               {history.length > 0 ? (
                 <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
-                  {history.map((url, i) => (
+                  {history.map((url, i) => {
+                    const genW = Math.round(64 * arRatio);
+                    return (
                     <div key={i} draggable onDragStart={(e) => handleDragStart(e, url)} className="relative shrink-0 cursor-grab">
                       <button onClick={() => onOpenLightbox(url, "image")} className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`Generation ${i + 1}`} loading="lazy"
-                          className={`h-16 rounded border object-cover transition hover:border-accent ${
-                            url === shot.imageUrl ? "border-accent" : "border-border/50"
-                          }`}
-                          style={{ aspectRatio: `${arW}/${arH}` }} />
+                        <div className="relative" style={{ width: genW, height: 64 }}>
+                          {!genLoaded[i] && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                          <Image src={url} alt={`Generation ${i + 1}`}
+                            fill
+                            sizes={`${genW}px`}
+                            onLoad={() => markGenLoaded(i, url)}
+                            className={`rounded border object-cover transition hover:border-accent ${
+                              url === shot.imageUrl ? "border-accent" : "border-border/50"
+                            } ${genLoaded[i] ? "opacity-100" : "opacity-0"}`} />
+                        </div>
                       </button>
                       <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[7px] leading-tight text-white/70">{i + 1}</span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <span className="text-[9px] text-muted/40">No image generations yet</span>
@@ -347,17 +469,17 @@ export function ShotCard({
               <div>
                 <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Model</label>
                 <select value={imgSettings.modelId ?? ""} onChange={(e) => onImageSettingsChange({ modelId: e.target.value || null })}
-                  className="w-full rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">Global</option>
-                  {selectableModels.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+                  className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
+                  <option value="">{imageModel.name}</option>
+                  {selectableModels.filter((m) => m.id !== imageModel.id).map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
                 </select>
               </div>
               <div>
                 <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Ratio</label>
                 <select value={imgSettings.aspectRatio ?? ""} onChange={(e) => onImageSettingsChange({ aspectRatio: e.target.value || null })}
-                  className="w-full rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">Global</option>
-                  {["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"].map((r) => (<option key={r} value={r}>{r}</option>))}
+                  className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
+                  <option value="">{globalAspectRatio}</option>
+                  {["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"].filter((r) => r !== globalAspectRatio).map((r) => (<option key={r} value={r}>{r}</option>))}
                 </select>
               </div>
             </div>
@@ -387,7 +509,7 @@ export function ShotCard({
                 onClick={() => onUpdate({ videoNegativePrompt: " " })}
                 className="mt-1 flex items-center gap-1 text-[10px] text-muted/60 transition hover:text-destructive"
               >
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-muted/10 text-[9px] font-bold leading-none">−</span>
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-md bg-muted/10 text-[9px] font-bold leading-none">−</span>
                 Negative
               </button>
             )}
@@ -416,26 +538,26 @@ export function ShotCard({
                 <div className="flex items-center gap-1">
                   <span className="text-[9px] font-medium uppercase text-muted">Dur</span>
                   <select value={vidSettings.duration ?? ""} onChange={(e) => onVideoSettingsChange({ duration: e.target.value ? Number(e.target.value) : null })}
-                    className="rounded border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
+                    className="rounded-lg border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
                     <option value="">{globalDuration}s</option>
-                    {(effVideoModel.durations ?? []).map((d) => (<option key={d} value={d}>{d}s</option>))}
+                    {(effVideoModel.durations ?? []).filter((d) => d !== globalDuration).map((d) => (<option key={d} value={d}>{d}s</option>))}
                   </select>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-[9px] font-medium uppercase text-muted">Ratio</span>
                   <select value={vidSettings.aspectRatio ?? ""} onChange={(e) => onVideoSettingsChange({ aspectRatio: e.target.value || null })}
-                    className="rounded border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
+                    className="rounded-lg border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
                     <option value="">{globalAspectRatio}</option>
-                    {(effVideoModel.aspectRatios ?? []).map((r) => (<option key={r} value={r}>{r}</option>))}
+                    {(effVideoModel.aspectRatios ?? []).filter((r) => r !== globalAspectRatio).map((r) => (<option key={r} value={r}>{r}</option>))}
                   </select>
                 </div>
                 {(effVideoModel.resolutions?.length ?? 0) > 0 && (
                   <div className="flex items-center gap-1">
                     <span className="text-[9px] font-medium uppercase text-muted">Res</span>
                     <select value={vidSettings.resolution ?? ""} onChange={(e) => onVideoSettingsChange({ resolution: e.target.value || null })}
-                      className="rounded border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
+                      className="rounded-lg border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
                       <option value="">{globalResolution}</option>
-                      {(effVideoModel.resolutions ?? []).map((r) => (<option key={r} value={r}>{r}</option>))}
+                      {(effVideoModel.resolutions ?? []).filter((r) => r !== globalResolution).map((r) => (<option key={r} value={r}>{r}</option>))}
                     </select>
                   </div>
                 )}
@@ -444,7 +566,7 @@ export function ShotCard({
                   return (
                     <button
                       onClick={() => onVideoSettingsChange({ generateAudio: effAudio ? false : true })}
-                      className={`rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase transition ${
+                      className={`rounded-lg border px-1.5 py-0.5 text-[9px] font-medium uppercase transition ${
                         effAudio
                           ? "border-accent/30 bg-accent/10 text-accent"
                           : "border-border bg-background text-muted hover:border-muted"
@@ -460,20 +582,14 @@ export function ShotCard({
               {videoHistory.length > 0 ? (
                 <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                   {videoHistory.map((url, i) => (
-                    <div key={i} className="relative shrink-0 cursor-pointer" onClick={() => onOpenLightbox(url, "video")}>
-                      <video
-                        src={url}
-                        muted
-                        playsInline
-                        className={`h-16 rounded border object-cover transition hover:border-accent ${
-                          url === shot.videoUrl ? "border-accent" : "border-border/50"
-                        }`}
-                        style={{ aspectRatio: `${vidArW}/${vidArH}` }}
-                        onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                        onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
-                      />
-                      <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[7px] leading-tight text-white/70">{i + 1}</span>
-                    </div>
+                    <VideoThumb
+                      key={i}
+                      url={url}
+                      isActive={url === shot.videoUrl}
+                      aspectRatio={`${vidArW}/${vidArH}`}
+                      index={i}
+                      onClick={() => onOpenLightbox(url, "video")}
+                    />
                   ))}
                 </div>
               ) : (
@@ -490,9 +606,9 @@ export function ShotCard({
                   const id = e.target.value || null;
                   onVideoSettingsChange({ modelId: id });
                   if (id) { const m = VIDEO_MODELS.find((v) => v.id === id); if (m && vidSettings.resolution && !m.resolutions.includes(vidSettings.resolution)) onVideoSettingsChange({ modelId: id, resolution: null }); }
-                }} className="w-full rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">Global</option>
-                  {VIDEO_MODELS.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+                }} className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
+                  <option value="">{videoModel.name}</option>
+                  {VIDEO_MODELS.filter((m) => m.id !== videoModel.id).map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
                 </select>
               </div>
               {effVideoModel.supportsCameraFixed && (
@@ -500,8 +616,8 @@ export function ShotCard({
                   <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Camera</label>
                   <select value={vidSettings.cameraFixed == null ? "" : vidSettings.cameraFixed ? "true" : "false"}
                     onChange={(e) => onVideoSettingsChange({ cameraFixed: e.target.value === "" ? null : e.target.value === "true" })}
-                    className="w-full rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                    <option value="">Global</option><option value="true">Fixed</option><option value="false">Free</option>
+                    className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
+                    <option value="">{globalCameraFixed ? "Fixed" : "Free"}</option><option value="true">Fixed</option><option value="false">Free</option>
                   </select>
                 </div>
               )}
@@ -521,7 +637,7 @@ export function ShotCard({
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => (document.getElementById(`audio-${shot.id}`) as HTMLInputElement)?.click()}
-                    className="flex h-8 items-center gap-1.5 rounded border border-dashed border-border px-2 text-[10px] text-muted transition hover:border-accent/40 hover:text-accent"
+                    className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-border px-2 text-[10px] text-muted transition hover:border-accent/40 hover:text-accent"
                   >
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                       <path d="M8 2v8M5 7l3 3 3-3" /><path d="M2 12h12" />
@@ -575,10 +691,14 @@ export function ShotCard({
             {shot.imageUrl ? (
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.imageUrl!)}>
                 <button onClick={() => onOpenLightbox(shot.imageUrl!, "image")} className="block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={shot.imageUrl} alt={`Shot ${shot.number}`} loading="lazy"
-                    className="rounded-md border border-border object-cover transition hover:border-muted cursor-grab"
-                    style={{ width: outputW, height: outputH }} />
+                  <div className="relative" style={{ width: outputW, height: outputH }}>
+                    {!firstLoaded && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                    <Image src={shot.imageUrl} alt={`Shot ${shot.number}`}
+                      fill
+                      sizes={`${outputW}px`}
+                      onLoad={markFirstLoaded}
+                      className={`rounded-md border border-border object-cover transition hover:border-muted cursor-grab ${firstLoaded ? "opacity-100" : "opacity-0"}`} />
+                  </div>
                 </button>
                 <button onClick={() => onUpdate({ imageUrl: null, imageStatus: "pending" as ShotStatus })}
                   className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[9px] text-white/70 hover:text-white">x</button>
@@ -588,8 +708,12 @@ export function ShotCard({
                 onClick={() => (document.getElementById(`first-frame-${shot.id}`) as HTMLInputElement)?.click()}
                 className="flex cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border transition hover:border-accent/40 hover:text-accent"
                 style={{ width: outputW, height: outputH }}>
-                {isImageBusy ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                  : <span className="text-[8px] text-muted/40">Drop or<br/>click</span>}
+                {isImageBusy ? (
+                  <div className="absolute inset-0 overflow-hidden rounded-md">
+                    <div className="absolute inset-0 animate-pulse bg-accent/[0.04]" />
+                    <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
+                  </div>
+                ) : <span className="text-[8px] text-muted/40">Drop or<br/>click</span>}
               </button>
             )}
             <input id={`first-frame-${shot.id}`} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
@@ -617,10 +741,27 @@ export function ShotCard({
             {endFrameSrc ? (
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.endImageUrl ?? endFrameSrc)}>
                 <button onClick={() => onOpenLightbox(endFrameSrc, "image")} className="block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={endFrameSrc} alt="End frame" loading="lazy"
-                    className="rounded-md border border-border object-cover transition hover:border-muted cursor-grab"
-                    style={{ width: outputW, height: outputH }} />
+                  <div className="relative" style={{ width: outputW, height: outputH }}>
+                    {isRemoteUrl(endFrameSrc) ? (
+                      <>
+                        {!lastLoaded && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                        <Image src={endFrameSrc} alt="End frame"
+                          fill
+                          sizes={`${outputW}px`}
+                          onLoad={() => markLastLoaded(endFrameSrc)}
+                          className={`rounded-md border border-border object-cover transition hover:border-muted cursor-grab ${lastLoaded ? "opacity-100" : "opacity-0"}`} />
+                      </>
+                    ) : (
+                      /* Blob / data URI preview — keep as raw img */
+                      <>
+                        {!lastLoaded && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={endFrameSrc} alt="End frame"
+                          onLoad={() => markLastLoaded(endFrameSrc)}
+                          className={`h-full w-full rounded-md border border-border object-cover transition hover:border-muted cursor-grab ${lastLoaded ? "opacity-100" : "opacity-0"}`} />
+                      </>
+                    )}
+                  </div>
                 </button>
                 <button onClick={onEndFrameRemove}
                   className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[9px] text-white/70 hover:text-white">x</button>
@@ -643,7 +784,12 @@ export function ShotCard({
           <div className="text-center">
             <span className="mb-1 block text-[9px] font-medium uppercase tracking-wider text-muted">Video</span>
             {shot.videoUrl ? (
-              <div className="group relative cursor-pointer" onClick={() => onOpenLightbox(shot.videoUrl!, "video")}>
+              <div
+                className="group relative cursor-pointer"
+                draggable
+                onDragStart={(e) => handleDragStart(e, shot.videoUrl!)}
+                onClick={() => onOpenLightbox(shot.videoUrl!, "video")}
+              >
                 <LazyVideo
                   src={shot.videoUrl}
                   className="rounded-md border border-border object-cover transition hover:border-muted"
@@ -654,13 +800,60 @@ export function ShotCard({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center rounded-md border border-dashed border-border"
+              <div className="relative flex items-center justify-center overflow-hidden rounded-md border border-dashed border-border"
                 style={{ width: vidOutputW, height: vidOutputH }}>
-                {isVideoBusy ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                  : <span className="text-[8px] text-muted/40">No video</span>}
+                {isVideoBusy ? (
+                  <>
+                    <div className="absolute inset-0 animate-pulse bg-accent/[0.04]" />
+                    <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
+                  </>
+                ) : <span className="text-[8px] text-muted/40">No video</span>}
               </div>
             )}
+            {/* Chain to next shot — extract last frame */}
+            {shot.videoUrl && onLastFrameToNext && (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (extracting) return;
+                  const ac = new AbortController();
+                  extractAbortRef.current = ac;
+                  try {
+                    setExtracting(true);
+                    const frameUrl = await extractLastFrameAndUpload(shot.videoUrl!, ac.signal);
+                    onLastFrameToNext(frameUrl);
+                  } catch (err) {
+                    if ((err as Error).name !== "AbortError") console.error("[ShotCard] Extract last frame failed:", err);
+                  } finally {
+                    extractAbortRef.current = null;
+                    setExtracting(false);
+                  }
+                }}
+                disabled={extracting}
+                className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-lg border border-border px-1.5 py-0.5 text-[8px] font-medium text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
+                title="Extract last frame and set as first frame of next shot"
+              >
+                {extracting ? (
+                  <>
+                    <div className="h-3 w-3 animate-spin rounded-full border border-accent border-t-transparent" />
+                    Extracting...
+                  </>
+                ) : (
+                  "Last frame → Next shot"
+                )}
+              </button>
+            )}
           </div>
+          {/* Extracting indicator — small pill, no blur */}
+          {extracting && (
+            <div className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2">
+              <div className="flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 shadow-md ring-1 ring-border">
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                <span className="text-[9px] font-medium text-muted">Extracting frame...</span>
+                <button onClick={cancelExtract} className="text-[9px] text-muted/60 transition hover:text-accent">✕</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

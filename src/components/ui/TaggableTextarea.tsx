@@ -176,7 +176,7 @@ export function TaggableTextarea({
               <img
                 src={img.thumbnailUrl}
                 alt=""
-                className="h-8 w-8 shrink-0 rounded border border-border object-cover"
+                className="h-8 w-8 shrink-0 rounded-md border border-border object-cover"
               />
               <span className="font-mono font-bold text-accent">
                 @{img.number}

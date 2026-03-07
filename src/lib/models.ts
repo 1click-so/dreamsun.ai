@@ -24,6 +24,14 @@ export interface ModelConfig {
   aspectRatios: string[];
   defaultAspectRatio: string;
   supportsNegativePrompt: boolean;
+  /** Provider name shown in selector (e.g. "Google", "xAI") */
+  provider?: string;
+  /** Feature tags shown in selector (e.g. "4K", "Fast", "Edit") */
+  tags?: string[];
+  /** Whether this is a featured/recommended model */
+  featured?: boolean;
+  /** Special callout badges (e.g. "Hot", "New") */
+  badges?: string[];
   /** Reference image configuration — only for image-to-image models */
   referenceImage?: ReferenceImageConfig;
   /** API param name for size — defaults to "aspect_ratio". GPT Image uses "image_size" with "1024x1024" format */
@@ -47,6 +55,9 @@ export const MODELS: ModelConfig[] = [
     capability: "text-to-image",
     description: "Google's latest. Excellent character consistency and typography.",
     costPerImage: "$0.15",
+    provider: "Google",
+    tags: ["4K", "Edit", "Neg. Prompt"],
+    featured: true,
     aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: true,
@@ -59,6 +70,10 @@ export const MODELS: ModelConfig[] = [
     capability: "text-to-image",
     description: "Fast, affordable text-to-image. Good quality at low cost.",
     costPerImage: "$0.08",
+    provider: "Google",
+    tags: ["Fast", "Edit"],
+    badges: ["Hot", "New"],
+    featured: true,
     aspectRatios: ["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: false,
@@ -71,6 +86,9 @@ export const MODELS: ModelConfig[] = [
     capability: "text-to-image",
     description: "xAI's highly aesthetic image generation model.",
     costPerImage: "~$0.07",
+    provider: "xAI",
+    tags: ["Aesthetic", "Edit"],
+    featured: true,
     aspectRatios: ["16:9", "4:3", "1:1", "3:4", "9:16"],
     defaultAspectRatio: "1:1",
     supportsNegativePrompt: false,
@@ -85,6 +103,8 @@ export const MODELS: ModelConfig[] = [
     capability: "text-to-image",
     description: "FLUX 2 with character LoRA. Trigger word: ohwx",
     costPerImage: "~$0.035",
+    provider: "Black Forest Labs",
+    tags: ["LoRA", "Character"],
     aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
     defaultAspectRatio: "16:9",
     supportsNegativePrompt: false,
@@ -120,6 +140,8 @@ export const MODELS: ModelConfig[] = [
     capability: "text-to-image",
     description: "Character LoRA + NSFW Master stacked. Trigger word: ohwx",
     costPerImage: "~$0.035",
+    provider: "Black Forest Labs",
+    tags: ["LoRA", "Character", "NSFW"],
     aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
     defaultAspectRatio: "3:4",
     supportsNegativePrompt: false,
@@ -159,6 +181,8 @@ export const MODELS: ModelConfig[] = [
     capability: "text-to-image",
     description: "Flux 1 trained character LoRA + NSFW Master — native base. Trigger word: ohwx",
     costPerImage: "~$0.035",
+    provider: "Black Forest Labs",
+    tags: ["LoRA", "Character", "NSFW"],
     aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
     defaultAspectRatio: "3:4",
     supportsNegativePrompt: false,

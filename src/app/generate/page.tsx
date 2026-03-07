@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import Image from "next/image";
 import { fal } from "@fal-ai/client";
 import {
   MODELS,
@@ -10,6 +11,9 @@ import {
 } from "@/lib/models";
 import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
+import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
+import { usePricing } from "@/hooks/usePricing";
+import { useGenerations, type Generation } from "@/hooks/useGenerations";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
@@ -26,18 +30,24 @@ interface GenerationSettings {
 }
 
 interface GenerationResult {
+  id?: string;
+  type?: "image" | "video" | "audio";
   imageUrl: string;
   allImageUrls?: string[];
   width: number;
   height: number;
+  duration?: number | null;
   seed: number;
   model: string;
+  modelId?: string;
   requestId: string;
   prompt?: string;
   batchId?: string;
   settings?: GenerationSettings;
   createdAt?: number;
   favorited?: boolean;
+  sceneId?: string | null;
+  shotNumber?: string | null;
 }
 
 interface UploadedImage {
@@ -115,6 +125,34 @@ function saveStorage(key: string, value: unknown) {
 let imageIdCounter = 0;
 let batchIdCounter = 0;
 
+/** Convert a Supabase Generation row to the UI's GenerationResult format */
+function generationToResult(g: Generation): GenerationResult {
+  // Merge the DB-level aspect_ratio into settings so the gallery can parse it
+  const settings = (g.settings ?? {}) as Record<string, unknown>;
+  if (g.aspect_ratio && !settings.aspectRatio) {
+    settings.aspectRatio = g.aspect_ratio;
+  }
+  return {
+    id: g.id,
+    type: g.type,
+    imageUrl: g.url,
+    width: g.width ?? 0,
+    height: g.height ?? 0,
+    duration: g.duration,
+    seed: g.seed ?? 0,
+    model: g.model_name ?? g.model_id,
+    modelId: g.model_id,
+    requestId: g.request_id ?? g.id,
+    prompt: g.prompt ?? undefined,
+    batchId: g.batch_id ?? undefined,
+    settings: settings as unknown as GenerationSettings | undefined,
+    createdAt: new Date(g.created_at).getTime(),
+    favorited: g.favorited,
+    sceneId: g.scene_id,
+    shotNumber: g.shot_number,
+  };
+}
+
 // --- Icon Components ---
 
 function IconRegenerate() {
@@ -182,88 +220,95 @@ function IconSparkle({ size = 14 }: { size?: number }) {
   );
 }
 
-// --- Model Multi-Select ---
+// --- Image Mode System ---
 
-function ModelSelector({
-  models,
-  selectedIds,
-  onChange,
-}: {
-  models: ModelConfig[];
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+type ImageMode = "create" | "upscale" | "edit" | "skin";
+type GalleryFilter = "all" | "images" | "loved" | "videos" | "audio";
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+interface ModeConfig {
+  id: ImageMode;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+  ready: boolean;
+}
 
-  const selectedModels = models.filter((m) => selectedIds.includes(m.id));
-  const label =
-    selectedModels.length === 0
-      ? "Select models"
-      : selectedModels.length === 1
-        ? selectedModels[0].name
-        : `${selectedModels.length} models`;
+const IMAGE_MODES: ModeConfig[] = [
+  {
+    id: "create",
+    label: "Create",
+    icon: <IconSparkle size={12} />,
+    description: "Generate images from text prompts",
+    ready: true,
+  },
+  {
+    id: "upscale",
+    label: "Upscale",
+    icon: <IconUpscale />,
+    description: "Enhance resolution and detail",
+    ready: false,
+  },
+  {
+    id: "edit",
+    label: "Edit",
+    icon: <IconEdit />,
+    description: "Modify images with prompts",
+    ready: false,
+  },
+  {
+    id: "skin",
+    label: "Skin Enhance",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="7" r="4" /><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      </svg>
+    ),
+    description: "Enhance skin texture and lighting",
+    ready: false,
+  },
+];
 
-  const toggle = (id: string) => {
-    const next = selectedIds.includes(id)
-      ? selectedIds.filter((x) => x !== id)
-      : [...selectedIds, id];
-    if (next.length === 0) return;
-    onChange(next);
-  };
-
+function ModeBar({ active, onChange }: { active: ImageMode; onChange: (mode: ImageMode) => void }) {
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground transition hover:border-accent/30 focus:border-accent"
-      >
-        <span className="truncate">{label}</span>
-        <IconChevron open={open} />
-      </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-border bg-surface py-1 shadow-lg">
-          {models.map((m) => {
-            const checked = selectedIds.includes(m.id);
-            return (
-              <button
-                key={m.id}
-                onClick={() => toggle(m.id)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-xs transition ${
-                  checked
-                    ? "text-accent"
-                    : "text-foreground hover:bg-accent/5 hover:text-accent"
-                }`}
-              >
-                <span
-                  className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition ${
-                    checked
-                      ? "border-accent bg-accent"
-                      : "border-border bg-surface"
-                  }`}
-                >
-                  {checked && (
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1.5 4l2 2L6.5 2" />
-                    </svg>
-                  )}
-                </span>
-                <span className="flex-1 text-left">{m.name}</span>
-                <span className="text-[10px] text-muted/50">{m.costPerImage}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div className="grid grid-cols-2 gap-1.5">
+      {IMAGE_MODES.map((mode) => (
+        <button
+          key={mode.id}
+          onClick={() => mode.ready ? onChange(mode.id) : undefined}
+          className={`group relative flex items-center gap-2 rounded-xl px-2.5 py-2 text-left transition ${
+            active === mode.id
+              ? "bg-accent/10 ring-1 ring-accent/25"
+              : mode.ready
+                ? "bg-surface hover:bg-surface-hover"
+                : "cursor-default bg-surface/50"
+          }`}
+          title={mode.ready ? mode.description : `${mode.label} — coming soon`}
+        >
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+            active === mode.id
+              ? "bg-accent/20 text-accent-text"
+              : mode.ready
+                ? "bg-surface-hover text-muted group-hover:text-foreground"
+                : "text-muted/25"
+          }`}>
+            {mode.icon}
+          </span>
+          <span className={`text-[11px] font-semibold leading-tight ${
+            active === mode.id
+              ? "text-accent-text"
+              : mode.ready
+                ? "text-foreground/70 group-hover:text-foreground"
+                : "text-muted/30"
+          }`}>
+            {mode.label}
+          </span>
+          {!mode.ready && (
+            <span className="absolute top-1.5 right-1.5 rounded-md bg-surface-hover px-1 py-px text-[7px] font-bold uppercase text-muted/40">
+              Soon
+            </span>
+          )}
+        </button>
+      ))}
     </div>
   );
 }
@@ -281,6 +326,9 @@ function GalleryCard({
   onDelete,
   onClick,
   copied,
+  onImageLoad,
+  isLoaded,
+  onMediaLoaded,
 }: {
   result: GenerationResult;
   isFeatured: boolean;
@@ -292,8 +340,18 @@ function GalleryCard({
   onDelete: () => void;
   onClick: () => void;
   copied: boolean;
+  onImageLoad?: (url: string, w: number, h: number) => void;
+  isLoaded?: boolean;
+  onMediaLoaded?: (url: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [localLoaded, setLocalLoaded] = useState(false);
+  const loaded = (isLoaded ?? false) || localLoaded;
+
+  const handleMediaReady = useCallback(() => {
+    setLocalLoaded(true);
+    onMediaLoaded?.(result.imageUrl);
+  }, [onMediaLoaded, result.imageUrl]);
 
   return (
     <div
@@ -308,16 +366,55 @@ function GalleryCard({
         e.dataTransfer.effectAllowed = "copy";
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={result.imageUrl}
-        alt={`Generated by ${result.model}`}
-        className="h-full w-full rounded-lg object-cover"
-        draggable={false}
-      />
+      {/* Skeleton placeholder until media loads */}
+      {!loaded && (
+        <div className="absolute inset-0 animate-pulse rounded-lg bg-surface" />
+      )}
+      {result.type === "video" ? (
+        <>
+          <video
+            src={result.imageUrl}
+            className={`h-full w-full rounded-lg object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            draggable={false}
+            onLoadedData={handleMediaReady}
+            onLoadedMetadata={handleMediaReady}
+            onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+            onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+          />
+          {/* Play icon overlay */}
+          {loaded && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover:opacity-0">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="white" stroke="none">
+                  <path d="M4 2.5l8 4.5-8 4.5V2.5z" />
+                </svg>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <Image
+          src={result.imageUrl}
+          alt={`Generated by ${result.model}`}
+          fill
+          sizes="(max-width: 768px) 50vw, 33vw"
+          quality={75}
+          className={`rounded-lg object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+          draggable={false}
+          onLoad={(e) => {
+            handleMediaReady();
+            const img = e.target as HTMLImageElement;
+            onImageLoad?.(result.imageUrl, img.naturalWidth, img.naturalHeight);
+          }}
+        />
+      )}
 
       {/* Model badge — subtle, hover-visible */}
-      <div className="absolute left-1.5 top-1.5 rounded bg-black/40 px-1.5 py-px text-[8px] font-medium text-white/60 backdrop-blur-sm transition-opacity group-hover:opacity-100 opacity-0">
+      <div className="absolute left-1.5 top-1.5 rounded-md bg-black/40 px-1.5 py-px text-[8px] font-medium text-white/60 backdrop-blur-sm transition-opacity group-hover:opacity-100 opacity-0">
         {result.model.replace(/\s*\(Edit\)/i, "")}
       </div>
 
@@ -335,64 +432,33 @@ function GalleryCard({
         </svg>
       </button>
 
-      {/* Hover overlay */}
+      {/* Hover overlay — actions only */}
       <div
-        className={`absolute inset-0 flex flex-col justify-end rounded-lg bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-200 ${
+        className={`absolute inset-x-0 bottom-0 flex items-center justify-end gap-0.5 rounded-b-lg bg-gradient-to-t from-black/60 to-transparent px-2 pb-2 pt-6 transition-opacity duration-200 ${
           hovered ? "opacity-100" : "opacity-0"
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Prompt text */}
-        {result.prompt && (
-          <div className="px-2.5 pt-8">
-            <p className="line-clamp-2 text-[10px] leading-snug text-white/70">
-              {result.prompt}
-            </p>
-          </div>
-        )}
-        <div className="flex items-end justify-between p-2.5" onClick={(e) => e.stopPropagation()}>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-medium text-white/50">
-              {result.width}x{result.height}
-            </span>
-            {result.settings && (
-              <span className="text-[8px] text-white/30">
-                {result.settings.aspectRatio} · {result.settings.resolution}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-0.5">
-            {isFeatured && (
-              <button onClick={onRegenerate} className="rounded-md p-1.5 text-accent transition hover:bg-white/10" title="Regenerate">
-                <IconRegenerate />
-              </button>
-            )}
-            <button onClick={() => {/* TODO */}} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Upscale">
-              <IconUpscale />
-            </button>
-            {isFeatured && (
-              <button onClick={onEdit} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Edit">
-                <IconEdit />
-              </button>
-            )}
-            <button onClick={onDownload} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Save">
-              <IconDownload />
-            </button>
-            <button onClick={onCopyUrl} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Copy URL">
-              {copied ? (
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 7l4 4L12 3" className="text-accent" />
-                </svg>
-              ) : (
-                <IconCopy />
-              )}
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-red-400" title="Delete">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M2 4h10M5 4V2.5h4V4M3 4l.7 8.1c.1.8.7 1.4 1.5 1.4h3.6c.8 0 1.4-.6 1.5-1.4L11 4" />
-              </svg>
-            </button>
-          </div>
-        </div>
+        <button onClick={onDownload} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Download">
+          <IconDownload />
+        </button>
+        <button onClick={() => {/* TODO */}} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Upscale">
+          <IconUpscale />
+        </button>
+        <button onClick={onCopyUrl} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Copy URL">
+          {copied ? (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M2 7l4 4L12 3" className="text-accent" />
+            </svg>
+          ) : (
+            <IconCopy />
+          )}
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-red-400" title="Delete">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M2 4h10M5 4V2.5h4V4M3 4l.7 8.1c.1.8.7 1.4 1.5 1.4h3.6c.8 0 1.4-.6 1.5-1.4L11 4" />
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -402,7 +468,7 @@ function GalleryCard({
 
 function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <label className={`mb-1.5 block text-[10px] font-medium uppercase tracking-wider text-muted ${className ?? ""}`}>
+    <label className={`mb-1.5 block text-[10px] font-medium uppercase tracking-wider text-foreground/60 ${className ?? ""}`}>
       {children}
     </label>
   );
@@ -426,8 +492,8 @@ function PillButton({
       onClick={onClick}
       className={`rounded-md border px-2 py-1 text-[10px] font-medium transition ${
         active
-          ? "border-accent/30 bg-accent/10 text-accent"
-          : "border-border text-muted hover:border-accent/20 hover:text-foreground"
+          ? "border-accent/30 bg-accent/10 text-accent-text"
+          : "border-border text-foreground/50 hover:border-accent/20 hover:text-foreground"
       } ${className ?? ""}`}
     >
       {children}
@@ -438,6 +504,9 @@ function PillButton({
 // --- Page ---
 
 export default function GeneratePage() {
+  // Mode
+  const [activeMode, setActiveMode] = useState<ImageMode>("create");
+
   // Settings state (persisted)
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [MODELS[0].id];
@@ -464,20 +533,35 @@ export default function GeneratePage() {
   const [generatingSlots, setGeneratingSlots] = useState<{ modelName: string; modelId: string; slotId: string }[]>([]);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<GenerationResult[]>(() =>
-    loadStorage<GenerationResult[]>(STORAGE_KEYS.history, [])
+
+  // Supabase-backed generations (master gallery)
+  const {
+    generations: dbGenerations,
+    loading: generationsLoading,
+    addGenerations: addDbGenerations,
+    toggleFavorite: dbToggleFavorite,
+    deleteGeneration: dbDeleteGeneration,
+  } = useGenerations();
+
+  // Convert DB rows to UI format
+  const history = useMemo(
+    () => dbGenerations.map(generationToResult),
+    [dbGenerations]
   );
   const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [editPromptValue, setEditPromptValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<GenerationResult | null>(null);
   const [promptBarDragOver, setPromptBarDragOver] = useState(false);
-  const [galleryRowHeight, setGalleryRowHeight] = useState(() =>
-    loadStorage(STORAGE_KEYS.gallerySize, 180)
-  );
+  const [refsDragOver, setRefsDragOver] = useState(false);
+  const [galleryRowHeight, setGalleryRowHeight] = useState(() => {
+    const stored = loadStorage(STORAGE_KEYS.gallerySize, 1.0);
+    // Migrate old pixel values to scale
+    return stored > 10 ? 1.0 : stored;
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [galleryFilter, setGalleryFilter] = useState<GalleryFilter>("images");
 
   // Characters
   const [characters, setCharacters] = useState<Character[]>(() =>
@@ -491,6 +575,8 @@ export default function GeneratePage() {
   const galleryRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
+  const { pricing, loading: pricingLoading } = usePricing();
+
   const isGenerating = generatingSlots.length > 0;
 
   // Derived
@@ -502,10 +588,7 @@ export default function GeneratePage() {
     resolveModel(primaryModel.id, hasRefs) ?? primaryModel;
   const maxImages = currentEffectiveModel.referenceImage?.maxImages ?? 14;
 
-  // Persist history + characters to localStorage
-  useEffect(() => {
-    saveStorage(STORAGE_KEYS.history, history);
-  }, [history]);
+  // Persist characters to localStorage
   useEffect(() => {
     saveStorage(STORAGE_KEYS.characters, characters);
   }, [characters]);
@@ -535,17 +618,65 @@ export default function GeneratePage() {
         : [data.imageUrl];
 
       const now = Date.now();
-      const genResults: GenerationResult[] = imageUrls.map((url: string, i: number) => ({
-        ...data,
-        imageUrl: url,
-        requestId: imageUrls.length > 1 ? `${data.requestId}_${i}` : data.requestId,
-        prompt: pending.prompt,
-        batchId: pending.batchId,
-        createdAt: now + i,
-        settings: pending.settings,
-      }));
+      const model = MODELS.find((m) => m.id === pending.modelId) ?? MODELS[0];
 
-      setHistory((prev) => [...genResults, ...prev]);
+      // Persist each image to Supabase and add to gallery
+      const persistedGens: Generation[] = [];
+      for (let i = 0; i < imageUrls.length; i++) {
+        const url = imageUrls[i];
+        const reqId = imageUrls.length > 1 ? `${data.requestId}_${i}` : data.requestId;
+        try {
+          const persistRes = await fetch("/api/persist-generation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "image",
+              url,
+              prompt: pending.prompt,
+              modelId: model.id,
+              modelName: model.name,
+              seed: data.seed,
+              requestId: reqId,
+              width: data.width,
+              height: data.height,
+              aspectRatio: pending.settings.aspectRatio,
+              resolution: pending.settings.resolution,
+              numImages: pending.settings.numImages,
+              settings: pending.settings,
+              batchId: pending.batchId,
+            }),
+          });
+          const persistData = await persistRes.json();
+          persistedGens.push({
+            id: persistData.id,
+            type: "image",
+            url: persistData.url ?? url,
+            width: data.width ?? null,
+            height: data.height ?? null,
+            duration: null,
+            prompt: pending.prompt,
+            negative_prompt: null,
+            model_id: model.id,
+            model_name: model.name,
+            seed: data.seed ?? null,
+            request_id: reqId,
+            aspect_ratio: pending.settings.aspectRatio ?? null,
+            resolution: pending.settings.resolution ?? null,
+            settings: pending.settings as unknown as Record<string, unknown>,
+            batch_id: pending.batchId ?? null,
+            favorited: false,
+            created_at: new Date(now + i).toISOString(),
+            scene_id: null,
+            shot_number: null,
+            project_id: null,
+            source_image_url: null,
+            reference_image_urls: null,
+          });
+        } catch (e) {
+          console.error("[persist] resubmit failed:", e);
+        }
+      }
+      if (persistedGens.length > 0) addDbGenerations(persistedGens);
     } catch (err) {
       setError((prev) =>
         prev
@@ -558,7 +689,7 @@ export default function GeneratePage() {
       saveStorage(STORAGE_KEYS.pending, stored.filter((p) => p.slotId !== pending.slotId));
       setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== pending.slotId));
     }
-  }, []);
+  }, [addDbGenerations]);
 
   // Resume pending generations on page load
   const resumedRef = useRef(false);
@@ -584,11 +715,18 @@ export default function GeneratePage() {
     fresh.forEach((p) => resubmitPending(p));
   }, [resubmitPending]);
 
-  // Filter by search + favorites
+  // Filter by gallery filter + search
   let filteredHistory = history;
-  if (favoritesOnly) {
+  if (galleryFilter === "loved") {
     filteredHistory = filteredHistory.filter((r) => r.favorited);
+  } else if (galleryFilter === "images") {
+    filteredHistory = filteredHistory.filter((r) => !r.type || r.type === "image");
+  } else if (galleryFilter === "videos") {
+    filteredHistory = filteredHistory.filter((r) => r.type === "video");
+  } else if (galleryFilter === "audio") {
+    filteredHistory = filteredHistory.filter((r) => r.type === "audio");
   }
+  // "all" → no filter
   if (searchQuery.trim()) {
     const q = searchQuery.toLowerCase();
     filteredHistory = filteredHistory.filter((r) =>
@@ -664,6 +802,44 @@ export default function GeneratePage() {
       }
 
       // 2) Check for dropped files from computer
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+        for (const file of imageFiles.slice(0, 14 - referenceImages.length)) {
+          const id = `img_${++imageIdCounter}`;
+          const preview = URL.createObjectURL(file);
+          const newImage: UploadedImage = { id, preview, url: null, uploading: true };
+          setReferenceImages((prev) => [...prev, newImage]);
+          try {
+            const url = await fal.storage.upload(file);
+            setReferenceImages((prev) =>
+              prev.map((img) => (img.id === id ? { ...img, url, uploading: false } : img))
+            );
+          } catch (err) {
+            setReferenceImages((prev) => prev.filter((img) => img.id !== id));
+            setError(`Upload failed: ${err instanceof Error ? err.message : "Network error"}`);
+          }
+        }
+      }
+    },
+    [referenceImages.length, addReferenceFromUrl]
+  );
+
+  // Handle drops on the reference images area — from gallery or desktop
+  const handleRefsDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setRefsDragOver(false);
+
+      // 1) Image URL from gallery drag
+      const imageUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+      if (imageUrl && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) && /\.(png|jpe?g|webp)/i.test(imageUrl)) {
+        addReferenceFromUrl(imageUrl);
+        return;
+      }
+
+      // 2) Files from desktop
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
@@ -764,42 +940,65 @@ export default function GeneratePage() {
           : [data.imageUrl];
 
         const now = Date.now();
-        const genResults: GenerationResult[] = imageUrls.map((url: string, i: number) => ({
-          ...data,
-          imageUrl: url,
-          requestId: imageUrls.length > 1 ? `${data.requestId}_${i}` : data.requestId,
-          prompt: usedPrompt.trim(),
-          batchId,
-          createdAt: now + i,
-          settings: pending.settings,
-        }));
 
-        setHistory((prev) => [...genResults, ...prev]);
-
-        // Persist to Supabase (fire-and-forget)
-        for (const gen of genResults) {
-          fetch("/api/persist-generation", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+        // Persist each image to Supabase and add to gallery
+        const persistedGens: Generation[] = [];
+        for (let i = 0; i < imageUrls.length; i++) {
+          const url = imageUrls[i];
+          const reqId = imageUrls.length > 1 ? `${data.requestId}_${i}` : data.requestId;
+          try {
+            const persistRes = await fetch("/api/persist-generation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "image",
+                url,
+                prompt: usedPrompt.trim(),
+                modelId: model.id,
+                modelName: model.name,
+                seed: data.seed,
+                requestId: reqId,
+                width: data.width,
+                height: data.height,
+                aspectRatio: pending.settings.aspectRatio,
+                resolution: pending.settings.resolution,
+                numImages: pending.settings.numImages,
+                settings: pending.settings,
+                referenceImageUrls: hasRefs ? referenceImages.filter((r) => r.url).map((r) => r.url) : null,
+                batchId,
+              }),
+            });
+            const persistData = await persistRes.json();
+            persistedGens.push({
+              id: persistData.id,
               type: "image",
-              url: gen.imageUrl,
-              prompt: gen.prompt,
-              modelId: model.id,
-              modelName: model.name,
-              seed: gen.seed,
-              requestId: gen.requestId,
-              width: gen.width,
-              height: gen.height,
-              aspectRatio: pending.settings.aspectRatio,
-              resolution: pending.settings.resolution,
-              numImages: pending.settings.numImages,
-              settings: pending.settings,
-              referenceImageUrls: hasRefs ? referenceImages.filter((r) => r.url).map((r) => r.url) : null,
-              batchId: gen.batchId,
-            }),
-          }).catch((err) => console.error("[persist] Failed:", err));
+              url: persistData.url ?? url,
+              width: data.width ?? null,
+              height: data.height ?? null,
+              duration: null,
+              prompt: usedPrompt.trim(),
+              negative_prompt: pending.settings.negativePrompt ?? null,
+              model_id: model.id,
+              model_name: model.name,
+              seed: data.seed ?? null,
+              request_id: reqId,
+              aspect_ratio: pending.settings.aspectRatio ?? null,
+              resolution: pending.settings.resolution ?? null,
+              settings: pending.settings as unknown as Record<string, unknown>,
+              batch_id: batchId ?? null,
+              favorited: false,
+              created_at: new Date(now + i).toISOString(),
+              scene_id: null,
+              shot_number: null,
+              project_id: null,
+              source_image_url: null,
+              reference_image_urls: hasRefs ? referenceImages.filter((r) => r.url).map((r) => r.url!) : null,
+            });
+          } catch (e) {
+            console.error("[persist] Failed:", e);
+          }
         }
+        if (persistedGens.length > 0) addDbGenerations(persistedGens);
       } catch (err) {
         setError((prev) =>
           prev
@@ -846,11 +1045,9 @@ export default function GeneratePage() {
   };
 
   const toggleFavorite = (requestId: string) => {
-    setHistory((prev) =>
-      prev.map((r) =>
-        r.requestId === requestId ? { ...r, favorited: !r.favorited } : r
-      )
-    );
+    // Find by requestId, but toggle via DB id
+    const gen = history.find((r) => r.requestId === requestId);
+    if (gen?.id) dbToggleFavorite(gen.id);
     // Also update selectedResult if it's the same
     setSelectedResult((prev) =>
       prev && prev.requestId === requestId ? { ...prev, favorited: !prev.favorited } : prev
@@ -858,7 +1055,8 @@ export default function GeneratePage() {
   };
 
   const deleteImage = (requestId: string) => {
-    setHistory((prev) => prev.filter((r) => r.requestId !== requestId));
+    const gen = history.find((r) => r.requestId === requestId);
+    if (gen?.id) dbDeleteGeneration(gen.id);
     // Close lightbox if this image is open
     setSelectedResult((prev) => (prev && prev.requestId === requestId ? null : prev));
   };
@@ -951,8 +1149,14 @@ export default function GeneratePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompt, isGenerating]);
 
-  const hasAnyContent = history.length > 0 || isGenerating;
+  const hasAnyContent = history.length > 0 || isGenerating || generationsLoading;
   const canGenerate = prompt.trim() && !referenceImages.some((img) => img.uploading);
+
+  const estimatedCredits = useMemo(() => {
+    if (pricingLoading) return 0;
+    const models = selectedModels.length > 0 ? selectedModels : [primaryModel];
+    return models.reduce((sum, m) => sum + (pricing[m.id]?.effective_credits ?? 0), 0) * numImages;
+  }, [selectedModels, primaryModel, pricing, pricingLoading, numImages]);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -963,8 +1167,14 @@ export default function GeneratePage() {
             LEFT SIDEBAR — All controls + prompt (28% width)
             ================================================================ */}
         <aside className="hidden w-[28%] min-w-[280px] max-w-[400px] shrink-0 flex-col border-r border-border lg:flex">
+          {/* Mode bar — fixed at top */}
+          <div className="border-b border-border px-2 py-2">
+            <ModeBar active={activeMode} onChange={setActiveMode} />
+          </div>
+
           {/* Scrollable settings area */}
           <div className="flex-1 overflow-y-auto p-4">
+            {activeMode === "create" ? (
             <div className="space-y-5">
               {/* Model */}
               <div>
@@ -973,9 +1183,10 @@ export default function GeneratePage() {
                   models={selectableModels}
                   selectedIds={selectedModelIds}
                   onChange={handleModelsChange}
+                  pricing={pricing}
                 />
                 {selectedModels.length > 1 && (
-                  <p className="mt-1.5 text-[10px] text-muted/60">
+                  <p className="mt-1.5 text-[10px] text-muted">
                     Generates with {selectedModels.length} models in parallel
                   </p>
                 )}
@@ -1033,7 +1244,7 @@ export default function GeneratePage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-muted/40">
+                    <p className="text-[10px] text-muted/60">
                       Upload reference images, then save as character
                     </p>
                   )}
@@ -1054,7 +1265,7 @@ export default function GeneratePage() {
                       onChange={(e) => setCharacterName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") saveCharacter(); if (e.key === "Escape") setShowCharacterModal(false); }}
                       placeholder="Character name..."
-                      className="mb-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+                      className="mb-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
                       autoFocus
                     />
                     <div className="flex items-center justify-end gap-2">
@@ -1080,7 +1291,14 @@ export default function GeneratePage() {
               {primaryModel.editVariant && (
                 <div>
                   <SectionLabel>Reference Images</SectionLabel>
-                  <div className="flex flex-wrap gap-2">
+                  <div
+                    className={`flex flex-wrap gap-2 rounded-lg p-1.5 -m-1.5 transition ${
+                      refsDragOver ? "bg-accent/10 ring-1 ring-accent/30" : ""
+                    }`}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setRefsDragOver(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); setRefsDragOver(false); }}
+                    onDrop={handleRefsDrop}
+                  >
                     {referenceImages.map((img) => (
                       <div
                         key={img.id}
@@ -1110,7 +1328,11 @@ export default function GeneratePage() {
                     {referenceImages.length < maxImages && (
                       <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted/40 transition hover:border-accent/40 hover:text-accent"
+                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed transition ${
+                          refsDragOver
+                            ? "border-accent bg-accent/10 text-accent-text"
+                            : "border-border text-muted hover:border-accent/40 hover:text-accent"
+                        }`}
                       >
                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                           <path d="M9 3v12M3 9h12" />
@@ -1127,7 +1349,7 @@ export default function GeneratePage() {
                     className="hidden"
                   />
                   {hasRefs && (
-                    <p className="mt-1.5 text-[10px] text-accent/60">
+                    <p className="mt-1.5 text-[10px] text-accent/80">
                       Auto-switching to {currentEffectiveModel.name}
                     </p>
                   )}
@@ -1214,7 +1436,7 @@ export default function GeneratePage() {
                 <div>
                   <button
                     onClick={() => setNegativeOpen(!negativeOpen)}
-                    className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-wider text-muted transition hover:text-foreground"
+                    className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-wider text-foreground/60 transition hover:text-foreground"
                   >
                     Negative Prompt
                     <IconChevron open={negativeOpen} />
@@ -1225,12 +1447,29 @@ export default function GeneratePage() {
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       placeholder="What to avoid..."
                       rows={3}
-                      className="mt-2 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition placeholder:text-muted/40 focus:border-accent"
+                      className="mt-2 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition placeholder:text-muted focus:border-accent"
                     />
                   )}
                 </div>
               )}
             </div>
+            ) : (
+              /* Placeholder for upcoming modes */
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-hover text-muted">
+                  {IMAGE_MODES.find((m) => m.id === activeMode)?.icon}
+                </div>
+                <p className="text-sm font-semibold text-foreground">
+                  {IMAGE_MODES.find((m) => m.id === activeMode)?.label}
+                </p>
+                <p className="mt-1 text-[11px] text-muted">
+                  {IMAGE_MODES.find((m) => m.id === activeMode)?.description}
+                </p>
+                <span className="mt-3 rounded-full bg-accent/10 px-3 py-1 text-[10px] font-semibold text-accent-text">
+                  Coming soon
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Sidebar bottom spacer — prompt moved to floating bar */}
@@ -1248,6 +1487,7 @@ export default function GeneratePage() {
                   models={selectableModels}
                   selectedIds={selectedModelIds}
                   onChange={handleModelsChange}
+                  pricing={pricing}
                 />
               </div>
               <div className="flex gap-1">
@@ -1297,25 +1537,30 @@ export default function GeneratePage() {
                   }
                 }}
                 placeholder="Describe your image..."
-                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-3 pt-2.5 pb-0.5 text-sm text-foreground outline-none placeholder:text-muted/30"
+                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-3 pt-2.5 pb-0.5 text-sm text-foreground outline-none placeholder:text-muted"
                 style={{ minHeight: "38px", maxHeight: "100px" }}
               />
               <div className="flex items-center justify-end px-2 pb-2 pt-0.5">
                 <button
                   onClick={() => handleGenerate()}
                   disabled={!canGenerate}
-                  className={`flex items-center gap-1.5 rounded-full py-1.5 pl-2.5 pr-3 text-[11px] font-semibold transition ${
+                  className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold transition ${
                     canGenerate
                       ? "bg-accent text-black hover:bg-accent-hover"
-                      : "cursor-not-allowed bg-surface-hover text-muted/30"
+                      : "cursor-not-allowed bg-surface-hover text-muted/50"
                   }`}
                 >
                   {isGenerating ? (
-                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
                   ) : (
-                    <IconSparkle size={10} />
+                    <IconSparkle size={12} />
                   )}
                   Generate
+                  {estimatedCredits > 0 && !isGenerating && (
+                    <span className="flex items-center gap-1 opacity-60">
+                      <CreditIcon size={10} /> {estimatedCredits}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -1325,7 +1570,7 @@ export default function GeneratePage() {
           <div className="flex-1 overflow-y-auto p-3">
             {!hasAnyContent ? (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-muted/40">Generate your first image</p>
+                <p className="text-sm text-muted/60">Generate your first image</p>
               </div>
             ) : (
               <GalleryGrid
@@ -1359,39 +1604,144 @@ export default function GeneratePage() {
             ================================================================ */}
         <main ref={galleryRef} className="relative hidden min-w-0 flex-1 flex-col lg:flex">
           {!hasAnyContent ? (
-            /* Empty state */
+            /* Empty / loading state */
             <div className="flex flex-1 items-center justify-center pb-32">
-              <div className="text-center">
-                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-surface">
-                  <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted/30">
-                    <rect x="2" y="2" width="16" height="16" rx="3" />
-                    <circle cx="7" cy="7" r="1.5" />
-                    <path d="M2 14l4-4 3 3 4-4 5 5" />
-                  </svg>
+              {generationsLoading ? (
+                <div className="w-full p-4">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse rounded-lg bg-surface"
+                        style={{ aspectRatio: [1, 0.75, 1.33, 0.66, 1, 0.75, 1.33, 1, 0.66, 1, 0.75, 1.33][i] }}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <p className="text-sm font-medium text-muted/40">
-                  Your generations will appear here
-                </p>
-                <p className="mt-1.5 text-[11px] text-muted/25">
-                  Write a prompt and hit Generate
-                </p>
-              </div>
+              ) : (
+                <div className="text-center">
+                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-surface">
+                    <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted/50">
+                      <rect x="2" y="2" width="16" height="16" rx="3" />
+                      <circle cx="7" cy="7" r="1.5" />
+                      <path d="M2 14l4-4 3 3 4-4 5 5" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-muted/60">
+                    Your generations will appear here
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-muted/50">
+                    Write a prompt and hit Generate
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
-              {/* Gallery toolbar */}
-              <div className="flex items-center justify-between border-b border-border/50 px-4 py-1.5">
-                {/* Left — image count */}
-                <span className="text-[10px] font-medium text-muted/50">
-                  {history.length} {history.length === 1 ? "image" : "images"}
-                </span>
+              {/* Gallery toolbar — Freepik-style filter bar */}
+              <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
+                {/* Left — count + placeholder for future actions */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-medium text-muted/50">
+                    {filteredHistory.length}{filteredHistory.length !== history.length ? `/${history.length}` : ""} {history.length === 1 ? "item" : "items"}
+                  </span>
+                </div>
 
-                {/* Right — search + size slider */}
-                <div className="flex items-center gap-3">
+                {/* Right — filter group + size slider + search */}
+                <div className="flex items-center gap-2">
+                  {/* Format filter group — bordered pill container */}
+                  <div className="flex items-center rounded-lg border border-border/60 bg-surface/50">
+                    {([
+                      { id: "all" as GalleryFilter, label: "All", icon: (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                          <rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1" />
+                          <rect x="8" y="1.5" width="4.5" height="4.5" rx="1" />
+                          <rect x="1.5" y="8" width="4.5" height="4.5" rx="1" />
+                          <rect x="8" y="8" width="4.5" height="4.5" rx="1" />
+                        </svg>
+                      )},
+                      { id: "images" as GalleryFilter, label: "Images", icon: (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="1.5" y="2" width="11" height="10" rx="1.5" />
+                          <circle cx="4.5" cy="5" r="1.2" />
+                          <path d="M1.5 10l3-3 2 2 3-3 3 3" />
+                        </svg>
+                      )},
+                      { id: "videos" as GalleryFilter, label: "Videos", icon: (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="1.5" y="2.5" width="8" height="9" rx="1.5" />
+                          <path d="M9.5 5.5l3-1.5v6l-3-1.5" />
+                        </svg>
+                      )},
+                      { id: "audio" as GalleryFilter, label: "Audio", icon: (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                          <path d="M3 5.5v3M5.5 4v6M8 3v8M10.5 5v4" />
+                        </svg>
+                      )},
+                      { id: "loved" as GalleryFilter, label: "Loved", icon: (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill={galleryFilter === "loved" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.3">
+                          <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
+                        </svg>
+                      )},
+                    ]).map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setGalleryFilter(f.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium transition first:rounded-l-lg last:rounded-r-lg ${
+                          galleryFilter === f.id
+                            ? "bg-accent/12 text-accent-text"
+                            : "text-muted/60 hover:bg-surface-hover hover:text-foreground"
+                        }`}
+                        title={f.label}
+                      >
+                        {f.icon}
+                        <span className="hidden xl:inline">{f.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="h-4 w-px bg-border/60" />
+
+                  {/* Size slider */}
+                  <div className="flex items-center gap-1.5">
+                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/50">
+                      <rect x="1" y="1" width="5" height="5" rx="1" />
+                      <rect x="8" y="1" width="5" height="5" rx="1" />
+                      <rect x="1" y="8" width="5" height="5" rx="1" />
+                      <rect x="8" y="8" width="5" height="5" rx="1" />
+                    </svg>
+                    <input
+                      type="range"
+                      min={0}
+                      max={5}
+                      step={1}
+                      value={[0.4, 0.6, 0.8, 1.0, 1.3, 1.7].indexOf(galleryRowHeight) !== -1
+                        ? [0.4, 0.6, 0.8, 1.0, 1.3, 1.7].indexOf(galleryRowHeight)
+                        : 3}
+                      onChange={(e) => {
+                        const scales = [0.4, 0.6, 0.8, 1.0, 1.3, 1.7];
+                        const v = scales[Number(e.target.value)];
+                        setGalleryRowHeight(v);
+                        saveStorage(STORAGE_KEYS.gallerySize, v);
+                      }}
+                      className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-border [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
+                    />
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/50">
+                      <rect x="1" y="1" width="5" height="5" rx="1" />
+                      <rect x="8" y="1" width="5" height="5" rx="1" />
+                      <rect x="1" y="8" width="5" height="5" rx="1" />
+                      <rect x="8" y="8" width="5" height="5" rx="1" />
+                    </svg>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="h-4 w-px bg-border/60" />
+
                   {/* Search */}
                   <div className="flex items-center">
                     {searchOpen ? (
-                      <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-0.5">
+                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1">
                         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-muted/50">
                           <circle cx="6" cy="6" r="4.5" /><path d="M9.5 9.5L13 13" />
                         </svg>
@@ -1399,8 +1749,8 @@ export default function GeneratePage() {
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search prompts..."
-                          className="w-28 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted/30"
+                          placeholder="Search..."
+                          className="w-24 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Escape") {
@@ -1412,7 +1762,7 @@ export default function GeneratePage() {
                         {searchQuery && (
                           <button
                             onClick={() => setSearchQuery("")}
-                            className="text-muted/40 hover:text-foreground"
+                            className="text-muted/60 hover:text-foreground"
                           >
                             <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                               <path d="M1 1l6 6M7 1l-6 6" />
@@ -1423,7 +1773,7 @@ export default function GeneratePage() {
                     ) : (
                       <button
                         onClick={() => setSearchOpen(true)}
-                        className="rounded-md p-1 text-muted/40 transition hover:bg-surface hover:text-foreground"
+                        className="rounded-md p-1.5 text-muted/50 transition hover:bg-surface hover:text-foreground"
                         title="Search"
                       >
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -1432,61 +1782,22 @@ export default function GeneratePage() {
                       </button>
                     )}
                   </div>
-
-                  {/* Favorites filter */}
-                  <button
-                    onClick={() => setFavoritesOnly(!favoritesOnly)}
-                    className={`rounded-md p-1 transition ${
-                      favoritesOnly
-                        ? "bg-red-500/10 text-red-400"
-                        : "text-muted/40 hover:bg-surface hover:text-foreground"
-                    }`}
-                    title={favoritesOnly ? "Show all" : "Show favorites"}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill={favoritesOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
-                      <path d="M7 12.5S1 8.5 1 5a3 3 0 015.5-1.5h1A3 3 0 0113 5c0 3.5-6 7.5-6 7.5z" />
-                    </svg>
-                  </button>
-
-                  {/* Divider */}
-                  <div className="h-3.5 w-px bg-border" />
-
-                  {/* Size slider */}
-                  <div className="flex items-center gap-2">
-                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/40">
-                      <rect x="1" y="1" width="5" height="5" rx="1" />
-                      <rect x="8" y="1" width="5" height="5" rx="1" />
-                      <rect x="1" y="8" width="5" height="5" rx="1" />
-                      <rect x="8" y="8" width="5" height="5" rx="1" />
-                    </svg>
-                    <input
-                      type="range"
-                      min={0}
-                      max={5}
-                      step={1}
-                      value={[80, 130, 180, 260, 350, 440].indexOf(galleryRowHeight) !== -1
-                        ? [80, 130, 180, 260, 350, 440].indexOf(galleryRowHeight)
-                        : 2}
-                      onChange={(e) => {
-                        const sizes = [80, 130, 180, 260, 350, 440];
-                        const v = sizes[Number(e.target.value)];
-                        setGalleryRowHeight(v);
-                        saveStorage(STORAGE_KEYS.gallerySize, v);
-                      }}
-                      className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-border [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
-                    />
-                    <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/40">
-                      <rect x="1" y="1" width="5" height="5" rx="1" />
-                      <rect x="8" y="1" width="5" height="5" rx="1" />
-                      <rect x="1" y="8" width="5" height="5" rx="1" />
-                      <rect x="8" y="8" width="5" height="5" rx="1" />
-                    </svg>
-                  </div>
                 </div>
               </div>
 
               {/* Gallery content — extra bottom padding for floating prompt bar */}
               <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 pb-28">
+                {generationsLoading && history.length === 0 ? (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse rounded-lg bg-surface"
+                        style={{ aspectRatio: [1, 0.75, 1.33, 0.66, 1, 0.75, 1.33, 1, 0.66, 1, 0.75, 1.33][i] }}
+                      />
+                    ))}
+                  </div>
+                ) : (
                 <GalleryGrid
                   results={filteredHistory}
                   latestBatchId={currentBatchId}
@@ -1509,6 +1820,7 @@ export default function GeneratePage() {
                   onFavorite={toggleFavorite}
                   onDelete={deleteImage}
                 />
+                )}
               </div>
 
             </div>
@@ -1553,7 +1865,7 @@ export default function GeneratePage() {
                   {referenceImages.length < maxImages && (
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 text-muted/30 transition hover:border-accent/40 hover:text-accent"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 text-muted/50 transition hover:border-accent/40 hover:text-accent"
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M7 2v10M2 7h10" />
@@ -1580,7 +1892,7 @@ export default function GeneratePage() {
                   }
                 }}
                 placeholder={promptBarDragOver ? "Drop image to use as reference..." : "Describe your image..."}
-                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted/30"
+                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted"
                 style={{ minHeight: "44px", maxHeight: "140px" }}
               />
 
@@ -1591,7 +1903,7 @@ export default function GeneratePage() {
                   {primaryModel.editVariant && (
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/40 transition hover:border-accent/40 hover:text-accent"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/60 transition hover:border-accent/40 hover:text-accent"
                       title="Add reference image"
                     >
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1599,22 +1911,27 @@ export default function GeneratePage() {
                       </svg>
                     </button>
                   )}
-                  <span className="select-none text-[10px] text-muted/20">
+                  <span className="select-none text-[10px] text-muted/40">
                     ↵ generate · ⇧↵ new line
                   </span>
                 </div>
                 <button
                   onClick={() => handleGenerate()}
                   disabled={!canGenerate}
-                  className={`flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-3.5 text-[11px] font-semibold tracking-wide transition ${
+                  className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
                     canGenerate
                       ? "bg-accent text-black hover:bg-accent-hover"
-                      : "cursor-not-allowed bg-surface-hover text-muted/30"
+                      : "cursor-not-allowed bg-surface-hover text-muted/50"
                   }`}
                   title="Generate (Enter)"
                 >
-                  <IconSparkle size={11} />
+                  <IconSparkle size={12} />
                   Generate
+                  {estimatedCredits > 0 && (
+                    <span className="flex items-center gap-1 opacity-60">
+                      <CreditIcon size={10} /> {estimatedCredits}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -1714,6 +2031,7 @@ function ImageLightbox({
 }) {
   const [promptCopied, setPromptCopied] = useState(false);
   const [imageMeta, setImageMeta] = useState<{ w: number; h: number; sizeKB: number | null }>({ w: result.width, h: result.height, sizeKB: null });
+  const [lightboxImgLoaded, setLightboxImgLoaded] = useState(false);
   const [showShotPicker, setShowShotPicker] = useState(false);
   const [sceneSearch, setSceneSearch] = useState("");
 
@@ -1737,7 +2055,8 @@ function ImageLightbox({
 
   // Load real dimensions + file size from the image itself
   useEffect(() => {
-    const img = new Image();
+    setLightboxImgLoaded(false);
+    const img = document.createElement("img");
     img.onload = () => {
       setImageMeta((prev) => ({ ...prev, w: img.naturalWidth, h: img.naturalHeight }));
     };
@@ -1794,14 +2113,36 @@ function ImageLightbox({
             </svg>
           </button>
         )}
-        {/* Image */}
+        {/* Image / Video */}
         <div onClick={(e) => e.stopPropagation()}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={result.imageUrl}
-            alt="Preview"
-            className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-2xl"
-          />
+          {result.type === "video" ? (
+            <video
+              src={result.imageUrl}
+              className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-2xl"
+              controls
+              autoPlay
+              loop
+              playsInline
+            />
+          ) : (
+            <div className="relative">
+              {!lightboxImgLoaded && (
+                <div className="flex max-h-[75vh] items-center justify-center" style={{ width: imageMeta.w ? Math.min(imageMeta.w, 1200) : 600, height: imageMeta.h ? Math.min(imageMeta.h, 800) : 400 }}>
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                </div>
+              )}
+              <Image
+                src={result.imageUrl}
+                alt="Preview"
+                width={imageMeta.w || result.width || 1024}
+                height={imageMeta.h || result.height || 1024}
+                quality={90}
+                sizes="75vw"
+                className={`max-h-[75vh] w-auto rounded-xl object-contain shadow-2xl transition-opacity duration-300 ${lightboxImgLoaded ? "opacity-100" : "opacity-0"}`}
+                onLoad={() => setLightboxImgLoaded(true)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Floating toolbar — below image */}
@@ -2122,8 +2463,8 @@ function ImageLightbox({
               {fileSizeLabel && <LightboxRow label="File Size" value={fileSizeLabel} />}
               {result.settings && (
                 <>
-                  <LightboxRow label="Aspect Ratio" value={result.settings.aspectRatio} />
-                  <LightboxRow label="Resolution" value={result.settings.resolution.toUpperCase()} />
+                  {result.settings.aspectRatio && <LightboxRow label="Aspect Ratio" value={result.settings.aspectRatio} />}
+                  {result.settings.resolution && <LightboxRow label="Resolution" value={result.settings.resolution.toUpperCase()} />}
                 </>
               )}
               {result.seed != null && (
@@ -2168,10 +2509,32 @@ interface GallerySlot {
 
 type GalleryEntry = GalleryItem | GallerySlot;
 
+// Base height tiers based on dominant orientation
+const ROW_HEIGHT_LANDSCAPE = 160;
+const ROW_HEIGHT_SQUARE = 210;
+const ROW_HEIGHT_PORTRAIT = 300;
+
+function getDominantHeight(row: GalleryEntry[], scale: number): number {
+  let portrait = 0;
+  let landscape = 0;
+  let square = 0;
+  for (const e of row) {
+    const ar = e.aspectRatio;
+    if (ar < 0.85) portrait++;
+    else if (ar > 1.2) landscape++;
+    else square++;
+  }
+  let base: number;
+  if (portrait >= landscape && portrait >= square) base = ROW_HEIGHT_PORTRAIT;
+  else if (landscape >= portrait && landscape >= square) base = ROW_HEIGHT_LANDSCAPE;
+  else base = ROW_HEIGHT_SQUARE;
+  return base * scale;
+}
+
 function buildJustifiedRows(
   items: GalleryEntry[],
   containerWidth: number,
-  targetRowHeight: number,
+  scale: number,
   gap: number
 ): GalleryEntry[][] {
   if (containerWidth <= 0 || items.length === 0) return [];
@@ -2182,26 +2545,19 @@ function buildJustifiedRows(
   for (const item of items) {
     currentRow.push(item);
 
-    // Calculate what height this row would be if justified to fill container width
     const totalGap = (currentRow.length - 1) * gap;
     const availableWidth = containerWidth - totalGap;
     const totalAR = currentRow.reduce((sum, e) => sum + e.aspectRatio, 0);
     const rowHeight = availableWidth / totalAR;
 
-    // Adjust target based on dominant aspect ratio:
-    // Portrait-heavy rows (low avg AR) → taller rows, fewer images
-    // Landscape-heavy rows (high avg AR) → shorter rows, more images
-    const avgAR = totalAR / currentRow.length;
-    const arFactor = Math.max(0.7, Math.min(1.4, 1 / avgAR));
-    const adjustedTarget = targetRowHeight * arFactor;
+    const targetHeight = getDominantHeight(currentRow, scale);
 
-    if (rowHeight <= adjustedTarget) {
+    if (rowHeight <= targetHeight) {
       rows.push(currentRow);
       currentRow = [];
     }
   }
 
-  // Last (potentially incomplete) row
   if (currentRow.length > 0) {
     rows.push(currentRow);
   }
@@ -2254,6 +2610,21 @@ function GalleryGrid({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  // Cache detected aspect ratios by URL (populated by img onLoad)
+  const [arCache, setArCache] = useState<Record<string, number>>({});
+  const arCacheRef = useRef(arCache);
+  arCacheRef.current = arCache;
+  // Track which URLs have finished loading (survives filter switches)
+  const [loadedUrls, setLoadedUrls] = useState<Set<string>>(() => new Set());
+  const markLoaded = useCallback((url: string) => {
+    setLoadedUrls((prev) => { if (prev.has(url)) return prev; const next = new Set(prev); next.add(url); return next; });
+  }, []);
+
+  const onImageLoad = useCallback((url: string, naturalW: number, naturalH: number) => {
+    if (naturalW > 0 && naturalH > 0 && !arCacheRef.current[url]) {
+      setArCache((prev) => ({ ...prev, [url]: naturalW / naturalH }));
+    }
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -2281,11 +2652,22 @@ function GalleryGrid({
       modelName: slot.modelName,
       aspectRatio: slotAspectRatio,
     })),
-    ...results.map((r): GalleryItem => ({
-      type: "result",
-      result: r,
-      aspectRatio: r.width && r.height ? r.width / r.height : 1,
-    })),
+    ...results.map((r): GalleryItem => {
+      // 1. Cached natural dimensions from img onLoad
+      let ar = arCache[r.imageUrl];
+      // 2. DB dimensions
+      if (!ar && r.width && r.height) {
+        ar = r.width / r.height;
+      }
+      // 3. Settings aspect ratio string (e.g. "16:9")
+      if (!ar && r.settings?.aspectRatio) {
+        const [w, h] = r.settings.aspectRatio.split(":").map(Number);
+        if (w && h) ar = w / h;
+      }
+      // 4. Default: 16:9 for video, 1:1 for image
+      if (!ar) ar = r.type === "video" ? 16 / 9 : 1;
+      return { type: "result", result: r, aspectRatio: ar };
+    }),
   ];
 
   const rows = buildJustifiedRows(entries, containerWidth, targetRowHeight, gap);
@@ -2336,7 +2718,7 @@ function GalleryGrid({
               if (e.key === "Escape") setShowEditPrompt(false);
             }}
             placeholder="Describe the edit..."
-            className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted/40"
+            className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
             autoFocus
           />
           <button
@@ -2360,14 +2742,15 @@ function GalleryGrid({
         <div className="flex flex-col" style={{ gap }}>
           {rows.map((row, rowIdx) => {
             // Justify: all rows fill exact container width
-            // Only cap last row if 1-2 images would make it absurdly tall
             const totalGap = (row.length - 1) * gap;
             const availableWidth = containerWidth - totalGap;
             const totalAR = row.reduce((sum, e) => sum + e.aspectRatio, 0);
             const justifiedHeight = availableWidth / totalAR;
+            const dominantHeight = getDominantHeight(row, targetRowHeight);
             const isLastRow = rowIdx === rows.length - 1;
-            const rowHeight = (isLastRow && row.length <= 2 && justifiedHeight > targetRowHeight * 1.5)
-              ? targetRowHeight
+            // Cap last row if too few images would make it absurdly tall
+            const rowHeight = (isLastRow && row.length <= 2 && justifiedHeight > dominantHeight * 1.5)
+              ? dominantHeight
               : justifiedHeight;
 
             return (
@@ -2377,14 +2760,19 @@ function GalleryGrid({
                     return (
                       <div
                         key={entry.slotId}
-                        className="glow-border flex min-w-0 items-center justify-center rounded-lg border border-accent/15 bg-surface"
+                        className="relative min-w-0 overflow-hidden rounded-lg"
                         style={{ flex: `1 1 ${rowHeight * entry.aspectRatio}px`, height: rowHeight }}
                       >
-                        <div className="text-center">
-                          <div className="mx-auto mb-1.5 h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                          <p className="text-[9px] font-medium text-muted">
+                        {/* Shimmer skeleton background */}
+                        <div className="absolute inset-0 animate-pulse bg-surface" />
+                        {/* Sweeping shimmer effect */}
+                        <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.07] to-transparent" />
+                        {/* Label */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                          <div className="h-6 w-24 animate-pulse rounded-md bg-border/40" />
+                          <span className="animate-pulse text-[10px] font-medium text-muted/50">
                             {entry.modelName}
-                          </p>
+                          </span>
                         </div>
                       </div>
                     );
@@ -2410,6 +2798,9 @@ function GalleryGrid({
                         onDelete={() => onDelete(r.requestId)}
                         onClick={() => onClickImage(r)}
                         copied={copiedId === r.requestId}
+                        onImageLoad={onImageLoad}
+                        isLoaded={loadedUrls.has(r.imageUrl)}
+                        onMediaLoaded={markLoaded}
                       />
                     </div>
                   );

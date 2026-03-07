@@ -15,7 +15,11 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Lightbox } from "@/components/shots/Lightbox";
 import { ShotCard } from "@/components/shots/ShotCard";
 import { StoryboardCard } from "@/components/shots/StoryboardCard";
+import { StoryboardShotModal } from "@/components/shots/StoryboardShotModal";
+import { usePricing } from "@/hooks/usePricing";
+import { CreditIcon } from "@/components/ModelSelector";
 import type { Shot, ShotStatus, ImageSettings, VideoSettings, ShotSettings, UploadedRef } from "@/types/shots";
+import Image from "next/image";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
@@ -282,6 +286,7 @@ function SceneOverview({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [loadedThumbs, setLoadedThumbs] = useState<Set<string>>(new Set());
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -325,8 +330,18 @@ function SceneOverview({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {scenes.map((scene) => {
               const shotCount = scene.shots.length;
-              const imgDone = scene.shots.filter((s) => (s as Record<string, unknown>).imageStatus === "done").length;
-              const vidDone = scene.shots.filter((s) => (s as Record<string, unknown>).videoStatus === "done").length;
+              const imgCount = scene.shots.reduce((sum, raw) => {
+                const s = raw as Record<string, unknown>;
+                let count = Array.isArray(s.imageHistory) ? (s.imageHistory as string[]).length : 0;
+                if (s.imageUrl && !(Array.isArray(s.imageHistory) && (s.imageHistory as string[]).includes(s.imageUrl as string))) count++;
+                return sum + count;
+              }, 0);
+              const vidCount = scene.shots.reduce((sum, raw) => {
+                const s = raw as Record<string, unknown>;
+                let count = Array.isArray(s.videoHistory) ? (s.videoHistory as string[]).length : 0;
+                if (s.videoUrl && !(Array.isArray(s.videoHistory) && (s.videoHistory as string[]).includes(s.videoUrl as string))) count++;
+                return sum + count;
+              }, 0);
               // Find first shot with an image for thumbnail
               const thumbShot = scene.shots.find((s) => (s as Record<string, unknown>).imageUrl) as Record<string, unknown> | undefined;
               const thumbUrl = thumbShot?.imageUrl as string | undefined;
@@ -343,8 +358,17 @@ function SceneOverview({
                     className="relative block aspect-video w-full overflow-hidden bg-background"
                   >
                     {thumbUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      <>
+                        {!loadedThumbs.has(scene.id) && <div className="absolute inset-0 animate-pulse rounded-lg bg-surface" />}
+                        <Image
+                          src={thumbUrl}
+                          alt=""
+                          fill
+                          sizes="(max-width: 640px) 100vw, 320px"
+                          className={`object-cover transition-opacity ${loadedThumbs.has(scene.id) ? "opacity-100" : "opacity-0"}`}
+                          onLoad={() => setLoadedThumbs((prev) => new Set(prev).add(scene.id))}
+                        />
+                      </>
                     ) : (
                       <div className="flex h-full w-full items-center justify-center">
                         <Film size={32} className="text-muted/20" />
@@ -359,14 +383,14 @@ function SceneOverview({
                     </div>
                     {/* Stats badges */}
                     <div className="absolute bottom-2 right-2 flex gap-1.5">
-                      {imgDone > 0 && (
+                      {imgCount > 0 && (
                         <span className="rounded-full bg-accent/80 px-2 py-0.5 text-[9px] font-bold text-black">
-                          {imgDone} img
+                          {imgCount} img
                         </span>
                       )}
-                      {vidDone > 0 && (
+                      {vidCount > 0 && (
                         <span className="rounded-full bg-accent/80 px-2 py-0.5 text-[9px] font-bold text-black">
-                          {vidDone} vid
+                          {vidCount} vid
                         </span>
                       )}
                     </div>
@@ -400,7 +424,7 @@ function SceneOverview({
                       <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
                         <button
                           onClick={() => { setEditingId(scene.id); setEditName(scene.name); }}
-                          className="rounded p-1 text-muted/50 transition hover:bg-surface-hover hover:text-foreground"
+                          className="rounded-md p-1 text-muted/50 transition hover:bg-surface-hover hover:text-foreground"
                           title="Rename"
                         >
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -410,14 +434,14 @@ function SceneOverview({
                         {deleteConfirm === scene.id ? (
                           <button
                             onClick={() => { onDeleteScene(scene.id); setDeleteConfirm(null); }}
-                            className="rounded px-1.5 py-0.5 text-[9px] font-medium text-destructive transition hover:bg-destructive/10"
+                            className="rounded-md px-1.5 py-0.5 text-[9px] font-medium text-destructive transition hover:bg-destructive/10"
                           >
                             Confirm
                           </button>
                         ) : (
                           <button
                             onClick={() => setDeleteConfirm(scene.id)}
-                            className="rounded p-1 text-muted/50 transition hover:bg-surface-hover hover:text-destructive"
+                            className="rounded-md p-1 text-muted/50 transition hover:bg-surface-hover hover:text-destructive"
                             title="Delete"
                           >
                             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -665,6 +689,9 @@ export function ShotListEditor({
   // --- Settings panel toggle ---
   const [showSettings, setShowSettings] = useState(false);
 
+  // --- Credit pricing ---
+  const { pricing } = usePricing();
+
   // --- Localhost detection (for output folder) ---
   const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
@@ -680,11 +707,13 @@ export function ShotListEditor({
   const [pasteText, setPasteText] = useState("");
   const [lightbox, setLightbox] = useState<{ src: string; type: "image" | "video"; shotId?: string; shotNumber?: string } | null>(null);
   const [newShotModal, setNewShotModal] = useState<{ imageUrl: string; suggestedNumber: string } | null>(null);
+  const [newShotRefLoaded, setNewShotRefLoaded] = useState(false);
   const [addShotModal, setAddShotModal] = useState<{ suggestedNumber: string } | null>(null);
   const [modalRefs, setModalRefs] = useState<UploadedRef[]>([]);
   const [modalFirstFrame, setModalFirstFrame] = useState<string | null>(null);
   const [modalEndFrame, setModalEndFrame] = useState<UploadedRef | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string } | null>(null);
+  const [storyboardModal, setStoryboardModal] = useState<{ shotId: string; mode: "image" | "video" } | null>(null);
 
   // --- Auto-save to scene on changes ---
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -832,6 +861,7 @@ export function ShotListEditor({
       const n = parseInt(String(s.number), 10) || 0;
       return n > max ? n : max;
     }, 0);
+    setNewShotRefLoaded(false);
     setNewShotModal({ imageUrl, suggestedNumber: String(maxNum + 1) });
   }, [shots]);
 
@@ -1626,21 +1656,24 @@ export function ShotListEditor({
   const allImagesDone =
     shots.length > 0 && shots.every((s) => s.imageStatus === "done");
 
-  const estimatedImageCost = (() => {
-    const cost = parseFloat(
-      effectiveModel.costPerImage.replace(/[^0-9.]/g, "")
-    );
-    return (cost * shots.length).toFixed(2);
-  })();
+  // Total images/videos across all shots (all generations + any active URL not in history)
+  const totalImages = shots.reduce((sum, s) => {
+    let count = s.imageHistory?.length ?? 0;
+    if (s.imageUrl && !(s.imageHistory ?? []).includes(s.imageUrl)) count++;
+    return sum + count;
+  }, 0);
+  const totalVideos = shots.reduce((sum, s) => {
+    let count = s.videoHistory?.length ?? 0;
+    if (s.videoUrl && !(s.videoHistory ?? []).includes(s.videoUrl)) count++;
+    return sum + count;
+  }, 0);
 
-  const estimatedVideoCost = (() => {
-    const costPer5 = parseFloat(
-      selectedVideoModel.costPer5Sec.replace(/[^0-9.]/g, "")
-    );
-    const costPerSec = costPer5 / 5;
-    const readyShots = shots.filter((s) => s.imageStatus === "done").length;
-    return (costPerSec * duration * readyShots).toFixed(2);
-  })();
+  // Estimated credits for generating all shots with current settings
+  const estimatedCredits = useMemo(() => {
+    const imgCredits = pricing[effectiveModel.id]?.effective_credits ?? 0;
+    const vidCredits = pricing[selectedVideoModel.id]?.effective_credits ?? 0;
+    return (imgCredits + vidCredits) * shots.length;
+  }, [pricing, effectiveModel.id, selectedVideoModel.id, shots.length]);
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
@@ -1815,17 +1848,22 @@ export function ShotListEditor({
                 <span>{shots.length} shot{shots.length !== 1 ? "s" : ""}</span>
                 <span className="text-border">|</span>
                 <span>
-                  Img {imagesCompleted}/{shots.length}
+                  {totalImages} img
                   {imagesGenerating > 0 && <span className="text-accent"> ({imagesGenerating})</span>}
                 </span>
                 <span className="text-border">|</span>
                 <span>
-                  Vid {videosCompleted}/{shots.length}
+                  {totalVideos} vid
                   {videosGenerating > 0 && <span className="text-accent"> ({videosGenerating})</span>}
                 </span>
-                <span className="text-border">|</span>
-                <span>~${estimatedImageCost}</span>
-                {allImagesDone && <><span className="text-border">|</span><span>~${estimatedVideoCost} vid</span></>}
+                {estimatedCredits > 0 && (
+                  <>
+                    <span className="text-border">|</span>
+                    <span className="flex items-center gap-1">
+                      ~<CreditIcon size={10} /> {estimatedCredits}
+                    </span>
+                  </>
+                )}
               </div>
             )}
 
@@ -2255,6 +2293,7 @@ export function ShotListEditor({
                 globalAspectRatio={aspectRatio}
                 globalGenerateAudio={generateAudio}
                 globalResolution={resolution}
+                globalCameraFixed={cameraFixed}
                 videoModel={selectedVideoModel}
                 onUpdate={(updates) => updateShot(shot.id, updates)}
                 onRemove={() => removeShot(shot.id)}
@@ -2279,41 +2318,45 @@ export function ShotListEditor({
                 imageModel={selectedImageModel}
                 onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
+                onLastFrameToNext={(frameUrl) => {
+                  if (idx < sortedShots.length - 1) {
+                    const nextShot = sortedShots[idx + 1];
+                    updateShot(nextShot.id, { imageUrl: frameUrl, imageStatus: "done" as ShotStatus });
+                  } else {
+                    confirmNewShotFromRef(frameUrl, String((parseInt(String(shot.number), 10) || 0) + 1));
+                  }
+                }}
               />
               </div>
             ))}
           </div>
         ) : (
           <div className="storyboard-scroll -mx-3 flex gap-3 overflow-x-auto px-3 py-3" style={{ scrollSnapType: "x mandatory" }}>
-            {sortedShots.map((shot) => (
+            {sortedShots.map((shot, idx) => (
               <div key={shot.id} id={`shot-${shot.id}`}>
               <StoryboardCard
                 shot={shot}
-                masterRefs={charRefs}
                 globalDuration={duration}
                 globalAspectRatio={aspectRatio}
-                globalGenerateAudio={generateAudio}
-                globalResolution={resolution}
-                videoModel={selectedVideoModel}
-                imageModel={selectedImageModel}
+                isBlurred={!!storyboardModal && storyboardModal.shotId !== shot.id}
                 onUpdate={(updates) => updateShot(shot.id, updates)}
                 onRemove={() => removeShot(shot.id)}
-                onRefUpload={(e) => handleShotRefUpload(shot.id, e)}
-                onRefFileDrop={(files) => handleShotRefFiles(shot.id, files)}
-                onRefUrlDrop={(url) => handleShotRefUrlDrop(shot.id, url)}
-                onRefRemove={(refId) => removeShotRef(shot.id, refId)}
-                refInputRef={(el) => { shotRefInputs.current[shot.id] = el; }}
                 onGenerateImage={() => generateSingleShot(shot)}
                 onAnimateShot={() => animateSingleShot(shot)}
                 onCancelImage={() => cancelShot(shot.id, "image")}
                 onCancelVideo={() => cancelShot(shot.id, "video")}
                 onOpenLightbox={(src, type) => setLightbox({ src, type, shotId: shot.id, shotNumber: shot.number })}
-                onEndFrameUpload={(e) => handleEndFrameUpload(shot.id, e)}
-                onEndFrameRemove={() => removeEndFrame(shot.id)}
-                onImageSettingsChange={(updates) => updateShotImageSettings(shot.id, updates)}
-                onVideoSettingsChange={(updates) => updateShotVideoSettings(shot.id, updates)}
+                onOpenModal={(mode) => setStoryboardModal({ shotId: shot.id, mode })}
                 onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
+                onLastFrameToNext={(frameUrl) => {
+                  if (idx < sortedShots.length - 1) {
+                    const nextShot = sortedShots[idx + 1];
+                    updateShot(nextShot.id, { imageUrl: frameUrl, imageStatus: "done" as ShotStatus });
+                  } else {
+                    confirmNewShotFromRef(frameUrl, String((parseInt(String(shot.number), 10) || 0) + 1));
+                  }
+                }}
               />
               </div>
             ))}
@@ -2321,6 +2364,37 @@ export function ShotListEditor({
         )}
       </div>
 
+
+      {/* Storyboard Shot Modal */}
+      {storyboardModal && (() => {
+        const modalShot = shots.find((s) => s.id === storyboardModal.shotId);
+        if (!modalShot) return null;
+        return (
+          <StoryboardShotModal
+            shot={modalShot}
+            mode={storyboardModal.mode}
+            masterRefs={charRefs}
+            globalDuration={duration}
+            globalAspectRatio={aspectRatio}
+            globalGenerateAudio={generateAudio}
+            globalResolution={resolution}
+            videoModel={selectedVideoModel}
+            imageModel={selectedImageModel}
+            onUpdate={(updates) => updateShot(modalShot.id, updates)}
+            onRefUpload={(e) => handleShotRefUpload(modalShot.id, e)}
+            onRefFileDrop={(files) => handleShotRefFiles(modalShot.id, files)}
+            onRefUrlDrop={(url) => handleShotRefUrlDrop(modalShot.id, url)}
+            onRefRemove={(refId) => removeShotRef(modalShot.id, refId)}
+            refInputRef={(el) => { shotRefInputs.current[modalShot.id] = el; }}
+            onEndFrameUpload={(e) => handleEndFrameUpload(modalShot.id, e)}
+            onEndFrameRemove={() => removeEndFrame(modalShot.id)}
+            onImageSettingsChange={(updates) => updateShotImageSettings(modalShot.id, updates)}
+            onVideoSettingsChange={(updates) => updateShotVideoSettings(modalShot.id, updates)}
+            onClose={() => setStoryboardModal(null)}
+            onSetMode={(mode) => setStoryboardModal({ shotId: storyboardModal.shotId, mode })}
+          />
+        );
+      })()}
 
       {/* Lightbox Modal */}
       {lightbox && (
@@ -2357,8 +2431,17 @@ export function ShotListEditor({
           <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-5" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-3 text-sm font-semibold">New Shot from Reference</h2>
             <div className="mb-4 flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={newShotModal.imageUrl} alt="Ref" className="h-16 w-12 rounded border border-border object-cover" />
+              <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md border border-border">
+                {!newShotRefLoaded && <div className="absolute inset-0 animate-pulse bg-surface" />}
+                <Image
+                  src={newShotModal.imageUrl}
+                  alt="Ref"
+                  fill
+                  sizes="48px"
+                  className={`object-cover transition-opacity ${newShotRefLoaded ? "opacity-100" : "opacity-0"}`}
+                  onLoad={() => setNewShotRefLoaded(true)}
+                />
+              </div>
               <div className="flex-1">
                 <label className="mb-1 block text-xs font-medium text-muted">Shot Number</label>
                 <input

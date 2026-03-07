@@ -41,6 +41,7 @@ export function Lightbox({
 }: LightboxProps) {
   const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
   const handleDownload = async () => {
     try {
@@ -87,20 +88,28 @@ export function Lightbox({
       )}
 
       {/* Media — clean, no overlays */}
-      <div onClick={(e) => e.stopPropagation()}>
+      <div onClick={(e) => e.stopPropagation()} className="relative">
+        {!mediaLoaded && (
+          <div className="flex max-h-[75vh] max-w-[90vw] items-center justify-center rounded-xl bg-surface/50" style={{ minWidth: 320, minHeight: 240 }}>
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
+          </div>
+        )}
         {type === "video" ? (
           <video
             src={src}
             controls
             autoPlay
-            className="max-h-[75vh] max-w-[90vw] rounded-xl shadow-2xl"
+            className={`max-h-[75vh] max-w-[90vw] rounded-xl shadow-2xl transition-opacity duration-300 ${mediaLoaded ? "opacity-100" : "opacity-0 absolute"}`}
+            onLoadedData={() => setMediaLoaded(true)}
+            onLoadedMetadata={() => setMediaLoaded(true)}
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={src}
             alt="Preview"
-            className="max-h-[75vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+            className={`max-h-[75vh] max-w-[90vw] rounded-xl object-contain shadow-2xl transition-opacity duration-300 ${mediaLoaded ? "opacity-100" : "opacity-0 absolute"}`}
+            onLoad={() => setMediaLoaded(true)}
           />
         )}
       </div>

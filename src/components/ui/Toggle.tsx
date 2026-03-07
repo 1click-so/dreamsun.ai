@@ -34,8 +34,8 @@ export function Toggle({ checked, onChange, label, description, size = "md", cla
     >
       {(label || description) && (
         <div className="text-left">
-          {label && <span className="text-sm font-medium text-muted">{label}</span>}
-          {description && <p className="text-xs text-muted/60">{description}</p>}
+          {label && <span className="text-sm font-medium text-foreground/70">{label}</span>}
+          {description && <p className="text-xs text-muted">{description}</p>}
         </div>
       )}
       <span
