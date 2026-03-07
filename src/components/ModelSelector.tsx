@@ -365,9 +365,9 @@ export function ModelSelector({
           stroke="currentColor"
           strokeWidth="1.5"
           strokeLinecap="round"
-          className={`shrink-0 text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-muted transition-transform duration-200 ${open ? "translate-x-0.5" : ""}`}
         >
-          <path d="M3.5 5.25l3.5 3.5 3.5-3.5" />
+          <path d="M5.25 3.5l3.5 3.5-3.5 3.5" />
         </svg>
       </button>
 
