@@ -4,8 +4,10 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "./Logo";
 import { ProfileDropdown } from "./ProfileDropdown";
+import { usePricingOverlay } from "@/contexts/PricingOverlay";
 
 const NAV_ITEMS = [
+  { href: "/explore", label: "Explore" },
   { href: "/images", label: "Images" },
   { href: "/video", label: "Videos" },
 ];
@@ -25,6 +27,7 @@ function NavBlobs() {
 export function Navbar() {
   const pathname = usePathname();
   const isShotsActive = pathname?.startsWith("/shots");
+  const { openPricing } = usePricingOverlay();
 
   return (
     <nav className="relative flex items-center gap-5 border-b border-border px-5 py-3">
@@ -82,8 +85,8 @@ export function Navbar() {
       </div>
 
       <div className="relative ml-auto flex items-center gap-2">
-        <Link
-          href="/pricing"
+        <button
+          onClick={() => openPricing("topup")}
           className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted transition hover:border-accent/40 hover:text-accent"
         >
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -91,7 +94,7 @@ export function Navbar() {
             <path d="M8 4.5L11 6.5V9.5L8 11.5L5 9.5V6.5L8 4.5Z" fill="currentColor" opacity="0.3" />
           </svg>
           Credits
-        </Link>
+        </button>
         <ProfileDropdown />
       </div>
     </nav>

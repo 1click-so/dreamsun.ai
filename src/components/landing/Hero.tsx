@@ -50,7 +50,7 @@ export function Hero() {
           className="font-display text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter leading-[0.9] mb-6"
         >
           Imagine <br />
-          <span className="text-gradient italic pr-4">in Motion.</span>
+          <span className="text-gradient pr-4" style={{ fontFamily: "var(--font-hand)" }}>in Motion.</span>
         </motion.h1>
 
         <motion.p

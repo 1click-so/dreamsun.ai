@@ -41,7 +41,7 @@ export function BentoGrid() {
   return (
     <section id="features" className="py-24 px-6 md:px-12 max-w-7xl mx-auto">
       <div className="mb-16">
-        <h2 className="font-display text-4xl md:text-5xl font-bold mb-4">Creative Superpowers</h2>
+        <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: "var(--font-hand)" }}>Creative Superpowers</h2>
         <p className="text-white/60 text-lg max-w-2xl">Everything you need to bring your imagination to life, powered by our next-generation multimodal models.</p>
       </div>
 

@@ -155,7 +155,10 @@ export default function SceneShotsPage() {
         <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
           <p className="text-sm text-muted">{error || "Scene not found"}</p>
           <button
-            onClick={() => router.push("/shots")}
+            onClick={() => {
+              try { localStorage.removeItem("dreamsun_last_scene"); } catch {}
+              router.push("/shots");
+            }}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black"
           >
             Back to Scenes

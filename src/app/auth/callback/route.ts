@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase-server";
 export async function GET(request: Request) {
   const { searchParams, origin, hash } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/images";
+  const next = searchParams.get("next") ?? "/explore";
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
 

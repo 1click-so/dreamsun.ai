@@ -66,6 +66,7 @@ html.dark {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-outfit);
+  --font-hand: var(--font-gochi);
 
   /* Border Radius Scale
      Hierarchy: sm (tiny badges, corner overlays) → md (thumbnails, small elements)
@@ -259,6 +260,11 @@ textarea:focus {
 
 .animate-marquee-reverse {
   animation: marquee-reverse 45s linear infinite;
+}
+
+@keyframes pricing-slide-up {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ================================================================
