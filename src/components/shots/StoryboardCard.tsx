@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { Shot, ShotStatus } from "@/types/shots";
 import { Button } from "@/components/ui/Button";
+import { CreditIcon } from "@/components/ModelSelector";
 import { extractLastFrameAndUpload } from "@/lib/extract-frame";
 
 /** Module-level cache of URLs that have already loaded — survives re-mounts */
@@ -25,6 +26,8 @@ interface StoryboardCardProps {
   onDropOnFirst: (url: string) => void;
   onDropOnLast: (url: string) => void;
   onLastFrameToNext?: (frameUrl: string) => void;
+  imgCredits?: number;
+  vidCredits?: number;
 }
 
 export function StoryboardCard({
@@ -43,6 +46,8 @@ export function StoryboardCard({
   onDropOnFirst,
   onDropOnLast,
   onLastFrameToNext,
+  imgCredits = 0,
+  vidCredits = 0,
 }: StoryboardCardProps) {
   const [videoPaused, setVideoPaused] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -374,6 +379,11 @@ export function StoryboardCard({
         ) : (
           <Button variant="primary" size="xs" className="flex-1" onClick={onGenerateImage}>
             {shot.imageStatus === "done" ? "Regenerate" : "Generate"}
+            {imgCredits > 0 && (
+              <span className="ml-0.5 flex items-center gap-0.5 opacity-60">
+                <CreditIcon size={7} />{imgCredits}
+              </span>
+            )}
           </Button>
         )}
         {isVideoBusy ? (
@@ -381,6 +391,11 @@ export function StoryboardCard({
         ) : (
           <Button variant="secondary" size="xs" className="flex-1" onClick={onAnimateShot} disabled={!canAnimate}>
             {shot.videoStatus === "done" ? "Re-Animate" : "Animate"}
+            {vidCredits > 0 && (
+              <span className="ml-0.5 flex items-center gap-0.5 opacity-60">
+                <CreditIcon size={7} />{vidCredits}
+              </span>
+            )}
           </Button>
         )}
       </div>

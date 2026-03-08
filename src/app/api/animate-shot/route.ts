@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
-import { writeFile, mkdir, readdir } from "fs/promises";
-import { dirname, join } from "path";
 import { createClient } from "@/lib/supabase-server";
-import { calculateCost, deductCredits, refundCredits } from "@/lib/credits";
+import { calculateCost, deductCredits, refundCredits, tryAutoTopup } from "@/lib/credits";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -16,6 +14,7 @@ export async function POST(req: NextRequest) {
   let userId = "";
   let cost = 0;
   let creditModelId = "";
+  let generationId: string | null = null;
 
   try {
     const supabase = await createClient();
@@ -40,12 +39,11 @@ export async function POST(req: NextRequest) {
       resolution,
       cameraFixed,
       generateAudio,
-      shotNumber,
-      outputFolder,
       multiShot,
       shotType,
       multiPrompt,
       elements: elementUrls,
+      batchId,
     } = body;
 
     if (!videoModelId || !imageUrl) {
@@ -76,6 +74,7 @@ export async function POST(req: NextRequest) {
           { status: 402 }
         );
       }
+      tryAutoTopup(user.id).catch(() => {});
     }
 
     // Build input using model's param mapping
@@ -148,7 +147,6 @@ export async function POST(req: NextRequest) {
     if (multiShot && multiPrompt && Array.isArray(multiPrompt)) {
       input.multi_prompt = multiPrompt;
       input.shot_type = shotType || "customize";
-      // When multi_prompt is used, main prompt is ignored by the API
     }
 
     // Elements (character consistency)
@@ -163,71 +161,77 @@ export async function POST(req: NextRequest) {
 
     console.log(`[animate-shot] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
 
-    const result = await fal.subscribe(endpoint, {
+    // Submit to fal.ai QUEUE (returns immediately with request_id)
+    const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
       input,
-      logs: true,
     });
 
-    const data = result.data as Record<string, unknown>;
+    console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}`);
 
-    // Video models return { video: { url } } or { video_url }
-    let resultVideoUrl: string | null = null;
-    if (data.video && typeof data.video === "object") {
-      const video = data.video as Record<string, unknown>;
-      resultVideoUrl = video.url as string;
-    } else if (typeof data.video_url === "string") {
-      resultVideoUrl = data.video_url;
+    // Build settings/reference data
+    const refUrls: string[] = [];
+    if (imageUrl) refUrls.push(imageUrl);
+    if (endImageUrl) refUrls.push(endImageUrl);
+    if (videoUrl) refUrls.push(videoUrl);
+
+    const settings: Record<string, unknown> = {
+      modelId: videoModelId,
+      mode: videoUrl ? "motion" : "create",
+      falEndpoint: endpoint,
+      falRequestId,
+    };
+    if (!videoUrl) {
+      Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
+    } else {
+      Object.assign(settings, { charOrientation: characterOrientation, keepOriginalSound });
     }
 
-    if (!resultVideoUrl) {
-      return NextResponse.json(
-        { error: "No video generated" },
-        { status: 500 }
-      );
+    // Save PENDING generation to Supabase immediately (url = null = still processing)
+    const { data: genRow, error: genError } = await supabase
+      .from("generations")
+      .insert({
+        user_id: user.id,
+        type: "video",
+        url: null,
+        prompt: prompt || null,
+        negative_prompt: body.negativePrompt || null,
+        model_id: videoModelId,
+        model_name: model.name,
+        seed: null,
+        request_id: falRequestId,
+        width: null,
+        height: null,
+        duration: duration || null,
+        aspect_ratio: aspectRatio || null,
+        resolution: resolution || null,
+        settings,
+        source_image_url: imageUrl || null,
+        reference_image_urls: refUrls.length > 0 ? refUrls : null,
+        batch_id: batchId || null,
+        favorited: false,
+        cost_estimate: cost || null,
+      })
+      .select("id")
+      .single();
+
+    if (genError) {
+      console.error("[animate-shot] DB insert error:", genError);
     }
+    generationId = genRow?.id ?? null;
 
-    let localPath: string | null = null;
+    console.log(`[animate-shot] Pending generation saved: id=${generationId}`);
 
-    // Save to local file if outputFolder is specified
-    if (outputFolder && shotNumber != null) {
-      try {
-        const paddedNum = String(shotNumber).padStart(3, "0");
-        const prefix = `video-shot-${paddedNum}`;
-
-        await mkdir(outputFolder, { recursive: true });
-        let nextGen = 1;
-        try {
-          const existing = await readdir(outputFolder);
-          const pattern = new RegExp(`^${prefix}_(\\d+)\\.mp4$`);
-          for (const f of existing) {
-            const m = f.match(pattern);
-            if (m) nextGen = Math.max(nextGen, Number(m[1]) + 1);
-          }
-        } catch { /* folder doesn't exist yet */ }
-
-        const fileName = `${prefix}_${nextGen}.mp4`;
-        const filePath = join(outputFolder, fileName);
-
-        const vidRes = await fetch(resultVideoUrl);
-        const buffer = Buffer.from(await vidRes.arrayBuffer());
-        await writeFile(filePath, buffer);
-
-        localPath = filePath;
-      } catch (saveErr) {
-        console.error("Failed to save video locally:", saveErr);
-      }
-    }
-
+    // Return immediately — client will poll /api/generation-poll
     return NextResponse.json({
-      videoUrl: resultVideoUrl,
+      generationId,
+      falRequestId,
       model: model.name,
-      requestId: result.requestId,
-      localPath,
       creditsUsed: cost,
+      status: "processing",
     });
   } catch (error: unknown) {
-    // Refund credits on animation failure
-    if (cost > 0 && userId) {
+    // Refund credits on failure (only if we haven't submitted to fal queue)
+    if (cost > 0 && userId && !generationId) {
       await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
     }
     console.error("Animation error:", error);

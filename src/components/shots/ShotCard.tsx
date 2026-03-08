@@ -5,11 +5,14 @@ import Image from "next/image";
 import type { Shot, ShotStatus, ImageSettings, VideoSettings, UploadedRef } from "@/types/shots";
 import type { ModelConfig } from "@/lib/models";
 import type { VideoModelConfig } from "@/lib/video-models";
-import { VIDEO_MODELS } from "@/lib/video-models";
+import { VIDEO_MODELS, getCreateModels } from "@/lib/video-models";
 import { getSelectableModels, getModelById, resolveModel } from "@/lib/models";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { CreditIcon } from "@/components/ModelSelector";
 import { TaggableTextarea } from "@/components/ui/TaggableTextarea";
 import { extractLastFrameAndUpload } from "@/lib/extract-frame";
+import { tierKey, type ModelPricing } from "@/hooks/usePricing";
 
 /** Module-level cache of URLs that have already loaded — survives re-mounts */
 const _loadedUrlCache = new Set<string>();
@@ -27,6 +30,7 @@ interface ShotCardProps {
   globalGenerateAudio: boolean;
   globalResolution: string;
   globalCameraFixed: boolean;
+  globalImageResolution: string;
   videoModel: VideoModelConfig;
   imageModel: ModelConfig;
   onUpdate: (updates: Partial<Shot>) => void;
@@ -50,6 +54,7 @@ interface ShotCardProps {
   onDropOnFirst: (url: string) => void;
   onDropOnLast: (url: string) => void;
   onLastFrameToNext?: (frameUrl: string) => void;
+  pricing: Record<string, ModelPricing>;
 }
 
 /** Video that only loads when scrolled into view, with skeleton loader */
@@ -139,6 +144,7 @@ export function ShotCard({
   globalGenerateAudio,
   globalResolution,
   globalCameraFixed,
+  globalImageResolution,
   videoModel,
   imageModel,
   onUpdate,
@@ -162,6 +168,7 @@ export function ShotCard({
   onLastFrameToNext,
   onMoveUp,
   onMoveDown,
+  pricing,
 }: ShotCardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -226,6 +233,16 @@ export function ShotCard({
   const effImageModel = resolveModel(effImageModelId, hasRefs) ?? imageModel;
   const imageSupportsNeg = effImageModel.supportsNegativePrompt;
   const videoSupportsNeg = effVideoModel.supportsNegativePrompt;
+
+  // Credit cost estimation
+  const imgKey = tierKey(effImageModel.id, globalImageResolution);
+  const imgCredits = pricing[imgKey]?.base_price_credits ?? pricing[effImageModel.id]?.base_price_credits ?? 0;
+  const effDuration = vidSettings.duration ?? globalDuration;
+  const effRes = vidSettings.resolution ?? globalResolution;
+  const effAudioTier = effVideoModel.supportsGenerateAudio ? ((vidSettings.generateAudio ?? globalGenerateAudio) ? "on" : "off") : null;
+  const vidKey = tierKey(effVideoModel.id, effRes, effAudioTier);
+  const vidUnitCost = pricing[vidKey]?.base_price_credits ?? pricing[effVideoModel.id]?.base_price_credits ?? 0;
+  const vidCredits = Math.round(vidUnitCost * effDuration);
 
   const endFrameSrc = shot.endImageRef?.preview ?? shot.endImageUrl;
   const endFrameUploading = shot.endImageRef?.uploading ?? false;
@@ -468,19 +485,27 @@ export function ShotCard({
             <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
               <div>
                 <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Model</label>
-                <select value={imgSettings.modelId ?? ""} onChange={(e) => onImageSettingsChange({ modelId: e.target.value || null })}
-                  className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">{imageModel.name}</option>
-                  {selectableModels.filter((m) => m.id !== imageModel.id).map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
-                </select>
+                <Select
+                  value={imgSettings.modelId ?? ""}
+                  options={[
+                    { value: "", label: imageModel.name },
+                    ...selectableModels.filter((m) => m.id !== imageModel.id).map((m) => ({ value: m.id, label: m.name })),
+                  ]}
+                  onChange={(v) => onImageSettingsChange({ modelId: v || null })}
+                  compact
+                />
               </div>
               <div>
                 <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Ratio</label>
-                <select value={imgSettings.aspectRatio ?? ""} onChange={(e) => onImageSettingsChange({ aspectRatio: e.target.value || null })}
-                  className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">{globalAspectRatio}</option>
-                  {["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"].filter((r) => r !== globalAspectRatio).map((r) => (<option key={r} value={r}>{r}</option>))}
-                </select>
+                <Select
+                  value={imgSettings.aspectRatio ?? ""}
+                  options={[
+                    { value: "", label: globalAspectRatio },
+                    ...["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"].filter((r) => r !== globalAspectRatio).map((r) => ({ value: r, label: r })),
+                  ]}
+                  onChange={(v) => onImageSettingsChange({ aspectRatio: v || null })}
+                  compact
+                />
               </div>
             </div>
           )}
@@ -491,6 +516,11 @@ export function ShotCard({
             ) : (
               <Button variant="primary" size="xs" onClick={onGenerateImage}>
                 {shot.imageStatus === "done" ? "Regenerate" : "Generate"}
+                {imgCredits > 0 && (
+                  <span className="ml-1 flex items-center gap-0.5 opacity-60">
+                    <CreditIcon size={8} />{imgCredits}
+                  </span>
+                )}
               </Button>
             )}
           </div>
@@ -535,30 +565,46 @@ export function ShotCard({
             <div>
               <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Settings</span>
               <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
-                <div className="flex items-center gap-1">
-                  <span className="text-[9px] font-medium uppercase text-muted">Dur</span>
-                  <select value={vidSettings.duration ?? ""} onChange={(e) => onVideoSettingsChange({ duration: e.target.value ? Number(e.target.value) : null })}
-                    className="rounded-lg border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
-                    <option value="">{globalDuration}s</option>
-                    {(effVideoModel.durations ?? []).filter((d) => d !== globalDuration).map((d) => (<option key={d} value={d}>{d}s</option>))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[9px] font-medium uppercase text-muted">Ratio</span>
-                  <select value={vidSettings.aspectRatio ?? ""} onChange={(e) => onVideoSettingsChange({ aspectRatio: e.target.value || null })}
-                    className="rounded-lg border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
-                    <option value="">{globalAspectRatio}</option>
-                    {(effVideoModel.aspectRatios ?? []).filter((r) => r !== globalAspectRatio).map((r) => (<option key={r} value={r}>{r}</option>))}
-                  </select>
-                </div>
-                {(effVideoModel.resolutions?.length ?? 0) > 0 && (
+                {(effVideoModel.durations ?? []).length > 1 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-medium uppercase text-muted">Dur</span>
+                    <Select
+                      value={String(vidSettings.duration ?? "")}
+                      options={[
+                        { value: "", label: `${globalDuration}s` },
+                        ...(effVideoModel.durations ?? []).filter((d) => d !== globalDuration).map((d) => ({ value: String(d), label: `${d}s` })),
+                      ]}
+                      onChange={(v) => onVideoSettingsChange({ duration: v ? Number(v) : null })}
+                      compact
+                    />
+                  </div>
+                )}
+                {(effVideoModel.aspectRatios ?? []).length > 1 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-medium uppercase text-muted">Ratio</span>
+                    <Select
+                      value={vidSettings.aspectRatio ?? ""}
+                      options={[
+                        { value: "", label: globalAspectRatio },
+                        ...(effVideoModel.aspectRatios ?? []).filter((r) => r !== globalAspectRatio).map((r) => ({ value: r, label: r })),
+                      ]}
+                      onChange={(v) => onVideoSettingsChange({ aspectRatio: v || null })}
+                      compact
+                    />
+                  </div>
+                )}
+                {(effVideoModel.resolutions ?? []).length > 1 && (
                   <div className="flex items-center gap-1">
                     <span className="text-[9px] font-medium uppercase text-muted">Res</span>
-                    <select value={vidSettings.resolution ?? ""} onChange={(e) => onVideoSettingsChange({ resolution: e.target.value || null })}
-                      className="rounded-lg border border-border bg-background px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-muted">
-                      <option value="">{globalResolution}</option>
-                      {(effVideoModel.resolutions ?? []).filter((r) => r !== globalResolution).map((r) => (<option key={r} value={r}>{r}</option>))}
-                    </select>
+                    <Select
+                      value={vidSettings.resolution ?? ""}
+                      options={[
+                        { value: "", label: globalResolution },
+                        ...(effVideoModel.resolutions ?? []).filter((r) => r !== globalResolution).map((r) => ({ value: r, label: r })),
+                      ]}
+                      onChange={(v) => onVideoSettingsChange({ resolution: v || null })}
+                      compact
+                    />
                   </div>
                 )}
                 {effVideoModel.supportsGenerateAudio && (() => {
@@ -602,23 +648,33 @@ export function ShotCard({
             <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
               <div>
                 <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Model</label>
-                <select value={vidSettings.modelId ?? ""} onChange={(e) => {
-                  const id = e.target.value || null;
-                  onVideoSettingsChange({ modelId: id });
-                  if (id) { const m = VIDEO_MODELS.find((v) => v.id === id); if (m && vidSettings.resolution && !m.resolutions.includes(vidSettings.resolution)) onVideoSettingsChange({ modelId: id, resolution: null }); }
-                }} className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                  <option value="">{videoModel.name}</option>
-                  {VIDEO_MODELS.filter((m) => m.id !== videoModel.id).map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
-                </select>
+                <Select
+                  value={vidSettings.modelId ?? ""}
+                  options={[
+                    { value: "", label: videoModel.name },
+                    ...getCreateModels().filter((m) => m.id !== videoModel.id).map((m) => ({ value: m.id, label: m.name })),
+                  ]}
+                  onChange={(v) => {
+                    const id = v || null;
+                    onVideoSettingsChange({ modelId: id });
+                    if (id) { const m = VIDEO_MODELS.find((mv) => mv.id === id); if (m && vidSettings.resolution && !m.resolutions.includes(vidSettings.resolution)) onVideoSettingsChange({ modelId: id, resolution: null }); }
+                  }}
+                  compact
+                />
               </div>
               {effVideoModel.supportsCameraFixed && (
                 <div>
                   <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Camera</label>
-                  <select value={vidSettings.cameraFixed == null ? "" : vidSettings.cameraFixed ? "true" : "false"}
-                    onChange={(e) => onVideoSettingsChange({ cameraFixed: e.target.value === "" ? null : e.target.value === "true" })}
-                    className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-muted">
-                    <option value="">{globalCameraFixed ? "Fixed" : "Free"}</option><option value="true">Fixed</option><option value="false">Free</option>
-                  </select>
+                  <Select
+                    value={vidSettings.cameraFixed == null ? "" : vidSettings.cameraFixed ? "true" : "false"}
+                    options={[
+                      { value: "", label: globalCameraFixed ? "Fixed" : "Free" },
+                      { value: "true", label: "Fixed" },
+                      { value: "false", label: "Free" },
+                    ]}
+                    onChange={(v) => onVideoSettingsChange({ cameraFixed: v === "" ? null : v === "true" })}
+                    compact
+                  />
                 </div>
               )}
             </div>
@@ -675,6 +731,11 @@ export function ShotCard({
             ) : (
               <Button variant="secondary" size="xs" onClick={onAnimateShot} disabled={!canAnimate && !effVideoModel.requiresAudio}>
                 {shot.videoStatus === "done" ? "Re-animate" : "Animate"}
+                {vidCredits > 0 && (
+                  <span className="ml-1 flex items-center gap-0.5 opacity-60">
+                    <CreditIcon size={8} />{vidCredits}
+                  </span>
+                )}
               </Button>
             )}
           </div>

@@ -7,7 +7,7 @@ import { loadStorage, saveStorage } from "@/lib/storage";
 import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
 import { Select } from "@/components/ui/Select";
-import { ModelSelector } from "@/components/ModelSelector";
+import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
 import { GalleryGrid } from "@/components/generate/GalleryGrid";
 import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
@@ -16,15 +16,17 @@ import { MediaLightbox } from "@/components/generate/MediaLightbox";
 import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion } from "@/components/generate/Icons";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
-import { usePricing } from "@/hooks/usePricing";
+import { usePricing, tierKey } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
+import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 import { generationToResult, type GenerationResult, type UploadedImage } from "@/types/generations";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
 // --- Storage keys ---
 
-const STORAGE_KEYS = {
+const STORAGE_KEYS: Record<string, string> = {
+  activeMode: "dreamsun_vid_mode",
   videoModel: "dreamsun_vid_model",
   mcModel: "dreamsun_vid_mc_model",
   duration: "dreamsun_vid_duration",
@@ -34,7 +36,24 @@ const STORAGE_KEYS = {
   generateAudio: "dreamsun_vid_gen_audio",
   gallerySize: "dreamsun_vid_gallery_size",
   charOrientation: "dreamsun_vid_char_orient",
+  prompt: "dreamsun_vid_prompt",
+  pending: "dreamsun_vid_pending",
+  firstFrameUrl: "dreamsun_vid_first_frame",
+  lastFrameUrl: "dreamsun_vid_last_frame",
+  refVideoUrl: "dreamsun_vid_ref_video",
 } as const;
+
+// --- Pending generation (survives refresh) ---
+
+interface PendingVideoGeneration {
+  slotId: string;
+  modelName: string;
+  modelId: string;
+  prompt: string;
+  batchId: string;
+  mode: VideoMode;
+  createdAt: number;
+}
 
 // --- Video modes ---
 
@@ -142,7 +161,9 @@ function UploadZone({ file, onRemove, onUpload, inputRef, label, dragOver, setDr
 // --- Page ---
 
 export default function VideoPage() {
-  const [activeMode, setActiveMode] = useState<VideoMode>("create");
+  const [activeMode, setActiveModeRaw] = useState<VideoMode>(() =>
+    loadStorage(STORAGE_KEYS.activeMode, "create") as VideoMode
+  );
 
   // Model — separate for each mode
   const [createModelId, setCreateModelId] = useState(() =>
@@ -175,16 +196,55 @@ export default function VideoPage() {
   );
   const [keepOriginalSound, setKeepOriginalSound] = useState(true);
 
+  // Wrapped setters that persist to localStorage
+  const setActiveMode = useCallback((mode: VideoMode) => {
+    setActiveModeRaw(mode);
+    saveStorage(STORAGE_KEYS.activeMode, mode);
+  }, []);
+
+  const setFirstFrame = useCallback((img: UploadedImage | null) => {
+    setFirstFrameRaw(img);
+    saveStorage(STORAGE_KEYS.firstFrameUrl, img?.url ?? null);
+  }, []);
+
+  const setLastFrame = useCallback((img: UploadedImage | null) => {
+    setLastFrameRaw(img);
+    saveStorage(STORAGE_KEYS.lastFrameUrl, img?.url ?? null);
+  }, []);
+
+  const setRefVideo = useCallback((img: UploadedImage | null) => {
+    setRefVideoRaw(img);
+    saveStorage(STORAGE_KEYS.refVideoUrl, img?.url ?? null);
+  }, []);
+
   // Generation state
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPromptRaw] = useState(() => loadStorage(STORAGE_KEYS.prompt, ""));
   const [negativePrompt, setNegativePrompt] = useState("");
+
+  // Debounced prompt save
+  const promptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setPrompt = useCallback((value: string) => {
+    setPromptRaw(value);
+    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
+    promptTimerRef.current = setTimeout(() => saveStorage(STORAGE_KEYS.prompt, value), 500);
+  }, []);
   const [negativeOpen, setNegativeOpen] = useState(false);
-  const [firstFrame, setFirstFrame] = useState<UploadedImage | null>(null);
-  const [lastFrame, setLastFrame] = useState<UploadedImage | null>(null);
-  const [refVideo, setRefVideo] = useState<UploadedImage | null>(null);
+  const [firstFrame, setFirstFrameRaw] = useState<UploadedImage | null>(() => {
+    const url = loadStorage<string | null>(STORAGE_KEYS.firstFrameUrl, null);
+    return url ? { id: "restored_first", preview: url, url, uploading: false } : null;
+  });
+  const [lastFrame, setLastFrameRaw] = useState<UploadedImage | null>(() => {
+    const url = loadStorage<string | null>(STORAGE_KEYS.lastFrameUrl, null);
+    return url ? { id: "restored_last", preview: url, url, uploading: false } : null;
+  });
+  const [refVideo, setRefVideoRaw] = useState<UploadedImage | null>(() => {
+    const url = loadStorage<string | null>(STORAGE_KEYS.refVideoUrl, null);
+    return url ? { id: "restored_ref", preview: url, url, uploading: false } : null;
+  });
   const [generatingSlots, setGeneratingSlots] = useState<{ modelName: string; modelId: string; slotId: string }[]>([]);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creditsShortfall, setCreditsShortfall] = useState<{ required: number; available: number } | null>(null);
 
   // Multi-shot storyboarding
   const [multiShotEnabled, setMultiShotEnabled] = useState(false);
@@ -227,6 +287,7 @@ export default function VideoPage() {
     generations: dbGenerations,
     loading: generationsLoading,
     addGenerations: addDbGenerations,
+    updateGeneration: updateDbGeneration,
     toggleFavorite: dbToggleFavorite,
     deleteGeneration: dbDeleteGeneration,
     deleteGenerations: dbDeleteGenerations,
@@ -241,10 +302,81 @@ export default function VideoPage() {
 
   const isGenerating = generatingSlots.length > 0;
 
+  // Poll a pending generation until it completes or fails
+  const pollGeneration = useCallback(async (genId: string, slotId: string) => {
+    const POLL_INTERVAL = 5000;
+    const MAX_POLLS = 120; // 10 minutes max
+    let polls = 0;
+
+    while (polls < MAX_POLLS) {
+      polls++;
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+      try {
+        const res = await fetch(`/api/generation-poll?id=${genId}`);
+        const data = await res.json();
+
+        if (data.status === "completed" && data.url) {
+          updateDbGeneration(genId, { url: data.url });
+          invalidateCredits();
+          setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
+          return;
+        }
+
+        if (data.status === "failed") {
+          setError(data.error || "Video generation failed");
+          setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
+          dbDeleteGeneration(genId);
+          return;
+        }
+      } catch {
+        // Network error — keep trying
+      }
+    }
+
+    setError("Generation timed out — it may still complete. Refresh to check.");
+    setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
+  }, [updateDbGeneration, dbDeleteGeneration]);
+
+  // Resume polling for pending generations on page load
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current || generationsLoading) return;
+    resumedRef.current = true;
+
+    // Find pending generations (url=null) from Supabase
+    const pendingGens = dbGenerations.filter((g) => !g.url && g.type === "video");
+    if (pendingGens.length === 0) return;
+
+    // Filter out stale ones (older than 15 minutes)
+    const fresh = pendingGens.filter((g) => {
+      const age = Date.now() - new Date(g.created_at).getTime();
+      return age < 15 * 60 * 1000;
+    });
+
+    if (fresh.length === 0) return;
+
+    // Create generating slots and start polling for each
+    const newSlots = fresh.map((g) => ({
+      modelName: g.model_name ?? g.model_id,
+      modelId: g.model_id,
+      slotId: `resume_${g.id}`,
+    }));
+    setGeneratingSlots((prev) => [...newSlots, ...prev]);
+
+    fresh.forEach((g) => {
+      pollGeneration(g.id, `resume_${g.id}`);
+    });
+
+    console.log(`[video] Resumed polling for ${fresh.length} pending generation(s)`);
+  }, [generationsLoading, dbGenerations, pollGeneration]);
+
   // Model lists — selector shows ALL models, grouped by type
   const createModels = useMemo(() => getCreateModels(), []);
   const mcModels = useMemo(() => getMotionControlModels(), []);
-  const allSelectorItems = useMemo(() => videoModelsToSelectorItems(VIDEO_MODELS), []);
+  const activeSelectorItems = useMemo(() => {
+    const models = activeMode === "create" ? createModels : mcModels;
+    return videoModelsToSelectorItems(models);
+  }, [activeMode, createModels, mcModels]);
 
   const selectedModelId = activeMode === "create" ? createModelId : mcModelId;
   const activeModels = activeMode === "create" ? createModels : mcModels;
@@ -299,8 +431,18 @@ export default function VideoPage() {
   const multiShotTotalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
   const maxModelDuration = currentModel.durations.length > 0 ? currentModel.durations[currentModel.durations.length - 1] : 15;
 
-  // Filter gallery
-  let filteredHistory = history;
+  // Estimated credit cost for current generation
+  const estimatedVidCredits = useMemo(() => {
+    const audioTier = currentModel.supportsGenerateAudio ? (generateAudio ? "on" : "off") : null;
+    const key = tierKey(currentModel.id, resolution, audioTier);
+    const unitCost = pricing[key]?.base_price_credits ?? pricing[currentModel.id]?.base_price_credits ?? 0;
+    if (unitCost === 0) return 0;
+    const effectiveDuration = multiShotEnabled ? multiShotTotalDuration : duration;
+    return Math.round(unitCost * effectiveDuration);
+  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration]);
+
+  // Filter gallery — exclude pending items (shown as generatingSlots instead)
+  let filteredHistory = history.filter((r) => !r.pending);
   if (galleryFilter === "loved") {
     filteredHistory = filteredHistory.filter((r) => r.favorited);
   } else if (galleryFilter === "videos") {
@@ -443,7 +585,7 @@ export default function VideoPage() {
     setShots((prev) => prev.map((s, i) => i === index ? { ...s, duration } : s));
   }, []);
 
-  // --- Generation ---
+  // --- Generation (queue-based) ---
 
   const handleGenerate = async (overridePrompt?: string) => {
     const usedPrompt = overridePrompt ?? prompt;
@@ -472,10 +614,10 @@ export default function VideoPage() {
         videoModelId: currentModel.id,
         prompt: usedPrompt.trim(),
         imageUrl: firstFrame.url,
+        batchId,
       };
 
       if (activeMode === "create") {
-        // Create mode — image-to-video
         body.duration = duration;
         if (currentModel.aspectRatios.length > 0) body.aspectRatio = aspectRatio;
         if (currentModel.resolutions.length > 0) body.resolution = resolution;
@@ -484,7 +626,6 @@ export default function VideoPage() {
         if (supportsLastFrame && lastFrame?.url) body.endImageUrl = lastFrame.url;
         if (negativePrompt.trim() && currentModel.supportsNegativePrompt) body.negativePrompt = negativePrompt.trim();
 
-        // Multi-shot storyboarding
         if (multiShotEnabled && currentModel.supportsMultiShot && shots.length > 0) {
           const validShots = shots.filter((s) => s.prompt.trim());
           if (validShots.length > 0) {
@@ -495,24 +636,22 @@ export default function VideoPage() {
               prompt: s.prompt,
               duration: s.duration,
             }));
-            // Override duration with total
             body.duration = shots.reduce((sum, s) => sum + s.duration, 0);
           }
         }
 
-        // Elements (character consistency)
         const elementUrls = elements.filter(Boolean).map((e) => e!.url).filter(Boolean) as string[];
         if (elementUrls.length > 0 && currentModel.supportsElements) {
           body.elements = elementUrls;
         }
       } else {
-        // Motion control — reference video + character orientation
         body.videoUrl = refVideo!.url;
         body.characterOrientation = charOrientation;
         if (currentModel.resolutions.length > 0) body.resolution = resolution;
         if (currentModel.supportsKeepOriginalSound) body.keepOriginalSound = keepOriginalSound;
       }
 
+      // Submit to queue — returns immediately
       const res = await fetch("/api/animate-shot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -522,82 +661,62 @@ export default function VideoPage() {
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 402) {
-          throw new Error(`Insufficient credits — need ${data.required}, have ${data.available}. Buy more at /pricing`);
+          setCreditsShortfall({ required: data.required, available: data.available });
+          invalidateCredits();
+          throw new Error(`Insufficient credits`);
         }
         throw new Error(data.error || "Video generation failed");
       }
       invalidateCredits();
 
-      if (!data.videoUrl) throw new Error("No video URL returned");
+      const generationId = data.generationId;
 
-      // Persist to Supabase
-      try {
-        const refUrls = [firstFrame.url];
-        if (activeMode === "create" && lastFrame?.url) refUrls.push(lastFrame.url);
-        if (activeMode === "motion" && refVideo?.url) refUrls.push(refVideo.url);
+      // Add pending generation to local cache (url=null, pending=true via generationToResult)
+      const refUrls = [firstFrame.url];
+      if (activeMode === "create" && lastFrame?.url) refUrls.push(lastFrame.url);
+      if (activeMode === "motion" && refVideo?.url) refUrls.push(refVideo.url);
 
-        const settings: Record<string, unknown> = { modelId: currentModel.id, mode: activeMode };
-        if (activeMode === "create") {
-          Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
-        } else {
-          Object.assign(settings, { charOrientation, keepOriginalSound });
-        }
-
-        const persistRes = await fetch("/api/persist-generation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "video",
-            url: data.videoUrl,
-            prompt: usedPrompt.trim(),
-            modelId: currentModel.id,
-            modelName: currentModel.name,
-            seed: 0,
-            requestId: data.requestId,
-            width: null,
-            height: null,
-            duration: activeMode === "create" ? duration : null,
-            aspectRatio: activeMode === "create" ? aspectRatio : null,
-            resolution: currentModel.resolutions.length > 0 ? resolution : null,
-            settings,
-            sourceImageUrl: firstFrame.url,
-            referenceImageUrls: refUrls,
-            batchId,
-          }),
-        });
-        const persistData = await persistRes.json();
-
-        addDbGenerations([{
-          id: persistData.id,
-          type: "video",
-          url: persistData.url ?? data.videoUrl,
-          width: null,
-          height: null,
-          duration: activeMode === "create" ? duration : null,
-          prompt: usedPrompt.trim(),
-          negative_prompt: activeMode === "create" && negativePrompt.trim() ? negativePrompt.trim() : null,
-          model_id: currentModel.id,
-          model_name: currentModel.name,
-          seed: null,
-          request_id: data.requestId,
-          aspect_ratio: activeMode === "create" ? aspectRatio : null,
-          resolution: activeMode === "create" && currentModel.resolutions.length > 0 ? resolution : null,
-          settings,
-          batch_id: batchId,
-          favorited: false,
-          created_at: new Date().toISOString(),
-          scene_id: null,
-          shot_number: null,
-          project_id: null,
-          source_image_url: firstFrame.url,
-          reference_image_urls: refUrls,
-        }]);
-      } catch (e) {
-        console.error("[persist] video failed:", e);
+      const settings: Record<string, unknown> = {
+        modelId: currentModel.id,
+        mode: activeMode,
+        falRequestId: data.falRequestId,
+      };
+      if (activeMode === "create") {
+        Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
+      } else {
+        Object.assign(settings, { charOrientation, keepOriginalSound });
       }
+
+      addDbGenerations([{
+        id: generationId,
+        type: "video",
+        url: null, // pending — will be updated when poll completes
+        width: null,
+        height: null,
+        duration: activeMode === "create" ? duration : null,
+        prompt: usedPrompt.trim(),
+        negative_prompt: activeMode === "create" && negativePrompt.trim() ? negativePrompt.trim() : null,
+        model_id: currentModel.id,
+        model_name: currentModel.name,
+        seed: null,
+        request_id: data.falRequestId,
+        aspect_ratio: activeMode === "create" ? aspectRatio : null,
+        resolution: activeMode === "create" && currentModel.resolutions.length > 0 ? resolution : null,
+        settings,
+        batch_id: batchId,
+        favorited: false,
+        created_at: new Date().toISOString(),
+        scene_id: null,
+        shot_number: null,
+        project_id: null,
+        source_image_url: firstFrame.url,
+        reference_image_urls: refUrls,
+      }]);
+
+      // Start polling in background — non-blocking
+      pollGeneration(generationId, slotId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Video generation failed");
-    } finally {
       setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
     }
   };
@@ -772,8 +891,8 @@ export default function VideoPage() {
 
   const hasAnyContent = history.length > 0 || isGenerating || generationsLoading;
   const canGenerate = activeMode === "create"
-    ? firstFrame?.url && !firstFrame.uploading && !isGenerating
-    : firstFrame?.url && !firstFrame.uploading && refVideo?.url && !refVideo.uploading && !isGenerating;
+    ? firstFrame?.url && !firstFrame.uploading
+    : firstFrame?.url && !firstFrame.uploading && refVideo?.url && !refVideo.uploading;
 
   const slotAspectRatio = (() => {
     const [w, h] = aspectRatio.split(":").map(Number);
@@ -801,14 +920,13 @@ export default function VideoPage() {
               <div>
                 <SectionLabel>Model</SectionLabel>
                 <ModelSelector
-                  models={allSelectorItems}
+                  models={activeSelectorItems}
                   selectedIds={[selectedModelId]}
                   onChange={handleModelChange}
                   pricing={pricing}
                   creditRanges={creditRanges}
                   mode="single"
-                  title="Choose Video Model"
-                  subtitle="Select a model — switching groups changes mode automatically"
+                  title={activeMode === "create" ? "Choose Video Model" : "Choose Motion Control Model"}
                 />
               </div>
 
@@ -1424,12 +1542,13 @@ export default function VideoPage() {
                       }`}
                       title="Generate (Enter)"
                     >
-                      {isGenerating ? (
-                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-                      ) : (
-                        <IconSparkle size={12} />
-                      )}
+                      <IconSparkle size={12} />
                       Generate
+                      {estimatedVidCredits > 0 && (
+                        <span className="flex items-center gap-1 opacity-60">
+                          <CreditIcon size={10} /> {estimatedVidCredits}
+                        </span>
+                      )}
                     </button>
                   </div>
                 </>
@@ -1482,12 +1601,13 @@ export default function VideoPage() {
                       }`}
                       title="Generate (Enter)"
                     >
-                      {isGenerating ? (
-                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-                      ) : (
-                        <IconSparkle size={12} />
-                      )}
+                      <IconSparkle size={12} />
                       Generate
+                      {estimatedVidCredits > 0 && (
+                        <span className="flex items-center gap-1 opacity-60">
+                          <CreditIcon size={10} /> {estimatedVidCredits}
+                        </span>
+                      )}
                     </button>
                   </div>
                 </>
@@ -1523,6 +1643,14 @@ export default function VideoPage() {
           hasNext={(() => { const idx = history.findIndex((r) => r.requestId === selectedResult.requestId); return idx > 0; })()}
         />
       )}
+
+      {/* Insufficient credits modal */}
+      <InsufficientCreditsModal
+        open={creditsShortfall !== null}
+        onClose={() => setCreditsShortfall(null)}
+        required={creditsShortfall?.required}
+        available={creditsShortfall?.available}
+      />
     </div>
   );
 }

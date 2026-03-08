@@ -16,7 +16,7 @@ export interface ModelPricing {
 }
 
 /** Build a composite key for tier lookups: "model_id", "model_id:1080p", "model_id::on", "model_id:720p:on" */
-function tierKey(modelId: string, resolution?: string | null, audioTier?: string | null): string {
+export function tierKey(modelId: string, resolution?: string | null, audioTier?: string | null): string {
   const res = resolution ?? "";
   const audio = audioTier ?? "";
   if (!res && !audio) return modelId;

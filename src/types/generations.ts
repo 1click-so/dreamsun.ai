@@ -29,6 +29,7 @@ export interface GenerationResult {
   favorited?: boolean;
   sceneId?: string | null;
   shotNumber?: string | null;
+  pending?: boolean;
 }
 
 export interface UploadedImage {
@@ -47,7 +48,7 @@ export function generationToResult(g: Generation): GenerationResult {
   return {
     id: g.id,
     type: g.type,
-    imageUrl: g.url,
+    imageUrl: g.url ?? "",
     width: g.width ?? 0,
     height: g.height ?? 0,
     duration: g.duration,
@@ -62,5 +63,6 @@ export function generationToResult(g: Generation): GenerationResult {
     favorited: g.favorited,
     sceneId: g.scene_id,
     shotNumber: g.shot_number,
+    pending: !g.url,
   };
 }

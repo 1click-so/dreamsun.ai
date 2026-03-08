@@ -1,0 +1,12 @@
+[eval]:5
+const rows = $(curl -s 'https://ptmdsirqscorqmcrjqrk.supabase.co/rest/v1/generations?width=is.null&select=id,url,type' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bWRzaXJxc2NvcnFtY3JqcXJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzMxMjAsImV4cCI6MjA4MjUwOTEyMH0.6tjVrR2M7XrvtBve54HXmCYX35T2QZiuvGmBSYmvx_4' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bWRzaXJxc2NvcnFtY3JqcXJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzMxMjAsImV4cCI6MjA4MjUwOTEyMH0.6tjVrR2M7XrvtBve54HXmCYX35T2QZiuvGmBSYmvx_4');
+                     ^
+Expected ',', got 'string literal (https://ptmdsirqscorqmcrjqrk.supabase.co/rest/v1/generations?width=is.null&select=id,url,type, 'https://ptmdsirqscorqmcrjqrk.supabase.co/rest/v1/generations?width=is.null&select=id,url,type')'
+
+SyntaxError: missing ) after argument list
+    at makeContextifyScript (node:internal/vm:194:14)
+    at compileScript (node:internal/process/execution:388:10)
+    at evalTypeScript (node:internal/process/execution:260:22)
+    at node:internal/main/eval_string:71:3
+
+Node.js v24.12.0

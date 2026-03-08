@@ -6,9 +6,10 @@ import { createPortal } from "react-dom";
 import type { Shot, ImageSettings, VideoSettings, UploadedRef } from "@/types/shots";
 import type { ModelConfig } from "@/lib/models";
 import type { VideoModelConfig } from "@/lib/video-models";
-import { VIDEO_MODELS } from "@/lib/video-models";
+import { VIDEO_MODELS, getCreateModels } from "@/lib/video-models";
 import { getSelectableModels, resolveModel } from "@/lib/models";
 import { TaggableTextarea } from "@/components/ui/TaggableTextarea";
+import { Select } from "@/components/ui/Select";
 
 interface StoryboardShotModalProps {
   shot: Shot;
@@ -305,27 +306,27 @@ export function StoryboardShotModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Model</label>
-                    <select
+                    <Select
                       value={imgSettings.modelId ?? ""}
-                      onChange={(e) => onImageSettingsChange({ modelId: e.target.value || null })}
-                      className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
-                    >
-                      <option value="">{imageModel.name}</option>
-                      {selectableModels.filter((m) => m.id !== imageModel.id).map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
-                    </select>
+                      options={[
+                        { value: "", label: imageModel.name },
+                        ...selectableModels.filter((m) => m.id !== imageModel.id).map((m) => ({ value: m.id, label: m.name })),
+                      ]}
+                      onChange={(v) => onImageSettingsChange({ modelId: v || null })}
+                      compact
+                    />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Ratio</label>
-                    <select
+                    <Select
                       value={imgSettings.aspectRatio ?? ""}
-                      onChange={(e) => onImageSettingsChange({ aspectRatio: e.target.value || null })}
-                      className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
-                    >
-                      <option value="">{globalAspectRatio}</option>
-                      {["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"].filter((r) => r !== globalAspectRatio).map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: "", label: globalAspectRatio },
+                        ...["21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"].filter((r) => r !== globalAspectRatio).map((r) => ({ value: r, label: r })),
+                      ]}
+                      onChange={(v) => onImageSettingsChange({ aspectRatio: v || null })}
+                      compact
+                    />
                   </div>
                 </div>
               </>
@@ -401,57 +402,78 @@ export function StoryboardShotModal({
                   />
                 </div>
 
-                {/* Duration / Ratio / Res / Model */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Duration</label>
-                    <select
-                      value={vidSettings.duration ?? ""}
-                      onChange={(e) => onVideoSettingsChange({ duration: e.target.value ? Number(e.target.value) : null })}
-                      className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
-                    >
-                      <option value="">{globalDuration}s</option>
-                      {(effVideoModel.durations ?? []).filter((d) => d !== globalDuration).map((d) => (<option key={d} value={d}>{d}s</option>))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Ratio</label>
-                    <select
-                      value={vidSettings.aspectRatio ?? ""}
-                      onChange={(e) => onVideoSettingsChange({ aspectRatio: e.target.value || null })}
-                      className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
-                    >
-                      <option value="">{globalAspectRatio}</option>
-                      {(effVideoModel.aspectRatios ?? []).filter((r) => r !== globalAspectRatio).map((r) => (<option key={r} value={r}>{r}</option>))}
-                    </select>
-                  </div>
-                  {(effVideoModel.resolutions?.length ?? 0) > 0 && (
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Resolution</label>
-                      <select
-                        value={vidSettings.resolution ?? ""}
-                        onChange={(e) => onVideoSettingsChange({ resolution: e.target.value || null })}
-                        className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
-                      >
-                        <option value="">{globalResolution}</option>
-                        {(effVideoModel.resolutions ?? []).filter((r) => r !== globalResolution).map((r) => (<option key={r} value={r}>{r}</option>))}
-                      </select>
+                {/* Duration / Ratio / Res / Model — only show options the effective model supports */}
+                {(() => {
+                  const durations = effVideoModel.durations ?? [];
+                  const aspectRatios = effVideoModel.aspectRatios ?? [];
+                  const resolutions = effVideoModel.resolutions ?? [];
+                  const showDuration = durations.length > 1;
+                  const showRatio = aspectRatios.length > 1;
+                  const showRes = resolutions.length > 1;
+                  const hasGrid = showDuration || showRatio || showRes;
+                  return hasGrid ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {showDuration && (
+                        <div>
+                          <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Duration</label>
+                          <Select
+                            value={String(vidSettings.duration ?? "")}
+                            options={[
+                              { value: "", label: `${globalDuration}s` },
+                              ...durations.filter((d) => d !== globalDuration).map((d) => ({ value: String(d), label: `${d}s` })),
+                            ]}
+                            onChange={(v) => onVideoSettingsChange({ duration: v ? Number(v) : null })}
+                            compact
+                          />
+                        </div>
+                      )}
+                      {showRatio && (
+                        <div>
+                          <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Ratio</label>
+                          <Select
+                            value={vidSettings.aspectRatio ?? ""}
+                            options={[
+                              { value: "", label: globalAspectRatio },
+                              ...aspectRatios.filter((r) => r !== globalAspectRatio).map((r) => ({ value: r, label: r })),
+                            ]}
+                            onChange={(v) => onVideoSettingsChange({ aspectRatio: v || null })}
+                            compact
+                          />
+                        </div>
+                      )}
+                      {showRes && (
+                        <div>
+                          <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Resolution</label>
+                          <Select
+                            value={vidSettings.resolution ?? ""}
+                            options={[
+                              { value: "", label: globalResolution },
+                              ...resolutions.filter((r) => r !== globalResolution).map((r) => ({ value: r, label: r })),
+                            ]}
+                            onChange={(v) => onVideoSettingsChange({ resolution: v || null })}
+                            compact
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Model</label>
-                    <select
-                      value={vidSettings.modelId ?? ""}
-                      onChange={(e) => onVideoSettingsChange({ modelId: e.target.value || null })}
-                      className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
-                    >
-                      <option value="">{videoModel.name}</option>
-                      {VIDEO_MODELS.filter((m) => m.id !== videoModel.id).map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
-                    </select>
-                  </div>
+                  ) : null;
+                })()}
+
+                {/* Model override */}
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Model</label>
+                  <Select
+                    value={vidSettings.modelId ?? ""}
+                    options={[
+                      { value: "", label: videoModel.name },
+                      ...getCreateModels().filter((m) => m.id !== videoModel.id).map((m) => ({ value: m.id, label: m.name })),
+                    ]}
+                    onChange={(v) => onVideoSettingsChange({ modelId: v || null })}
+                    compact
+                  />
                 </div>
 
-                {/* Sound toggle */}
+                {/* Sound toggle — only if the effective model supports it */}
                 {effVideoModel.supportsGenerateAudio && (() => {
                   const effAudio = vidSettings.generateAudio ?? globalGenerateAudio;
                   return (
@@ -464,6 +486,23 @@ export function StoryboardShotModal({
                       }`}
                     >
                       {effAudio ? "Sound on" : "Sound off"}
+                    </button>
+                  );
+                })()}
+
+                {/* Camera fixed — only if the effective model supports it */}
+                {effVideoModel.supportsCameraFixed && (() => {
+                  const effFixed = vidSettings.cameraFixed ?? false;
+                  return (
+                    <button
+                      onClick={() => onVideoSettingsChange({ cameraFixed: !effFixed })}
+                      className={`w-full rounded-lg border py-1.5 text-xs font-medium uppercase transition ${
+                        effFixed
+                          ? "border-accent/30 bg-accent/10 text-accent"
+                          : "border-border bg-background text-muted hover:border-muted"
+                      }`}
+                    >
+                      {effFixed ? "Camera fixed" : "Camera free"}
                     </button>
                   );
                 })()}

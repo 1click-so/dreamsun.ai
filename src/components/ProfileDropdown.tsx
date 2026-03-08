@@ -5,7 +5,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { useCredits } from "@/hooks/useCredits";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CreditIcon } from "@/components/ModelSelector";
+import { usePricingOverlay } from "@/contexts/PricingOverlay";
 
 /** SVG circular progress ring around the avatar */
 function CreditRing({ ratio, size = 36 }: { ratio: number; size?: number }) {
@@ -60,6 +62,7 @@ export function ProfileDropdown() {
   const { theme, toggle } = useTheme();
   const { total: credits, subscription, topup, tier, loading: creditsLoading } = useCredits();
   const router = useRouter();
+  const { openPricing } = usePricingOverlay();
 
   // Fetch user email
   useEffect(() => {
@@ -159,6 +162,30 @@ export function ProfileDropdown() {
               </div>
             )}
           </div>
+
+          {/* Buy credits */}
+          <button
+            onClick={() => { openPricing("topup"); setOpen(false); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-accent transition hover:bg-surface-hover"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 4.5v7M4.5 8h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            Buy Credits
+          </button>
+
+          {/* Account Settings */}
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-foreground transition hover:bg-surface-hover"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM2 14.5c0-2.5 2.7-4.5 6-4.5s6 2 6 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            Account Settings
+          </Link>
 
           {/* Theme toggle */}
           <button

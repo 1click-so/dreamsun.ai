@@ -11,13 +11,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { modelId, duration, numImages, generationId } = body;
+  const { modelId, duration, numImages, resolution, audioTier, generationId } = body;
 
   if (!modelId) {
     return NextResponse.json({ error: "modelId is required" }, { status: 400 });
   }
 
-  const cost = await calculateCost(modelId, { duration, numImages });
+  const cost = await calculateCost(modelId, { duration, numImages, resolution, audioTier });
   if (cost <= 0) {
     return NextResponse.json({ error: "Could not determine cost" }, { status: 400 });
   }

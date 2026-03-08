@@ -4,7 +4,7 @@ import { getModelById } from "@/lib/models";
 import { writeFile, mkdir, readdir } from "fs/promises";
 import { dirname, join } from "path";
 import { createClient } from "@/lib/supabase-server";
-import { calculateCost, deductCredits, refundCredits } from "@/lib/credits";
+import { calculateCost, deductCredits, refundCredits, tryAutoTopup } from "@/lib/credits";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     // Credit deduction
     const effectiveNumImages = typeof numImages === "number" && numImages >= 1 && numImages <= 4 ? numImages : 1;
     creditModelId = modelId;
-    cost = await calculateCost(modelId, { numImages: effectiveNumImages });
+    cost = await calculateCost(modelId, { numImages: effectiveNumImages, resolution: imageResolution as string | undefined });
     if (cost > 0) {
       const deduction = await deductCredits(user.id, cost, { modelId, description: `Shot image: ${model.name}` });
       if (!deduction.success) {
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
           { status: 402 }
         );
       }
+      tryAutoTopup(user.id).catch(() => {});
     }
 
     // Build input — same logic as /api/generate

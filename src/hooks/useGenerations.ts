@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 export interface Generation {
   id: string;
   type: "image" | "video" | "audio";
-  url: string;
+  url: string | null;
   width: number | null;
   height: number | null;
   duration: number | null;
@@ -114,6 +114,13 @@ export function useGenerations() {
       });
   }, [updateCache]);
 
+  // Update a generation (e.g., when pending generation completes)
+  const updateGeneration = useCallback((id: string, updates: Partial<Generation>) => {
+    updateCache((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, ...updates } : g))
+    );
+  }, [updateCache]);
+
   // Bulk delete — optimistic + persist
   const deleteGenerations = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
@@ -134,6 +141,7 @@ export function useGenerations() {
     loading,
     addGeneration,
     addGenerations,
+    updateGeneration,
     toggleFavorite,
     deleteGeneration,
     deleteGenerations,

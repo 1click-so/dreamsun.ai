@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 interface SelectOption<T extends string> {
   value: T;
   label: string;
-  detail?: string;
+  detail?: React.ReactNode;
 }
 
 interface SelectProps<T extends string> {

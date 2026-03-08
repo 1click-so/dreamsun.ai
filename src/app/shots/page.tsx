@@ -6,7 +6,7 @@ import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
 import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download } from "lucide-react";
 import JSZip from "jszip";
-import { VIDEO_MODELS, type VideoModelConfig } from "@/lib/video-models";
+import { VIDEO_MODELS, getCreateModels, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
@@ -16,8 +16,9 @@ import { Lightbox } from "@/components/shots/Lightbox";
 import { ShotCard } from "@/components/shots/ShotCard";
 import { StoryboardCard } from "@/components/shots/StoryboardCard";
 import { StoryboardShotModal } from "@/components/shots/StoryboardShotModal";
-import { usePricing } from "@/hooks/usePricing";
+import { usePricing, tierKey } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
+import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 import { CreditIcon } from "@/components/ModelSelector";
 import type { Shot, ShotStatus, ImageSettings, VideoSettings, ShotSettings, UploadedRef } from "@/types/shots";
 import Image from "next/image";
@@ -691,7 +692,7 @@ export function ShotListEditor({
   const [showSettings, setShowSettings] = useState(false);
 
   // --- Credit pricing ---
-  const { pricing } = usePricing();
+  const { pricing, creditRanges } = usePricing();
 
   // --- Localhost detection (for output folder) ---
   const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
@@ -715,6 +716,7 @@ export function ShotListEditor({
   const [modalEndFrame, setModalEndFrame] = useState<UploadedRef | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string } | null>(null);
   const [storyboardModal, setStoryboardModal] = useState<{ shotId: string; mode: "image" | "video" } | null>(null);
+  const [creditsShortfall, setCreditsShortfall] = useState<{ required: number; available: number } | null>(null);
 
   // --- Auto-save to scene on changes ---
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1250,13 +1252,14 @@ export function ShotListEditor({
       }
 
       if (!res.ok) {
+        if (res.status === 402) {
+          setCreditsShortfall({ required: data.required as number, available: data.available as number });
+          invalidateCredits();
+        }
         updateShot(shot.id, {
           imageStatus: "error",
-          error: res.status === 402
-            ? `Insufficient credits — need ${data.required}, have ${data.available}`
-            : (data.error as string) || "Generation failed",
+          error: res.status === 402 ? "Insufficient credits" : (data.error as string) || "Generation failed",
         });
-        if (res.status === 402) invalidateCredits();
         return;
       }
       invalidateCredits();
@@ -1375,13 +1378,14 @@ export function ShotListEditor({
       }
 
       if (!res.ok) {
+        if (res.status === 402) {
+          setCreditsShortfall({ required: data.required as number, available: data.available as number });
+          invalidateCredits();
+        }
         updateShot(shotId, {
           imageStatus: "error",
-          error: res.status === 402
-            ? `Insufficient credits — need ${data.required}, have ${data.available}`
-            : (data.error as string) || "Edit failed",
+          error: res.status === 402 ? "Insufficient credits" : (data.error as string) || "Edit failed",
         });
-        if (res.status === 402) invalidateCredits();
         return;
       }
       invalidateCredits();
@@ -1417,7 +1421,7 @@ export function ShotListEditor({
   };
 
   // --- Single Shot Animation (reusable) ---
-  // Calls fal.ai directly from the browser via proxy — no Vercel timeout limit.
+  // Uses /api/animate-shot (queue-based) — refresh-safe, server persists to Supabase.
   const animateSingleShot = async (shot: Shot) => {
     const shotVideoModelId = shot.settings.video.modelId ?? selectedVideoModel.id;
     const model = VIDEO_MODELS.find((m) => m.id === shotVideoModelId) ?? selectedVideoModel;
@@ -1440,193 +1444,131 @@ export function ShotListEditor({
     const shotDuration = shot.settings.video.duration ?? duration;
     const shotAspectRatio = shot.settings.video.aspectRatio ?? aspectRatio;
     const shotResolution = shot.settings.video.resolution ?? resolution;
+    const useCameraFixed = shot.settings.video.cameraFixed ?? cameraFixed;
+    const useGenerateAudio = shot.settings.video.generateAudio ?? generateAudio;
 
     try {
-      // Build input using model's param mapping (same logic as API route)
-      const input: Record<string, unknown> = {
-        [model.params.prompt]: shot.videoPrompt || "",
+      // Build request body for /api/animate-shot
+      const body: Record<string, unknown> = {
+        videoModelId: model.id,
+        prompt: shot.videoPrompt || "",
+        imageUrl: shot.imageUrl,
+        duration: shotDuration,
+        aspectRatio: shotAspectRatio,
+        resolution: shotResolution,
+        cameraFixed: useCameraFixed,
+        generateAudio: useGenerateAudio,
+        shotNumber: shot.number,
       };
-      if (model.params.duration) {
-        input[model.params.duration] = typeof shotDuration === "number" ? shotDuration : Number(shotDuration);
-      }
 
-      // Image URL — required for image-to-video, optional for audio-to-video
-      if (shot.imageUrl) {
-        input[model.params.imageUrl] = shot.imageUrl;
-      }
+      if (shot.audioUrl) body.audioUrl = shot.audioUrl;
+      if (shot.endImageUrl && shot.endImageUrl.startsWith("https://")) body.endImageUrl = shot.endImageUrl;
+      if (shot.videoNegativePrompt) body.negativePrompt = shot.videoNegativePrompt;
 
-      // Audio URL for audio-to-video models
-      if (shot.audioUrl && model.params.audioUrl) {
-        input[model.params.audioUrl] = shot.audioUrl;
-      }
-
-      // End image (last frame)
-      if (shot.endImageUrl && shot.endImageUrl.startsWith("https://") && model.params.endImageUrl) {
-        input[model.params.endImageUrl] = shot.endImageUrl;
-      }
-
-      if (shotAspectRatio && model.params.aspectRatio) {
-        input[model.params.aspectRatio] = shotAspectRatio;
-      }
-
-      if (shotResolution && model.params.resolution) {
-        input[model.params.resolution] = shotResolution;
-      }
-
-      // Camera fixed — per-shot overrides global
-      const useCameraFixed = shot.settings.video.cameraFixed ?? cameraFixed;
-      if (useCameraFixed && model.supportsCameraFixed) {
-        input.camera_fixed = true;
-      }
-
-      // Generate audio — per-shot overrides global
-      const useGenerateAudio = shot.settings.video.generateAudio ?? generateAudio;
-      if (useGenerateAudio === false && model.supportsGenerateAudio) {
-        input.generate_audio = false;
-      }
-
-      // Extra model defaults (negative_prompt, cfg_scale, etc.)
-      if (model.extraInput) {
-        Object.assign(input, model.extraInput);
-      }
-
-      // Per-shot overrides
-      if (shot.videoNegativePrompt && model.supportsNegativePrompt) {
-        input.negative_prompt = shot.videoNegativePrompt;
-      }
-
-      // Deduct credits before generation
-      const deductRes = await fetch("/api/credits/deduct", {
+      // Submit to queue via API (handles credits, fal queue submit, Supabase persistence)
+      const res = await fetch("/api/animate-shot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: model.id, duration: shotDuration }),
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
-      if (!deductRes.ok) {
-        const deductData = await deductRes.json();
-        if (deductRes.status === 402) {
-          updateShot(shot.id, { videoStatus: "error", error: `Insufficient credits — need ${deductData.required}, have ${deductData.available}` });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 402) {
+          setCreditsShortfall({ required: data.required as number, available: data.available as number });
+          updateShot(shot.id, { videoStatus: "error", error: "Insufficient credits" });
           invalidateCredits();
           return;
         }
+        throw new Error(data.error || "Animation failed");
       }
-
-      // Call fal.ai directly through proxy — browser polls, no serverless timeout
-      let result;
-      try {
-        result = await fal.subscribe(model.endpoint, {
-          input,
-          logs: true,
-        });
-      } catch (falError) {
-        // Refund credits on fal.ai failure
-        await fetch("/api/credits/refund", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modelId: model.id, duration: shotDuration }),
-        }).catch(() => {});
-        invalidateCredits();
-        throw falError;
-      }
-
       invalidateCredits();
 
-      // Check if cancelled during generation
-      if (controller.signal.aborted) {
-        updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
-        return;
-      }
+      const generationId = data.generationId as string;
 
-      const data = result.data as Record<string, unknown>;
+      // Poll for completion
+      const POLL_INTERVAL = 5000;
+      const MAX_POLLS = 120; // 10 minutes
+      let polls = 0;
 
-      // Video models return { video: { url } } or { video_url }
-      let videoUrl: string | null = null;
-      if (data.video && typeof data.video === "object") {
-        const video = data.video as Record<string, unknown>;
-        videoUrl = video.url as string;
-      } else if (typeof data.video_url === "string") {
-        videoUrl = data.video_url;
-      }
+      while (polls < MAX_POLLS) {
+        if (controller.signal.aborted) {
+          updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
+          return;
+        }
+        polls++;
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
 
-      if (!videoUrl) {
-        updateShot(shot.id, { videoStatus: "error", error: "No video generated" });
-        return;
-      }
-
-      // Save locally if outputFolder set (fire-and-forget, don't block)
-      let localPath: string | null = null;
-      if (outputFolder && shot.number != null) {
         try {
-          const paddedNum = String(shot.number).padStart(3, "0");
-          const genNum = (shot.videoHistory?.length ?? 0) + 1;
-          const saveRes = await fetch("/api/save-local", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              url: videoUrl,
-              outputFolder,
-              fileName: `video-shot-${paddedNum}_${genNum}.mp4`,
-            }),
-          });
-          if (saveRes.ok) {
-            const saveData = await saveRes.json();
-            localPath = saveData.localPath ?? null;
+          const pollRes = await fetch(`/api/generation-poll?id=${generationId}`, { signal: controller.signal });
+          const pollData = await pollRes.json();
+
+          if (pollData.status === "completed" && pollData.url) {
+            // Save locally if outputFolder set
+            let localPath: string | null = null;
+            if (outputFolder && shot.number != null) {
+              try {
+                const paddedNum = String(shot.number).padStart(3, "0");
+                const genNum = (shot.videoHistory?.length ?? 0) + 1;
+                const saveRes = await fetch("/api/save-local", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: pollData.url,
+                    outputFolder,
+                    fileName: `video-shot-${paddedNum}_${genNum}.mp4`,
+                  }),
+                });
+                if (saveRes.ok) {
+                  const saveData = await saveRes.json();
+                  localPath = saveData.localPath ?? null;
+                }
+              } catch {
+                // Non-critical
+              }
+            }
+
+            setShots((prev) =>
+              prev.map((s) => {
+                if (s.id !== shot.id) return s;
+                const prevVideos = s.videoHistory ?? [];
+                return {
+                  ...s,
+                  videoStatus: "done" as ShotStatus,
+                  videoUrl: pollData.url,
+                  localVideoPath: localPath,
+                  error: null,
+                  videoHistory: [pollData.url as string, ...prevVideos],
+                };
+              })
+            );
+            return;
           }
-        } catch {
-          // Non-critical — video URL still works
+
+          if (pollData.status === "failed") {
+            updateShot(shot.id, { videoStatus: "error", error: pollData.error || "Generation failed" });
+            return;
+          }
+
+          // Still processing — continue polling
+        } catch (pollErr) {
+          if (controller.signal.aborted) {
+            updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
+            return;
+          }
+          // Network error — keep trying
         }
       }
 
-      setShots((prev) =>
-        prev.map((s) => {
-          if (s.id !== shot.id) return s;
-          const prevVideos = s.videoHistory ?? [];
-          return {
-            ...s,
-            videoStatus: "done" as ShotStatus,
-            videoUrl,
-            localVideoPath: localPath,
-            error: null,
-            videoHistory: [videoUrl as string, ...prevVideos],
-          };
-        })
-      );
-
-      // Persist to Supabase (fire-and-forget)
-      fetch("/api/persist-generation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "video",
-          url: videoUrl,
-          prompt: shot.videoPrompt,
-          modelId: model.id,
-          modelName: model.name,
-          requestId: result.requestId,
-          duration: shotDuration,
-          aspectRatio: shotAspectRatio,
-          resolution: shotResolution,
-          settings: { ...shot.settings.video, modelId: model.id },
-          sourceImageUrl: shot.imageUrl,
-          sourceAudioUrl: shot.audioUrl,
-          shotNumber: shot.number,
-        }),
-      }).catch((err) => console.error("[persist] Video failed:", err));
+      // Timed out
+      updateShot(shot.id, { videoStatus: "error", error: "Generation timed out" });
     } catch (err) {
       if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
         return;
       }
-      let message = "Animation failed";
-      if (err && typeof err === "object") {
-        const e = err as Record<string, unknown>;
-        if (e.body && typeof e.body === "object") {
-          const body = e.body as Record<string, unknown>;
-          if (typeof body.detail === "string") message = body.detail;
-          else if (typeof body.message === "string") message = body.message;
-        } else if (typeof e.message === "string") {
-          message = e.message;
-        }
-      }
+      const message = err instanceof Error ? err.message : "Animation failed";
       updateShot(shot.id, { videoStatus: "error", error: message });
     } finally {
       delete abortControllers.current[abortKey];
@@ -1710,11 +1652,14 @@ export function ShotListEditor({
 
   // Estimated credits for generating all shots with current settings
   const estimatedCredits = useMemo(() => {
-    const imgCredits = pricing[effectiveModel.id]?.base_price_credits ?? 0;
-    const vidUnitCost = pricing[selectedVideoModel.id]?.base_price_credits ?? 0;
+    const imgKey = tierKey(effectiveModel.id, imageResolution);
+    const imgCredits = pricing[imgKey]?.base_price_credits ?? pricing[effectiveModel.id]?.base_price_credits ?? 0;
+    const audioTier = selectedVideoModel.supportsGenerateAudio ? (generateAudio ? "on" : "off") : null;
+    const vidKey = tierKey(selectedVideoModel.id, resolution, audioTier);
+    const vidUnitCost = pricing[vidKey]?.base_price_credits ?? pricing[selectedVideoModel.id]?.base_price_credits ?? 0;
     const vidCredits = vidUnitCost * duration;
     return (imgCredits + vidCredits) * shots.length;
-  }, [pricing, effectiveModel.id, selectedVideoModel.id, shots.length, duration]);
+  }, [pricing, effectiveModel.id, selectedVideoModel.id, selectedVideoModel.supportsGenerateAudio, shots.length, duration, imageResolution, resolution, generateAudio]);
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
@@ -1987,7 +1932,16 @@ export function ShotListEditor({
                     </label>
                     <Select
                       value={selectedImageModel.id}
-                      options={selectableModels.map((m) => ({ value: m.id, label: m.name, detail: m.costPerImage }))}
+                      options={selectableModels.map((m) => {
+                        const range = creditRanges[m.id];
+                        const detail = range ? (
+                          <span className="flex items-center gap-1">
+                            <CreditIcon size={9} />
+                            {range.max > range.min ? `${range.min}–${range.max}` : range.min}
+                          </span>
+                        ) : undefined;
+                        return { value: m.id, label: m.name, detail };
+                      })}
                       onChange={(id) => {
                         const m = MODELS.find((m) => m.id === id);
                         if (m) {
@@ -2106,7 +2060,16 @@ export function ShotListEditor({
                     <label className="mb-1.5 block text-[10px] font-medium text-muted">Model</label>
                     <Select
                       value={selectedVideoModel.id}
-                      options={VIDEO_MODELS.map((m) => ({ value: m.id, label: m.name, detail: `${m.costPerSec}/s` }))}
+                      options={getCreateModels().map((m) => {
+                        const range = creditRanges[m.id];
+                        const detail = range ? (
+                          <span className="flex items-center gap-1">
+                            <CreditIcon size={9} />
+                            {range.max > range.min ? `${range.min}–${range.max}` : range.min}
+                          </span>
+                        ) : undefined;
+                        return { value: m.id, label: m.name, detail };
+                      })}
                       onChange={(id) => {
                         const m = VIDEO_MODELS.find((m) => m.id === id);
                         if (m) {
@@ -2335,6 +2298,7 @@ export function ShotListEditor({
                 globalGenerateAudio={generateAudio}
                 globalResolution={resolution}
                 globalCameraFixed={cameraFixed}
+                globalImageResolution={imageResolution}
                 videoModel={selectedVideoModel}
                 onUpdate={(updates) => updateShot(shot.id, updates)}
                 onRemove={() => removeShot(shot.id)}
@@ -2357,6 +2321,7 @@ export function ShotListEditor({
                 onImageSettingsChange={(updates) => updateShotImageSettings(shot.id, updates)}
                 onVideoSettingsChange={(updates) => updateShotVideoSettings(shot.id, updates)}
                 imageModel={selectedImageModel}
+                pricing={pricing}
                 onDropOnFirst={(url) => updateShot(shot.id, { imageUrl: url, imageStatus: "done" })}
                 onDropOnLast={(url) => updateShot(shot.id, { endImageUrl: url })}
                 onLastFrameToNext={(frameUrl) => {
@@ -2380,6 +2345,8 @@ export function ShotListEditor({
                 globalDuration={duration}
                 globalAspectRatio={aspectRatio}
                 isBlurred={!!storyboardModal && storyboardModal.shotId !== shot.id}
+                imgCredits={pricing[tierKey(selectedImageModel.id, imageResolution)]?.base_price_credits ?? pricing[selectedImageModel.id]?.base_price_credits ?? 0}
+                vidCredits={Math.round((pricing[tierKey(selectedVideoModel.id, resolution, selectedVideoModel.supportsGenerateAudio ? (generateAudio ? "on" : "off") : null)]?.base_price_credits ?? pricing[selectedVideoModel.id]?.base_price_credits ?? 0) * duration)}
                 onUpdate={(updates) => updateShot(shot.id, updates)}
                 onRemove={() => removeShot(shot.id)}
                 onGenerateImage={() => generateSingleShot(shot)}
@@ -2783,7 +2750,14 @@ export function ShotListEditor({
           </div>
         </div>
       )}
+
+      {/* Insufficient credits modal */}
+      <InsufficientCreditsModal
+        open={creditsShortfall !== null}
+        onClose={() => setCreditsShortfall(null)}
+        required={creditsShortfall?.required}
+        available={creditsShortfall?.available}
+      />
     </div>
   );
 }
-

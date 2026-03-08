@@ -12,8 +12,9 @@ import {
 import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
-import { usePricing } from "@/hooks/usePricing";
+import { usePricing, tierKey } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
+import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
 import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
@@ -139,7 +140,7 @@ function generationToResult(g: Generation): GenerationResult {
   return {
     id: g.id,
     type: g.type,
-    imageUrl: g.url,
+    imageUrl: g.url ?? "",
     width: g.width ?? 0,
     height: g.height ?? 0,
     duration: g.duration,
@@ -515,6 +516,7 @@ export default function GeneratePage() {
   const [generatingSlots, setGeneratingSlots] = useState<{ modelName: string; modelId: string; slotId: string }[]>([]);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creditsShortfall, setCreditsShortfall] = useState<{ required: number; available: number } | null>(null);
 
   // Supabase-backed generations (master gallery)
   const {
@@ -926,7 +928,9 @@ export default function GeneratePage() {
         const data = await res.json();
         if (!res.ok) {
           if (res.status === 402) {
-            throw new Error(`Insufficient credits — need ${data.required}, have ${data.available}. Buy more at /pricing`);
+            setCreditsShortfall({ required: data.required, available: data.available });
+            invalidateCredits();
+            throw new Error(`Insufficient credits`);
           }
           throw new Error(data.error || "Generation failed");
         }
@@ -1214,8 +1218,11 @@ export default function GeneratePage() {
   const estimatedCredits = useMemo(() => {
     if (pricingLoading) return 0;
     const models = selectedModels.length > 0 ? selectedModels : [primaryModel];
-    return models.reduce((sum, m) => sum + (pricing[m.id]?.base_price_credits ?? 0), 0) * numImages;
-  }, [selectedModels, primaryModel, pricing, pricingLoading, numImages]);
+    return models.reduce((sum, m) => {
+      const key = tierKey(m.id, imageResolution);
+      return sum + (pricing[key]?.base_price_credits ?? pricing[m.id]?.base_price_credits ?? 0);
+    }, 0) * numImages;
+  }, [selectedModels, primaryModel, pricing, pricingLoading, numImages, imageResolution]);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -1909,6 +1916,14 @@ export default function GeneratePage() {
           hasNext={(() => { const idx = history.findIndex((r) => r.requestId === selectedResult.requestId); return idx > 0; })()}
         />
       )}
+
+      {/* Insufficient credits modal */}
+      <InsufficientCreditsModal
+        open={creditsShortfall !== null}
+        onClose={() => setCreditsShortfall(null)}
+        required={creditsShortfall?.required}
+        available={creditsShortfall?.available}
+      />
     </div>
   );
 }
