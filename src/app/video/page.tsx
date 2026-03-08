@@ -6,16 +6,18 @@ import { type VideoModelConfig, VIDEO_MODELS, getCreateModels, getMotionControlM
 import { loadStorage, saveStorage } from "@/lib/storage";
 import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
+import { Select } from "@/components/ui/Select";
 import { ModelSelector } from "@/components/ModelSelector";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
 import { GalleryGrid } from "@/components/generate/GalleryGrid";
-import { GalleryToolbar, type GalleryFilter, type ViewMode } from "@/components/generate/GalleryToolbar";
+import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { MediaLightbox } from "@/components/generate/MediaLightbox";
 import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion } from "@/components/generate/Icons";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
 import { usePricing } from "@/hooks/usePricing";
+import { invalidateCredits } from "@/hooks/useCredits";
 import { generationToResult, type GenerationResult, type UploadedImage } from "@/types/generations";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
@@ -184,6 +186,18 @@ export default function VideoPage() {
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Multi-shot storyboarding
+  const [multiShotEnabled, setMultiShotEnabled] = useState(false);
+  const [shots, setShots] = useState<{ prompt: string; duration: number }[]>([
+    { prompt: "", duration: 5 },
+    { prompt: "", duration: 5 },
+  ]);
+
+  // Elements (character consistency)
+  const [elements, setElements] = useState<(UploadedImage | null)[]>([null, null, null]);
+  const [elementDragOver, setElementDragOver] = useState<number | null>(null);
+  const elementInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+
   // Gallery state
   const [galleryFilter, setGalleryFilter] = useState<GalleryFilter>("videos");
   const [searchQuery, setSearchQuery] = useState("");
@@ -196,7 +210,6 @@ export default function VideoPage() {
   const [editPromptValue, setEditPromptValue] = useState("");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [firstDragOver, setFirstDragOver] = useState(false);
   const [lastDragOver, setLastDragOver] = useState(false);
@@ -224,7 +237,7 @@ export default function VideoPage() {
     [dbGenerations]
   );
 
-  const { pricing } = usePricing();
+  const { pricing, creditRanges } = usePricing();
 
   const isGenerating = generatingSlots.length > 0;
 
@@ -270,6 +283,21 @@ export default function VideoPage() {
       setResolution(currentModel.defaultResolution);
     }
   }, [currentModel, resolution]);
+
+  // Reset multi-shot & elements when switching to a model that doesn't support them
+  useEffect(() => {
+    if (!currentModel.supportsMultiShot) {
+      setMultiShotEnabled(false);
+      setShots([{ prompt: "", duration: 5 }, { prompt: "", duration: 5 }]);
+    }
+    if (!currentModel.supportsElements) {
+      setElements([null, null, null]);
+    }
+  }, [currentModel]);
+
+  // Multi-shot total duration
+  const multiShotTotalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
+  const maxModelDuration = currentModel.durations.length > 0 ? currentModel.durations[currentModel.durations.length - 1] : 15;
 
   // Filter gallery
   let filteredHistory = history;
@@ -355,6 +383,66 @@ export default function VideoPage() {
     }
   }, [uploadImage]);
 
+  // --- Element upload handlers ---
+
+  const handleElementUpload = useCallback((index: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const setter = (img: UploadedImage | null) => {
+      setElements((prev) => { const next = [...prev]; next[index] = img; return next; });
+    };
+    uploadImage(file, setter);
+    if (elementInputRefs[index].current) elementInputRefs[index].current!.value = "";
+  }, [uploadImage, elementInputRefs]);
+
+  const handleElementDrop = useCallback((index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setElementDragOver(null);
+
+    const imageUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (imageUrl && imageUrl.startsWith("http") && /\.(png|jpe?g|webp)/i.test(imageUrl)) {
+      const id = `img_${++imageIdCounter}`;
+      setElements((prev) => { const next = [...prev]; next[index] = { id, preview: imageUrl, url: imageUrl, uploading: false }; return next; });
+      return;
+    }
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const setter = (img: UploadedImage | null) => {
+        setElements((prev) => { const next = [...prev]; next[index] = img; return next; });
+      };
+      uploadImage(file, setter);
+    }
+  }, [uploadImage]);
+
+  const removeElement = useCallback((index: number) => {
+    setElements((prev) => {
+      const next = [...prev];
+      if (next[index]) URL.revokeObjectURL(next[index]!.preview);
+      next[index] = null;
+      return next;
+    });
+  }, []);
+
+  // --- Shot helpers ---
+
+  const addShot = useCallback(() => {
+    setShots((prev) => prev.length < 6 ? [...prev, { prompt: "", duration: 5 }] : prev);
+  }, []);
+
+  const removeShot = useCallback((index: number) => {
+    setShots((prev) => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+  }, []);
+
+  const updateShotPrompt = useCallback((index: number, prompt: string) => {
+    setShots((prev) => prev.map((s, i) => i === index ? { ...s, prompt } : s));
+  }, []);
+
+  const updateShotDuration = useCallback((index: number, duration: number) => {
+    setShots((prev) => prev.map((s, i) => i === index ? { ...s, duration } : s));
+  }, []);
+
   // --- Generation ---
 
   const handleGenerate = async (overridePrompt?: string) => {
@@ -395,10 +483,33 @@ export default function VideoPage() {
         if (currentModel.supportsGenerateAudio) body.generateAudio = generateAudio;
         if (supportsLastFrame && lastFrame?.url) body.endImageUrl = lastFrame.url;
         if (negativePrompt.trim() && currentModel.supportsNegativePrompt) body.negativePrompt = negativePrompt.trim();
+
+        // Multi-shot storyboarding
+        if (multiShotEnabled && currentModel.supportsMultiShot && shots.length > 0) {
+          const validShots = shots.filter((s) => s.prompt.trim());
+          if (validShots.length > 0) {
+            body.multiShot = true;
+            body.shotType = "customize";
+            body.multiPrompt = shots.map((s, i) => ({
+              index: i + 1,
+              prompt: s.prompt,
+              duration: s.duration,
+            }));
+            // Override duration with total
+            body.duration = shots.reduce((sum, s) => sum + s.duration, 0);
+          }
+        }
+
+        // Elements (character consistency)
+        const elementUrls = elements.filter(Boolean).map((e) => e!.url).filter(Boolean) as string[];
+        if (elementUrls.length > 0 && currentModel.supportsElements) {
+          body.elements = elementUrls;
+        }
       } else {
         // Motion control — reference video + character orientation
         body.videoUrl = refVideo!.url;
         body.characterOrientation = charOrientation;
+        if (currentModel.resolutions.length > 0) body.resolution = resolution;
         if (currentModel.supportsKeepOriginalSound) body.keepOriginalSound = keepOriginalSound;
       }
 
@@ -409,7 +520,13 @@ export default function VideoPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Video generation failed");
+      if (!res.ok) {
+        if (res.status === 402) {
+          throw new Error(`Insufficient credits — need ${data.required}, have ${data.available}. Buy more at /pricing`);
+        }
+        throw new Error(data.error || "Video generation failed");
+      }
+      invalidateCredits();
 
       if (!data.videoUrl) throw new Error("No video URL returned");
 
@@ -441,7 +558,7 @@ export default function VideoPage() {
             height: null,
             duration: activeMode === "create" ? duration : null,
             aspectRatio: activeMode === "create" ? aspectRatio : null,
-            resolution: activeMode === "create" && currentModel.resolutions.length > 0 ? resolution : null,
+            resolution: currentModel.resolutions.length > 0 ? resolution : null,
             settings,
             sourceImageUrl: firstFrame.url,
             referenceImageUrls: refUrls,
@@ -688,6 +805,7 @@ export default function VideoPage() {
                   selectedIds={[selectedModelId]}
                   onChange={handleModelChange}
                   pricing={pricing}
+                  creditRanges={creditRanges}
                   mode="single"
                   title="Choose Video Model"
                   subtitle="Select a model — switching groups changes mode automatically"
@@ -738,8 +856,20 @@ export default function VideoPage() {
                     />
                   )}
 
-                  {/* Duration */}
-                  {currentModel.durations.length > 0 && (
+                  {/* Multi-Shot toggle */}
+                  {currentModel.supportsMultiShot && (
+                    <Toggle
+                      checked={multiShotEnabled}
+                      onChange={setMultiShotEnabled}
+                      label="Multi-Shot"
+                      description="Storyboard with per-shot prompts"
+                      size="sm"
+                      className="w-full"
+                    />
+                  )}
+
+                  {/* Duration — hidden when multi-shot is active */}
+                  {currentModel.durations.length > 0 && !(multiShotEnabled && currentModel.supportsMultiShot) && (
                     <div>
                       <SectionLabel>Duration</SectionLabel>
                       <div className="flex flex-wrap gap-1.5">
@@ -754,6 +884,72 @@ export default function VideoPage() {
                           >
                             {d}s
                           </PillButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Elements (character consistency) */}
+                  {currentModel.supportsElements && (
+                    <div>
+                      <SectionLabel>Elements</SectionLabel>
+                      <p className="mb-2 text-[10px] text-muted">Reference as @Element1, @Element2, @Element3 in prompts</p>
+                      <div className="flex gap-2">
+                        {[0, 1, 2].map((idx) => (
+                          <div key={idx} className="relative">
+                            <div
+                              className={`relative h-[60px] w-[60px] rounded-lg transition ${
+                                elementDragOver === idx ? "ring-1 ring-accent/30" : ""
+                              }`}
+                              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setElementDragOver(idx); }}
+                              onDragLeave={(e) => { e.preventDefault(); setElementDragOver(null); }}
+                              onDrop={handleElementDrop(idx)}
+                            >
+                              {elements[idx] ? (
+                                <div className="group relative h-full w-full overflow-hidden rounded-lg border border-border">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={elements[idx]!.preview} alt={`Element ${idx + 1}`} className="h-full w-full object-cover" />
+                                  {elements[idx]!.uploading && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => removeElement(idx)}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover:opacity-100"
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                                      <path d="M2 2l6 6M8 2l-6 6" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => elementInputRefs[idx].current?.click()}
+                                  className={`flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed transition ${
+                                    elementDragOver === idx
+                                      ? "border-accent bg-accent/10 text-accent-text"
+                                      : "border-border text-muted hover:border-accent/40 hover:text-accent"
+                                  }`}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                                    <path d="M7 3v8M3 7h8" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                            {/* Badge */}
+                            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface text-[8px] font-bold text-muted ring-1 ring-border">
+                              @{idx + 1}
+                            </span>
+                            <input
+                              ref={elementInputRefs[idx]}
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={handleElementUpload(idx)}
+                              className="hidden"
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -914,6 +1110,28 @@ export default function VideoPage() {
                     </div>
                   )}
 
+                  {/* Resolution (Kling MC models now have 720p/1080p) */}
+                  {currentModel.resolutions.length > 0 && (
+                    <div>
+                      <SectionLabel>Resolution</SectionLabel>
+                      <div className="flex gap-1.5">
+                        {currentModel.resolutions.map((r) => (
+                          <PillButton
+                            key={r}
+                            active={resolution === r}
+                            onClick={() => {
+                              setResolution(r);
+                              saveStorage(STORAGE_KEYS.resolution, r);
+                            }}
+                            className="flex-1"
+                          >
+                            {r}
+                          </PillButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Keep Original Sound */}
                   {currentModel.supportsKeepOriginalSound && (
                     <Toggle
@@ -981,8 +1199,6 @@ export default function VideoPage() {
                 selectMode={selectMode}
                 onToggleSelectMode={toggleSelectMode}
                 selectedCount={selectedIds.size}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
               />
 
               {/* Gallery content */}
@@ -1124,61 +1340,158 @@ export default function VideoPage() {
                 </div>
               )}
 
-              {/* Textarea */}
-              <textarea
-                ref={promptRef}
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value);
-                  const el = e.target;
-                  el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 140) + "px";
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (canGenerate) handleGenerate();
-                  }
-                }}
-                placeholder={promptBarDragOver ? "Drop image as first frame..." : "Describe the video motion..."}
-                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted"
-                style={{ minHeight: "44px", maxHeight: "140px" }}
-              />
+              {/* Prompt area — single or multi-shot storyboard */}
+              {multiShotEnabled && currentModel.supportsMultiShot ? (
+                <>
+                  {/* Multi-shot storyboard editor */}
+                  <div className="scrollbar-none max-h-[280px] overflow-y-auto px-3 pt-3 pb-1">
+                    <div className="space-y-1.5">
+                      {shots.map((shot, i) => (
+                        <div key={i} className="group/shot flex items-start gap-2 rounded-lg border border-border/40 bg-surface/50 px-2.5 py-2 transition hover:border-border">
+                          {/* Shot number badge */}
+                          <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-accent/10 text-[10px] font-bold text-accent-text">
+                            {i + 1}
+                          </span>
+                          {/* Prompt input */}
+                          <textarea
+                            value={shot.prompt}
+                            onChange={(e) => updateShotPrompt(i, e.target.value)}
+                            placeholder={`Shot ${i + 1} — describe scene...`}
+                            rows={1}
+                            className="scrollbar-none min-w-0 flex-1 resize-none overflow-hidden bg-transparent text-xs leading-relaxed text-foreground outline-none placeholder:text-muted/40"
+                            onInput={(e) => {
+                              const el = e.target as HTMLTextAreaElement;
+                              el.style.height = "auto";
+                              el.style.height = Math.min(el.scrollHeight, 80) + "px";
+                            }}
+                          />
+                          {/* Duration selector */}
+                          <Select
+                            value={String(shot.duration)}
+                            options={Array.from({ length: 15 }, (_, n) => ({
+                              value: String(n + 1),
+                              label: `${n + 1}s`,
+                            }))}
+                            onChange={(v) => updateShotDuration(i, Number(v))}
+                            compact
+                            placement="top"
+                            minWidth={60}
+                            className="mt-0.5 w-[52px] shrink-0"
+                          />
+                          {/* Remove button */}
+                          {shots.length > 1 && (
+                            <button
+                              onClick={() => removeShot(i)}
+                              className="mt-0.5 shrink-0 rounded p-0.5 text-muted/30 transition hover:text-red-400 opacity-0 group-hover/shot:opacity-100"
+                              title="Remove shot"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                                <path d="M2 2l6 6M8 2l-6 6" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Add shot */}
+                    {shots.length < 6 && (
+                      <button
+                        onClick={addShot}
+                        className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/40 py-1.5 text-[10px] font-medium text-muted/60 transition hover:border-accent/40 hover:text-accent"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M5 1v8M1 5h8" />
+                        </svg>
+                        Add Shot
+                      </button>
+                    )}
+                  </div>
 
-              {/* Bottom bar */}
-              <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => firstInputRef.current?.click()}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/60 transition hover:border-accent/40 hover:text-accent"
-                    title="Add first frame"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M6 1v10M1 6h10" />
-                    </svg>
-                  </button>
-                  <span className="select-none text-[10px] text-muted/40">
-                    ↵ generate · ⇧↵ new line
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleGenerate()}
-                  disabled={!canGenerate}
-                  className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
-                    canGenerate
-                      ? "bg-accent text-black hover:bg-accent-hover"
-                      : "cursor-not-allowed bg-surface-hover text-muted/50"
-                  }`}
-                  title="Generate (Enter)"
-                >
-                  {isGenerating ? (
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-                  ) : (
-                    <IconSparkle size={12} />
-                  )}
-                  Generate
-                </button>
-              </div>
+                  {/* Bottom bar — multi-shot */}
+                  <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[10px] font-medium ${multiShotTotalDuration > maxModelDuration ? "text-red-400" : "text-muted/60"}`}>
+                        {shots.length} shots · {multiShotTotalDuration}s{multiShotTotalDuration > maxModelDuration ? ` (max ${maxModelDuration}s)` : ""}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleGenerate()}
+                      disabled={!canGenerate}
+                      className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
+                        canGenerate
+                          ? "bg-accent text-black hover:bg-accent-hover"
+                          : "cursor-not-allowed bg-surface-hover text-muted/50"
+                      }`}
+                      title="Generate (Enter)"
+                    >
+                      {isGenerating ? (
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                      ) : (
+                        <IconSparkle size={12} />
+                      )}
+                      Generate
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Single prompt textarea */}
+                  <textarea
+                    ref={promptRef}
+                    value={prompt}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      const el = e.target;
+                      el.style.height = "auto";
+                      el.style.height = Math.min(el.scrollHeight, 140) + "px";
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (canGenerate) handleGenerate();
+                      }
+                    }}
+                    placeholder={promptBarDragOver ? "Drop image as first frame..." : "Describe the video motion..."}
+                    className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted"
+                    style={{ minHeight: "44px", maxHeight: "140px" }}
+                  />
+
+                  {/* Bottom bar — single prompt */}
+                  <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => firstInputRef.current?.click()}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/60 transition hover:border-accent/40 hover:text-accent"
+                        title="Add first frame"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M6 1v10M1 6h10" />
+                        </svg>
+                      </button>
+                      <span className="select-none text-[10px] text-muted/40">
+                        ↵ generate · ⇧↵ new line
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleGenerate()}
+                      disabled={!canGenerate}
+                      className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
+                        canGenerate
+                          ? "bg-accent text-black hover:bg-accent-hover"
+                          : "cursor-not-allowed bg-surface-hover text-muted/50"
+                      }`}
+                      title="Generate (Enter)"
+                    >
+                      {isGenerating ? (
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                      ) : (
+                        <IconSparkle size={12} />
+                      )}
+                      Generate
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </main>

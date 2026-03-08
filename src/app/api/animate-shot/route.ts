@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
-import { getVideoModelById } from "@/lib/video-models";
+import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
 import { writeFile, mkdir, readdir } from "fs/promises";
 import { dirname, join } from "path";
+import { createClient } from "@/lib/supabase-server";
+import { calculateCost, deductCredits, refundCredits } from "@/lib/credits";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -11,7 +13,18 @@ fal.config({
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
+  let userId = "";
+  let cost = 0;
+  let creditModelId = "";
+
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    userId = user.id;
+
     const body = await req.json();
     const {
       videoModelId,
@@ -29,6 +42,10 @@ export async function POST(req: NextRequest) {
       generateAudio,
       shotNumber,
       outputFolder,
+      multiShot,
+      shotType,
+      multiPrompt,
+      elements: elementUrls,
     } = body;
 
     if (!videoModelId || !imageUrl) {
@@ -44,6 +61,21 @@ export async function POST(req: NextRequest) {
         { error: "Unknown video model" },
         { status: 400 }
       );
+    }
+
+    // Credit deduction — duration-based for video, with resolution + audio tier
+    const effectiveDuration = duration || model.defaultDuration;
+    creditModelId = videoModelId;
+    const audioTier = generateAudio === false ? "off" : "on";
+    cost = await calculateCost(videoModelId, { duration: effectiveDuration, resolution: resolution || undefined, audioTier });
+    if (cost > 0) {
+      const deduction = await deductCredits(user.id, cost, { modelId: videoModelId, description: `Video: ${model.name} (${effectiveDuration}s)` });
+      if (!deduction.success) {
+        return NextResponse.json(
+          { error: "Insufficient credits", required: deduction.required ?? cost, available: deduction.available ?? 0 },
+          { status: 402 }
+        );
+      }
     }
 
     // Build input using model's param mapping
@@ -112,9 +144,26 @@ export async function POST(req: NextRequest) {
       input.cfg_scale = body.cfgScale;
     }
 
-    console.log(`[animate-shot] endpoint=${model.endpoint} input=`, JSON.stringify(input, null, 2));
+    // Multi-shot storyboarding
+    if (multiShot && multiPrompt && Array.isArray(multiPrompt)) {
+      input.multi_prompt = multiPrompt;
+      input.shot_type = shotType || "customize";
+      // When multi_prompt is used, main prompt is ignored by the API
+    }
 
-    const result = await fal.subscribe(model.endpoint, {
+    // Elements (character consistency)
+    if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
+      input.elements = elementUrls.map((url: string) => ({
+        frontal_image_url: url,
+      }));
+    }
+
+    // Resolve endpoint — for Kling, 720p→Standard, 1080p→Pro
+    const endpoint = resolveVideoEndpoint(model, resolution);
+
+    console.log(`[animate-shot] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
+
+    const result = await fal.subscribe(endpoint, {
       input,
       logs: true,
     });
@@ -174,8 +223,13 @@ export async function POST(req: NextRequest) {
       model: model.name,
       requestId: result.requestId,
       localPath,
+      creditsUsed: cost,
     });
   } catch (error: unknown) {
+    // Refund credits on animation failure
+    if (cost > 0 && userId) {
+      await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
+    }
     console.error("Animation error:", error);
 
     let message = "Animation failed";

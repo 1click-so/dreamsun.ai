@@ -17,6 +17,7 @@ import { ShotCard } from "@/components/shots/ShotCard";
 import { StoryboardCard } from "@/components/shots/StoryboardCard";
 import { StoryboardShotModal } from "@/components/shots/StoryboardShotModal";
 import { usePricing } from "@/hooks/usePricing";
+import { invalidateCredits } from "@/hooks/useCredits";
 import { CreditIcon } from "@/components/ModelSelector";
 import type { Shot, ShotStatus, ImageSettings, VideoSettings, ShotSettings, UploadedRef } from "@/types/shots";
 import Image from "next/image";
@@ -1251,10 +1252,14 @@ export function ShotListEditor({
       if (!res.ok) {
         updateShot(shot.id, {
           imageStatus: "error",
-          error: (data.error as string) || "Generation failed",
+          error: res.status === 402
+            ? `Insufficient credits — need ${data.required}, have ${data.available}`
+            : (data.error as string) || "Generation failed",
         });
+        if (res.status === 402) invalidateCredits();
         return;
       }
+      invalidateCredits();
 
       // All generated image URLs (first is primary, rest are alternatives)
       const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
@@ -1372,10 +1377,14 @@ export function ShotListEditor({
       if (!res.ok) {
         updateShot(shotId, {
           imageStatus: "error",
-          error: (data.error as string) || "Edit failed",
+          error: res.status === 402
+            ? `Insufficient credits — need ${data.required}, have ${data.available}`
+            : (data.error as string) || "Edit failed",
         });
+        if (res.status === 402) invalidateCredits();
         return;
       }
+      invalidateCredits();
 
       const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
 
@@ -1486,11 +1495,40 @@ export function ShotListEditor({
         input.negative_prompt = shot.videoNegativePrompt;
       }
 
-      // Call fal.ai directly through proxy — browser polls, no serverless timeout
-      const result = await fal.subscribe(model.endpoint, {
-        input,
-        logs: true,
+      // Deduct credits before generation
+      const deductRes = await fetch("/api/credits/deduct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelId: model.id, duration: shotDuration }),
       });
+      if (!deductRes.ok) {
+        const deductData = await deductRes.json();
+        if (deductRes.status === 402) {
+          updateShot(shot.id, { videoStatus: "error", error: `Insufficient credits — need ${deductData.required}, have ${deductData.available}` });
+          invalidateCredits();
+          return;
+        }
+      }
+
+      // Call fal.ai directly through proxy — browser polls, no serverless timeout
+      let result;
+      try {
+        result = await fal.subscribe(model.endpoint, {
+          input,
+          logs: true,
+        });
+      } catch (falError) {
+        // Refund credits on fal.ai failure
+        await fetch("/api/credits/refund", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modelId: model.id, duration: shotDuration }),
+        }).catch(() => {});
+        invalidateCredits();
+        throw falError;
+      }
+
+      invalidateCredits();
 
       // Check if cancelled during generation
       if (controller.signal.aborted) {
@@ -1672,10 +1710,11 @@ export function ShotListEditor({
 
   // Estimated credits for generating all shots with current settings
   const estimatedCredits = useMemo(() => {
-    const imgCredits = pricing[effectiveModel.id]?.effective_credits ?? 0;
-    const vidCredits = pricing[selectedVideoModel.id]?.effective_credits ?? 0;
+    const imgCredits = pricing[effectiveModel.id]?.base_price_credits ?? 0;
+    const vidUnitCost = pricing[selectedVideoModel.id]?.base_price_credits ?? 0;
+    const vidCredits = vidUnitCost * duration;
     return (imgCredits + vidCredits) * shots.length;
-  }, [pricing, effectiveModel.id, selectedVideoModel.id, shots.length]);
+  }, [pricing, effectiveModel.id, selectedVideoModel.id, shots.length, duration]);
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);

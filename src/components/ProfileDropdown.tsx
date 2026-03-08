@@ -58,7 +58,7 @@ export function ProfileDropdown() {
   const [email, setEmail] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useTheme();
-  const { credits, maxCredits, loading: creditsLoading } = useCredits();
+  const { total: credits, subscription, topup, tier, loading: creditsLoading } = useCredits();
   const router = useRouter();
 
   // Fetch user email
@@ -94,7 +94,9 @@ export function ProfileDropdown() {
   }, [open]);
 
   const initial = email ? email[0].toUpperCase() : "?";
-  const ratio = maxCredits > 0 ? credits / maxCredits : 1;
+  // Ring: ratio based on sensible max (plan-based or 100 for free tier)
+  const maxCredits = tier === "pro" ? 9200 : tier === "creator" ? 4400 : tier === "starter" ? 1000 : 100;
+  const ratio = credits > 0 ? Math.min(credits / maxCredits, 1) : 0;
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -136,14 +138,16 @@ export function ProfileDropdown() {
                 Credits
               </span>
               <span className="text-xs font-semibold text-foreground">
-                {creditsLoading ? "..." : (
-                  maxCredits > 0
-                    ? <>{credits.toLocaleString()} <span className="text-muted font-normal">/ {maxCredits.toLocaleString()}</span></>
-                    : <span className="text-muted">No plan</span>
-                )}
+                {creditsLoading ? "..." : credits.toLocaleString()}
               </span>
             </div>
-            {!creditsLoading && maxCredits > 0 && (
+            {!creditsLoading && (subscription > 0 || topup > 0) && (
+              <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted">
+                {subscription > 0 && <span>Plan: {subscription.toLocaleString()}</span>}
+                {topup > 0 && <span>Top-up: {topup.toLocaleString()}</span>}
+              </div>
+            )}
+            {!creditsLoading && (
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/50">
                 <div
                   className="h-full rounded-full transition-all duration-700"

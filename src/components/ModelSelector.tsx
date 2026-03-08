@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import type { ModelPricing } from "@/hooks/usePricing";
+import type { ModelPricing, CreditRange } from "@/hooks/usePricing";
 
 export function CreditIcon({ size = 10 }: { size?: number }) {
   return (
@@ -13,9 +13,10 @@ export function CreditIcon({ size = 10 }: { size?: number }) {
   );
 }
 
-function CreditBadge({ credits, discount, promoLabel }: { credits: number; discount?: number; promoLabel?: string | null }) {
+function CreditBadge({ credits, creditsMax, discount, promoLabel }: { credits: number; creditsMax?: number; discount?: number; promoLabel?: string | null }) {
   if (!credits || credits <= 0) return null;
   const hasDiscount = (discount ?? 0) > 0;
+  const showRange = creditsMax != null && creditsMax > credits;
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1.5">
       {hasDiscount && promoLabel && (
@@ -25,7 +26,7 @@ function CreditBadge({ credits, discount, promoLabel }: { credits: number; disco
       )}
       <span className="flex items-center gap-1 text-[11px] text-muted">
         <CreditIcon size={11} />
-        <span className="font-medium">{credits}</span>
+        <span className="font-medium">{showRange ? `${credits}–${creditsMax}` : credits}</span>
       </span>
     </span>
   );
@@ -78,6 +79,7 @@ interface ModelSelectorProps {
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   pricing?: Record<string, ModelPricing>;
+  creditRanges?: Record<string, CreditRange>;
   /** "multi" = checkbox multi-select (default), "single" = select one and close */
   mode?: "single" | "multi";
   /** Panel title */
@@ -87,7 +89,7 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({
-  models, selectedIds, onChange, pricing,
+  models, selectedIds, onChange, pricing, creditRanges,
   mode = "multi",
   title,
   subtitle,
@@ -300,6 +302,7 @@ export function ModelSelector({
                       selectedIds={selectedIds}
                       onSelect={handleSelect}
                       pricing={pricing}
+                      creditRanges={creditRanges}
                     />
                   ))
                 )}
@@ -336,6 +339,18 @@ export function ModelSelector({
           )}
         </div>
         {pricing && selectedModels.length >= 1 && (() => {
+          if (selectedModels.length === 1 && creditRanges?.[selectedModels[0].id]) {
+            const range = creditRanges[selectedModels[0].id];
+            if (range.min > 0) {
+              const label = range.max > range.min ? `${range.min}–${range.max}` : `${range.min}`;
+              return (
+                <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
+                  <CreditIcon size={11} />
+                  <span className="font-medium">{label}</span>
+                </span>
+              );
+            }
+          }
           const totalCredits = selectedModels.reduce((sum, m) => sum + (pricing[m.id]?.effective_credits ?? 0), 0);
           return totalCredits > 0 ? (
             <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
@@ -369,12 +384,14 @@ function ModelSection({
   selectedIds,
   onSelect,
   pricing,
+  creditRanges,
 }: {
   label?: string;
   models: SelectorModel[];
   selectedIds: string[];
   onSelect: (id: string) => void;
   pricing?: Record<string, ModelPricing>;
+  creditRanges?: Record<string, CreditRange>;
 }) {
   return (
     <div>
@@ -430,7 +447,8 @@ function ModelSection({
                 ))}
                 {pricing?.[m.id] && (
                   <CreditBadge
-                    credits={pricing[m.id].effective_credits}
+                    credits={creditRanges?.[m.id]?.min ?? pricing[m.id].effective_credits}
+                    creditsMax={creditRanges?.[m.id]?.max}
                     discount={pricing[m.id].discount_pct}
                     promoLabel={pricing[m.id].promo_label}
                   />

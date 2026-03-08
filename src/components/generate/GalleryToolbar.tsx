@@ -4,7 +4,6 @@ import { useState } from "react";
 import { saveStorage } from "@/lib/storage";
 
 export type GalleryFilter = "all" | "images" | "loved" | "videos" | "audio";
-export type ViewMode = "grid" | "list";
 
 const ALL_FILTERS: GalleryFilter[] = ["all", "images", "videos", "audio", "loved"];
 
@@ -64,9 +63,6 @@ interface GalleryToolbarProps {
   selectMode?: boolean;
   onToggleSelectMode?: () => void;
   selectedCount?: number;
-  // View mode
-  viewMode?: ViewMode;
-  onViewModeChange?: (v: ViewMode) => void;
 }
 
 const SCALES = [0.4, 0.6, 0.8, 1.0, 1.3, 1.7];
@@ -84,8 +80,6 @@ export function GalleryToolbar({
   selectMode,
   onToggleSelectMode,
   selectedCount = 0,
-  viewMode = "grid",
-  onViewModeChange,
 }: GalleryToolbarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -145,40 +139,6 @@ export function GalleryToolbar({
 
         {/* Divider */}
         <div className="h-4 w-px bg-border/60" />
-
-        {/* View mode toggle */}
-        {onViewModeChange && (
-          <div className="flex items-center rounded-lg border border-border/60 bg-surface/50">
-            <button
-              onClick={() => onViewModeChange("grid")}
-              className={`rounded-l-lg p-1.5 transition ${
-                viewMode === "grid" ? "bg-accent/12 text-accent-text" : "text-muted/50 hover:text-foreground"
-              }`}
-              title="Grid view"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
-                <rect x="1" y="1" width="5" height="5" rx="1" />
-                <rect x="8" y="1" width="5" height="5" rx="1" />
-                <rect x="1" y="8" width="5" height="5" rx="1" />
-                <rect x="8" y="8" width="5" height="5" rx="1" />
-              </svg>
-            </button>
-            <button
-              onClick={() => onViewModeChange("list")}
-              className={`rounded-r-lg p-1.5 transition ${
-                viewMode === "list" ? "bg-accent/12 text-accent-text" : "text-muted/50 hover:text-foreground"
-              }`}
-              title="List view"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-                <path d="M1 3h12M1 7h12M1 11h12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Divider */}
-        {onViewModeChange && <div className="h-4 w-px bg-border/60" />}
 
         {/* Size slider */}
         <div className="flex items-center gap-1.5">

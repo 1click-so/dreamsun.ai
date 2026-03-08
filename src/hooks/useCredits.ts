@@ -1,51 +1,59 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase-browser";
+import { useState, useEffect, useCallback } from "react";
 
 export interface CreditBalance {
-  credits: number;
-  maxCredits: number;
+  subscription: number;
+  topup: number;
+  total: number;
+  tier: string;
   loading: boolean;
 }
 
-let cache: { credits: number; maxCredits: number } | null = null;
+let cache: Omit<CreditBalance, "loading"> | null = null;
+const CREDIT_REFRESH_EVENT = "credits:refresh";
 
 export function useCredits(): CreditBalance {
-  const [balance, setBalance] = useState<{ credits: number; maxCredits: number }>(
-    cache ?? { credits: 0, maxCredits: 0 }
+  const [balance, setBalance] = useState<Omit<CreditBalance, "loading">>(
+    cache ?? { subscription: 0, topup: 0, total: 0, tier: "free" }
   );
   const [loading, setLoading] = useState(!cache);
 
-  useEffect(() => {
-    if (cache) return;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        setLoading(false);
-        return;
-      }
-      supabase
-        .from("user_credits")
-        .select("credits, max_credits")
-        .eq("user_id", data.user.id)
-        .single()
-        .then(({ data: row }) => {
-          const result = {
-            credits: row?.credits ?? 0,
-            maxCredits: row?.max_credits ?? 0,
-          };
-          cache = result;
-          setBalance(result);
-          setLoading(false);
-        });
-    });
+  const fetchBalance = useCallback(async () => {
+    try {
+      const res = await fetch("/api/credits/balance");
+      if (!res.ok) return;
+      const data = await res.json();
+      const result = {
+        subscription: data.subscription ?? 0,
+        topup: data.topup ?? 0,
+        total: data.total ?? 0,
+        tier: data.tier ?? "free",
+      };
+      cache = result;
+      setBalance(result);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!cache) fetchBalance();
+
+    // Listen for refresh events (from invalidateCredits)
+    const handler = () => {
+      cache = null;
+      fetchBalance();
+    };
+    window.addEventListener(CREDIT_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(CREDIT_REFRESH_EVENT, handler);
+  }, [fetchBalance]);
 
   return { ...balance, loading };
 }
 
-/** Invalidate the cached credit balance so next render re-fetches */
+/** Invalidate the cached credit balance so all hooks re-fetch */
 export function invalidateCredits() {
   cache = null;
+  window.dispatchEvent(new Event(CREDIT_REFRESH_EVENT));
 }

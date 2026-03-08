@@ -3,6 +3,8 @@ import { fal } from "@fal-ai/client";
 import { getModelById } from "@/lib/models";
 import { writeFile, mkdir, readdir } from "fs/promises";
 import { dirname, join } from "path";
+import { createClient } from "@/lib/supabase-server";
+import { calculateCost, deductCredits, refundCredits } from "@/lib/credits";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -11,7 +13,18 @@ fal.config({
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
+  let userId = "";
+  let cost = 0;
+  let creditModelId = "";
+
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    userId = user.id;
+
     const body = await req.json();
     const {
       modelId,
@@ -36,6 +49,20 @@ export async function POST(req: NextRequest) {
     const model = getModelById(modelId);
     if (!model) {
       return NextResponse.json({ error: "Unknown model" }, { status: 400 });
+    }
+
+    // Credit deduction
+    const effectiveNumImages = typeof numImages === "number" && numImages >= 1 && numImages <= 4 ? numImages : 1;
+    creditModelId = modelId;
+    cost = await calculateCost(modelId, { numImages: effectiveNumImages });
+    if (cost > 0) {
+      const deduction = await deductCredits(user.id, cost, { modelId, description: `Shot image: ${model.name}` });
+      if (!deduction.success) {
+        return NextResponse.json(
+          { error: "Insufficient credits", required: deduction.required ?? cost, available: deduction.available ?? 0 },
+          { status: 402 }
+        );
+      }
     }
 
     // Build input — same logic as /api/generate
@@ -167,8 +194,13 @@ export async function POST(req: NextRequest) {
       model: model.name,
       requestId: result.requestId,
       localPath,
+      creditsUsed: cost,
     });
   } catch (error: unknown) {
+    // Refund credits on generation failure
+    if (cost > 0 && userId) {
+      await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
+    }
     console.error("Shot generation error:", error);
 
     let message = "Generation failed";

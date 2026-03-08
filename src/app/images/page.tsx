@@ -13,8 +13,9 @@ import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
 import { usePricing } from "@/hooks/usePricing";
+import { invalidateCredits } from "@/hooks/useCredits";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
-import { GalleryToolbar, type GalleryFilter, type ViewMode } from "@/components/generate/GalleryToolbar";
+import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 
@@ -545,7 +546,6 @@ export default function GeneratePage() {
   const [galleryFilter, setGalleryFilter] = useState<GalleryFilter>("images");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [bulkDownloading, setBulkDownloading] = useState(false);
 
   // Characters
@@ -560,7 +560,7 @@ export default function GeneratePage() {
   const galleryRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
-  const { pricing, loading: pricingLoading } = usePricing();
+  const { pricing, creditRanges, loading: pricingLoading } = usePricing();
 
   const isGenerating = generatingSlots.length > 0;
 
@@ -924,7 +924,14 @@ export default function GeneratePage() {
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Generation failed");
+        if (!res.ok) {
+          if (res.status === 402) {
+            throw new Error(`Insufficient credits — need ${data.required}, have ${data.available}. Buy more at /pricing`);
+          }
+          throw new Error(data.error || "Generation failed");
+        }
+        // Refresh credit display after successful generation
+        invalidateCredits();
 
         const imageUrls: string[] = data.allImageUrls && data.allImageUrls.length > 0
           ? data.allImageUrls
@@ -1207,7 +1214,7 @@ export default function GeneratePage() {
   const estimatedCredits = useMemo(() => {
     if (pricingLoading) return 0;
     const models = selectedModels.length > 0 ? selectedModels : [primaryModel];
-    return models.reduce((sum, m) => sum + (pricing[m.id]?.effective_credits ?? 0), 0) * numImages;
+    return models.reduce((sum, m) => sum + (pricing[m.id]?.base_price_credits ?? 0), 0) * numImages;
   }, [selectedModels, primaryModel, pricing, pricingLoading, numImages]);
 
   return (
@@ -1236,6 +1243,7 @@ export default function GeneratePage() {
                   selectedIds={selectedModelIds}
                   onChange={handleModelsChange}
                   pricing={pricing}
+                  creditRanges={creditRanges}
                 />
                 {selectedModels.length > 1 && (
                   <p className="mt-1.5 text-[10px] text-muted">
@@ -1526,6 +1534,7 @@ export default function GeneratePage() {
                   selectedIds={selectedModelIds}
                   onChange={handleModelsChange}
                   pricing={pricing}
+                  creditRanges={creditRanges}
                 />
               </div>
               <div className="flex gap-1">
@@ -1635,6 +1644,7 @@ export default function GeneratePage() {
                 selectMode={selectMode}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
+
               />
             )}
           </div>
@@ -1693,8 +1703,6 @@ export default function GeneratePage() {
                 selectMode={selectMode}
                 onToggleSelectMode={toggleSelectMode}
                 selectedCount={selectedIds.size}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
               />
 
               {/* Gallery content — extra bottom padding for floating prompt bar */}
@@ -1731,6 +1739,10 @@ export default function GeneratePage() {
                   onClickImage={setSelectedResult}
                   onFavorite={toggleFavorite}
                   onDelete={deleteImage}
+                  selectMode={selectMode}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+  
                 />
                 )}
               </div>
@@ -2672,21 +2684,19 @@ function GalleryGrid({
       {containerWidth > 0 && (
         <div className="flex flex-col" style={{ gap }}>
           {rows.map((row, rowIdx) => {
-            // Justify: all rows fill exact container width
             const totalGap = (row.length - 1) * gap;
             const availableWidth = containerWidth - totalGap;
             const totalAR = row.reduce((sum, e) => sum + e.aspectRatio, 0);
             const justifiedHeight = availableWidth / totalAR;
             const dominantHeight = getDominantHeight(row, targetRowHeight);
             const isLastRow = rowIdx === rows.length - 1;
-            // Cap last row if too few images would make it absurdly tall
             const rowHeight = (isLastRow && row.length <= 2 && justifiedHeight > dominantHeight * 1.5)
               ? dominantHeight
               : justifiedHeight;
 
             return (
               <div key={rowIdx} className="flex" style={{ gap, height: rowHeight }}>
-                {row.map((entry, colIdx) => {
+                {row.map((entry) => {
                   if (entry.type === "slot") {
                     return (
                       <div
@@ -2694,11 +2704,8 @@ function GalleryGrid({
                         className="relative min-w-0 overflow-hidden rounded-lg"
                         style={{ flex: `1 1 ${rowHeight * entry.aspectRatio}px`, height: rowHeight }}
                       >
-                        {/* Shimmer skeleton background */}
                         <div className="absolute inset-0 animate-pulse bg-surface" />
-                        {/* Sweeping shimmer effect */}
                         <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.07] to-transparent" />
-                        {/* Label */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                           <div className="h-6 w-24 animate-pulse rounded-md bg-border/40" />
                           <span className="animate-pulse text-[10px] font-medium text-muted/50">

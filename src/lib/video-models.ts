@@ -42,15 +42,21 @@ export interface VideoModelConfig {
   supportsGenerateAudio: boolean;
   /** Whether model supports keep_original_sound (motion control) */
   supportsKeepOriginalSound?: boolean;
+  /** Whether model supports multi-shot storyboarding (per-shot prompts) */
+  supportsMultiShot?: boolean;
+  /** Whether model supports elements (character consistency via reference images) */
+  supportsElements?: boolean;
   /** Extra params always sent with this model */
   extraInput?: Record<string, unknown>;
+  /** Resolution → endpoint mapping (for models where Standard=720p, Pro=1080p) */
+  endpointByResolution?: Record<string, string>;
 }
 
 export const VIDEO_MODELS: VideoModelConfig[] = [
   // ===== Image-to-Video =====
   {
-    id: "kling-2-6-pro",
-    name: "Kling 2.6 Pro",
+    id: "kling-2-6",
+    name: "Kling 2.6",
     description: "Reliable image-to-video with negative prompt and CFG control.",
     endpoint: "fal-ai/kling-video/v2.6/pro/image-to-video",
     type: "image-to-video",
@@ -58,8 +64,8 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     defaultDuration: 5,
     durations: [5, 10],
     aspectRatios: ["16:9", "9:16", "1:1"],
-    resolutions: [],
-    defaultResolution: "",
+    resolutions: ["1080p"],
+    defaultResolution: "1080p",
     params: {
       imageUrl: "start_image_url",
       endImageUrl: "end_image_url",
@@ -77,45 +83,17 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     },
   },
   {
-    id: "kling-3-standard",
-    name: "Kling 3.0 Standard",
-    description: "Latest Kling generation. First + last frame support, 3-15s duration.",
-    endpoint: "fal-ai/kling-video/v3/standard/image-to-video",
-    type: "image-to-video",
-    costPerSec: "$0.168",
-    defaultDuration: 5,
-    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    aspectRatios: ["16:9", "9:16", "1:1"],
-    resolutions: [],
-    defaultResolution: "",
-    params: {
-      imageUrl: "start_image_url",
-      endImageUrl: "end_image_url",
-      prompt: "prompt",
-      duration: "duration",
-      aspectRatio: "aspect_ratio",
-    },
-    supportsNegativePrompt: true,
-    supportsCfgScale: true,
-    supportsCameraFixed: false,
-    supportsGenerateAudio: true,
-    extraInput: {
-      negative_prompt: "blur, distort, and low quality",
-      cfg_scale: 0.5,
-    },
-  },
-  {
-    id: "kling-3-pro",
-    name: "Kling 3.0 Pro",
-    description: "Highest quality Kling. First + last frame, audio generation, 3-15s.",
+    id: "kling-3",
+    name: "Kling 3.0",
+    description: "Latest Kling generation. First + last frame, audio, 3-15s duration.",
     endpoint: "fal-ai/kling-video/v3/pro/image-to-video",
     type: "image-to-video",
-    costPerSec: "$0.224",
+    costPerSec: "$0.168–0.392",
     defaultDuration: 5,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     aspectRatios: ["16:9", "9:16", "1:1"],
-    resolutions: [],
-    defaultResolution: "",
+    resolutions: ["720p", "1080p"],
+    defaultResolution: "1080p",
     params: {
       imageUrl: "start_image_url",
       endImageUrl: "end_image_url",
@@ -127,9 +105,15 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     supportsCfgScale: true,
     supportsCameraFixed: false,
     supportsGenerateAudio: true,
+    supportsMultiShot: true,
+    supportsElements: true,
     extraInput: {
       negative_prompt: "blur, distort, and low quality",
       cfg_scale: 0.5,
+    },
+    endpointByResolution: {
+      "720p": "fal-ai/kling-video/v3/standard/image-to-video",
+      "1080p": "fal-ai/kling-video/v3/pro/image-to-video",
     },
   },
   {
@@ -236,43 +220,17 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
 
   // ===== Motion Control =====
   {
-    id: "kling-2-6-mc-standard",
-    name: "Kling 2.6 Standard",
-    description: "Affordable motion transfer. Copy movement from any reference video.",
-    endpoint: "fal-ai/kling-video/v2.6/standard/motion-control",
-    type: "motion-control",
-    costPerSec: "$0.07",
-    defaultDuration: 10,
-    durations: [],
-    aspectRatios: [],
-    resolutions: [],
-    defaultResolution: "",
-    params: {
-      imageUrl: "image_url",
-      videoUrl: "video_url",
-      characterOrientation: "character_orientation",
-      prompt: "prompt",
-    },
-    requiresVideo: true,
-    characterOrientations: ["video", "image"],
-    supportsNegativePrompt: false,
-    supportsCfgScale: false,
-    supportsCameraFixed: false,
-    supportsGenerateAudio: false,
-    supportsKeepOriginalSound: true,
-  },
-  {
-    id: "kling-2-6-mc-pro",
-    name: "Kling 2.6 Pro",
-    description: "Pro motion transfer with keep-audio support. Higher fidelity.",
+    id: "kling-2-6-mc",
+    name: "Kling 2.6",
+    description: "Motion transfer. Copy movement from any reference video.",
     endpoint: "fal-ai/kling-video/v2.6/pro/motion-control",
     type: "motion-control",
-    costPerSec: "$0.14",
+    costPerSec: "$0.07–0.112",
     defaultDuration: 10,
     durations: [],
     aspectRatios: [],
-    resolutions: [],
-    defaultResolution: "",
+    resolutions: ["720p", "1080p"],
+    defaultResolution: "1080p",
     params: {
       imageUrl: "image_url",
       videoUrl: "video_url",
@@ -286,45 +244,23 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     supportsCameraFixed: false,
     supportsGenerateAudio: false,
     supportsKeepOriginalSound: true,
-  },
-  {
-    id: "kling-3-mc-standard",
-    name: "Kling 3.0 Standard",
-    description: "Latest Kling motion control. Facial consistency via elements.",
-    endpoint: "fal-ai/kling-video/v3/standard/motion-control",
-    type: "motion-control",
-    costPerSec: "$0.126",
-    defaultDuration: 10,
-    durations: [],
-    aspectRatios: [],
-    resolutions: [],
-    defaultResolution: "",
-    params: {
-      imageUrl: "image_url",
-      videoUrl: "video_url",
-      characterOrientation: "character_orientation",
-      prompt: "prompt",
+    endpointByResolution: {
+      "720p": "fal-ai/kling-video/v2.6/standard/motion-control",
+      "1080p": "fal-ai/kling-video/v2.6/pro/motion-control",
     },
-    requiresVideo: true,
-    characterOrientations: ["video", "image"],
-    supportsNegativePrompt: false,
-    supportsCfgScale: false,
-    supportsCameraFixed: false,
-    supportsGenerateAudio: false,
-    supportsKeepOriginalSound: true,
   },
   {
-    id: "kling-3-mc-pro",
-    name: "Kling 3.0 Pro",
-    description: "Highest quality motion transfer. Facial elements, keep audio, up to 30s.",
+    id: "kling-3-mc",
+    name: "Kling 3.0",
+    description: "Latest motion control. Facial consistency via elements, keep audio, up to 30s.",
     endpoint: "fal-ai/kling-video/v3/pro/motion-control",
     type: "motion-control",
-    costPerSec: "$0.168",
+    costPerSec: "$0.126–0.168",
     defaultDuration: 10,
     durations: [],
     aspectRatios: [],
-    resolutions: [],
-    defaultResolution: "",
+    resolutions: ["720p", "1080p"],
+    defaultResolution: "1080p",
     params: {
       imageUrl: "image_url",
       videoUrl: "video_url",
@@ -338,11 +274,23 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     supportsCameraFixed: false,
     supportsGenerateAudio: false,
     supportsKeepOriginalSound: true,
+    endpointByResolution: {
+      "720p": "fal-ai/kling-video/v3/standard/motion-control",
+      "1080p": "fal-ai/kling-video/v3/pro/motion-control",
+    },
   },
 ];
 
 export function getVideoModelById(id: string): VideoModelConfig | undefined {
   return VIDEO_MODELS.find((m) => m.id === id);
+}
+
+/** Resolve the actual fal.ai endpoint for a model, accounting for resolution-based routing */
+export function resolveVideoEndpoint(model: VideoModelConfig, resolution?: string): string {
+  if (model.endpointByResolution && resolution && model.endpointByResolution[resolution]) {
+    return model.endpointByResolution[resolution];
+  }
+  return model.endpoint;
 }
 
 /** Image-to-video models (non-audio) for Create mode */
@@ -375,6 +323,8 @@ export function videoModelsToSelectorItems(models: VideoModelConfig[]) {
       if (m.supportsCameraFixed) tags.push("camera lock");
       if (m.supportsGenerateAudio) tags.push("audio");
       if (m.params.endImageUrl) tags.push("last frame");
+      if (m.supportsMultiShot) tags.push("multi-shot");
+      if (m.supportsElements) tags.push("elements");
     } else {
       tags.push("motion transfer");
       if (m.characterOrientations?.includes("video")) tags.push("up to 30s");
