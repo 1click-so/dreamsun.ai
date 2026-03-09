@@ -81,7 +81,7 @@ const QUICK_TOOLS = [
   { icon: Film, label: "Video Generator", href: "/video", badge: null },
   { icon: Clapperboard, label: "Shot Scenes", href: "/shots", badge: "Hot" },
   { icon: Wand2, label: "Edit with Refs", href: "/images", badge: null },
-  { icon: ScanEye, label: "Upscale", href: "/images", badge: "Soon" },
+  { icon: ScanEye, label: "Upscale", href: "/images?mode=upscale", badge: "New" },
 ];
 
 /* ------------------------------------------------------------------ */

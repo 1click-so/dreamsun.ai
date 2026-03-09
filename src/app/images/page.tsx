@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { fal } from "@fal-ai/client";
 import {
@@ -564,11 +565,27 @@ function PillButton({
 
 // --- Page ---
 
+const VALID_MODES: ImageMode[] = ["create", "upscale", "edit", "skin"];
+
 export default function GeneratePage() {
-  // Mode
-  const [activeMode, setActiveMode] = useState<ImageMode>(() =>
-    loadStorage<ImageMode>(STORAGE_KEYS.mode, "create")
-  );
+  const searchParams = useSearchParams();
+
+  // Mode — URL param > localStorage > default
+  const [activeMode, setActiveMode] = useState<ImageMode>(() => {
+    if (typeof window === "undefined") return "create";
+    const urlMode = new URLSearchParams(window.location.search).get("mode") as ImageMode | null;
+    if (urlMode && VALID_MODES.includes(urlMode)) return urlMode;
+    return loadStorage<ImageMode>(STORAGE_KEYS.mode, "create");
+  });
+
+  // Sync when searchParams change (e.g. navigating from explore page)
+  useEffect(() => {
+    const urlMode = searchParams.get("mode") as ImageMode | null;
+    if (urlMode && VALID_MODES.includes(urlMode) && urlMode !== activeMode) {
+      setActiveMode(urlMode);
+      saveStorage(STORAGE_KEYS.mode, urlMode);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Settings state (persisted)
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
