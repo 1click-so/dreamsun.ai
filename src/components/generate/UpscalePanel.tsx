@@ -54,6 +54,9 @@ export function UpscalePanel({
   // Scale factor
   const [scale, setScale] = useState(selectedModel.defaultScale);
 
+  // Creativity (for Crystal models)
+  const [creativity, setCreativity] = useState(selectedModel.defaultCreativity ?? 0);
+
   // Image upload
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -78,8 +81,9 @@ export function UpscalePanel({
       const newId = ids[0];
       setSelectedModelId(newId);
       const newModel = getUpscaleModelById(newId);
-      if (newModel && !newModel.scales.includes(scale)) {
-        setScale(newModel.defaultScale);
+      if (newModel) {
+        if (!newModel.scales.includes(scale)) setScale(newModel.defaultScale);
+        setCreativity(newModel.defaultCreativity ?? 0);
       }
     },
     [scale]
@@ -174,6 +178,7 @@ export function UpscalePanel({
           scale,
           imageWidth: imageDims?.width,
           imageHeight: imageDims?.height,
+          creativity: selectedModel.supportsCreativity ? creativity : undefined,
         }),
       });
 
@@ -267,6 +272,28 @@ export function UpscalePanel({
             </p>
           )}
         </div>
+
+        {/* Creativity / Enhancement strength — Crystal models only */}
+        {selectedModel.supportsCreativity && (
+          <div>
+            <SectionLabel>Enhancement Strength</SectionLabel>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={1}
+                value={creativity}
+                onChange={(e) => setCreativity(Number(e.target.value))}
+                className="h-1 w-full cursor-pointer appearance-none rounded-full bg-border accent-accent"
+              />
+              <span className="w-6 shrink-0 text-right text-[11px] font-medium text-foreground">{creativity}</span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted">
+              {creativity === 0 ? "Faithful — preserves original details" : creativity <= 3 ? "Subtle refinement" : creativity <= 6 ? "Moderate enhancement" : "Aggressive refinement"}
+            </p>
+          </div>
+        )}
 
         {/* Image upload area */}
         <div>

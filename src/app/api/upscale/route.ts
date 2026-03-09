@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     userId = user.id;
 
     const body = await req.json();
-    const { modelId, imageUrl, scale, imageWidth, imageHeight } = body;
+    const { modelId, imageUrl, scale, imageWidth, imageHeight, creativity } = body;
 
     if (!modelId || !imageUrl) {
       return NextResponse.json({ error: "modelId and imageUrl are required" }, { status: 400 });
@@ -63,6 +63,11 @@ export async function POST(req: NextRequest) {
 
     if (model.extraInput) {
       Object.assign(input, model.extraInput);
+    }
+
+    // User-controlled creativity (overrides extraInput default)
+    if (creativity != null && model.supportsCreativity) {
+      input.creativity = creativity;
     }
 
     const result = await fal.subscribe(model.endpoint, { input, logs: true });

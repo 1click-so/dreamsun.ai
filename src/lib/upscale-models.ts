@@ -21,6 +21,10 @@ export interface UpscaleModelConfig {
   categories: ("upscale" | "skin")[];
   /** How to extract the result URL from the API response */
   responseFormat?: "image" | "images_array";
+  /** Whether the model supports a creativity/enhancement strength slider (0-10) */
+  supportsCreativity?: boolean;
+  /** Default creativity value */
+  defaultCreativity?: number;
 }
 
 export const UPSCALE_MODELS: UpscaleModelConfig[] = [
@@ -73,15 +77,14 @@ export const UPSCALE_MODELS: UpscaleModelConfig[] = [
     tags: ["Portraits", "Skin & Eyes"],
     categories: ["upscale", "skin"],
     responseFormat: "images_array",
-    extraInput: {
-      creativity: 0,
-    },
+    supportsCreativity: true,
+    defaultCreativity: 0,
   },
   {
     id: "crystal-skin-enhance",
     name: "Crystal Skin Enhance",
     endpoint: "clarityai/crystal-upscaler",
-    description: "Enhance skin, eyes, and facial features with creative refinement.",
+    description: "More aggressive skin, eye, and facial feature refinement.",
     provider: "ClarityAI",
     imageParam: "image_url",
     scaleParam: "scale_factor",
@@ -90,9 +93,8 @@ export const UPSCALE_MODELS: UpscaleModelConfig[] = [
     tags: ["Skin", "Face Refine"],
     categories: ["skin"],
     responseFormat: "images_array",
-    extraInput: {
-      creativity: 5,
-    },
+    supportsCreativity: true,
+    defaultCreativity: 5,
   },
 ];
 
