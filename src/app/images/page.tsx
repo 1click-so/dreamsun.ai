@@ -2112,7 +2112,6 @@ function ImageLightbox({
 }) {
   const [promptCopied, setPromptCopied] = useState(false);
   const [imageMeta, setImageMeta] = useState<{ w: number; h: number; sizeKB: number | null }>({ w: result.width, h: result.height, sizeKB: null });
-  const [lightboxImgLoaded, setLightboxImgLoaded] = useState(false);
   const [showShotPicker, setShowShotPicker] = useState(false);
   const [sceneSearch, setSceneSearch] = useState("");
 
@@ -2138,7 +2137,6 @@ function ImageLightbox({
   useEffect(() => {
     // Reset file size but keep w/h from result to avoid layout shift
     setImageMeta({ w: result.width || 1024, h: result.height || 1024, sizeKB: null });
-    setLightboxImgLoaded(false);
     const img = document.createElement("img");
     img.onload = () => {
       setImageMeta((prev) => ({ ...prev, w: img.naturalWidth, h: img.naturalHeight }));
@@ -2208,18 +2206,11 @@ function ImageLightbox({
               playsInline
             />
           ) : (
-            <div className="relative">
-              <Image
-                src={result.imageUrl}
-                alt="Preview"
-                width={imageMeta.w || result.width || 1024}
-                height={imageMeta.h || result.height || 1024}
-                quality={90}
-                sizes="75vw"
-                className="max-h-[75vh] w-auto rounded-xl object-contain shadow-2xl"
-                onLoad={() => setLightboxImgLoaded(true)}
-              />
-            </div>
+            <img // eslint-disable-line @next/next/no-img-element
+              src={result.imageUrl}
+              alt="Preview"
+              className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-2xl"
+            />
           )}
         </div>
 
