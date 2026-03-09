@@ -187,7 +187,7 @@ function LoginContent() {
   const titles: Record<Mode, { heading: string; sub: string }> = {
     signin: { heading: "Welcome back", sub: "Sign in to your account" },
     signup: { heading: "Create account", sub: "Get started with DreamSun" },
-    forgot: { heading: "Reset password", sub: "We\u2019ll send you a reset link" },
+    forgot: { heading: "Reset password", sub: "We'll send you a reset link" },
   };
 
   const inputClass =
@@ -279,7 +279,7 @@ function LoginContent() {
                   <label className="text-xs font-medium text-muted">Password</label>
                   <input
                     type="password"
-                    placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
