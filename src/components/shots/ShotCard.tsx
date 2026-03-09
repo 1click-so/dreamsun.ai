@@ -376,10 +376,10 @@ export function ShotCard({
       </div>
 
       {/* Bento Grid */}
-      <div className="grid grid-cols-[1fr_1fr_auto] border-t border-border">
+      <div className="grid grid-cols-1 border-t border-border lg:grid-cols-[1fr_1fr_auto]">
 
         {/* BENTO: Image Controls */}
-        <div className="flex flex-col border-r border-border p-3 space-y-2">
+        <div className="flex flex-col border-b border-border p-3 space-y-2 lg:border-b-0 lg:border-r">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Image</span>
           <div>
             <TaggableTextarea
@@ -527,7 +527,7 @@ export function ShotCard({
         </div>
 
         {/* BENTO: Video Controls */}
-        <div className="flex flex-col border-r border-border p-3 space-y-2">
+        <div className="flex flex-col border-b border-border p-3 space-y-2 lg:border-b-0 lg:border-r">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Video</span>
           <div>
             <textarea value={shot.videoPrompt}
@@ -742,7 +742,7 @@ export function ShotCard({
         </div>
 
         {/* BENTO: Output */}
-        <div className={`flex gap-2.5 p-3 ${arRatio >= 1 ? "flex-col items-center" : "flex-row"}`}>
+        <div className={`flex flex-row flex-wrap justify-center gap-2.5 p-3 lg:flex-nowrap ${arRatio >= 1 ? "lg:flex-col lg:items-center" : ""}`}>
           {/* First Frame */}
           <div className="text-center"
             onDragOver={handleDragOver}

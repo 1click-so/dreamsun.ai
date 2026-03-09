@@ -22,9 +22,9 @@ function ShotCardSkeleton() {
         </div>
       </div>
       {/* Bento grid */}
-      <div className="grid grid-cols-[1fr_1fr_auto] border-t border-border">
+      <div className="grid grid-cols-1 border-t border-border lg:grid-cols-[1fr_1fr_auto]">
         {/* Image column */}
-        <div className="border-r border-border p-3 space-y-2">
+        <div className="border-b border-border p-3 space-y-2 lg:border-b-0 lg:border-r">
           <Skeleton className="h-3 w-10" />
           <Skeleton className="h-16 w-full rounded-lg" />
           <div className="flex gap-2">
@@ -33,13 +33,13 @@ function ShotCardSkeleton() {
           </div>
         </div>
         {/* Video column */}
-        <div className="border-r border-border p-3 space-y-2">
+        <div className="border-b border-border p-3 space-y-2 lg:border-b-0 lg:border-r">
           <Skeleton className="h-3 w-10" />
           <Skeleton className="h-16 w-full rounded-lg" />
           <Skeleton className="h-7 w-20 rounded-lg" />
         </div>
         {/* Output column */}
-        <div className="flex gap-2.5 p-3">
+        <div className="flex flex-wrap justify-center gap-2.5 p-3 lg:flex-nowrap">
           <div className="space-y-1 text-center">
             <Skeleton className="mx-auto h-2 w-8" />
             <Skeleton className="h-[160px] w-[90px] rounded-md" />

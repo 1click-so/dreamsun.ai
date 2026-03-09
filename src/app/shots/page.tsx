@@ -293,8 +293,8 @@ function SceneOverview({
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <div className="mb-8 flex items-center justify-between">
+      <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-10">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
               <span className="text-accent">Scenes</span>
@@ -633,8 +633,8 @@ export default function ShotsPage() {
     return (
       <div className="min-h-screen bg-background text-foreground">
         <Navbar />
-        <div className="mx-auto max-w-5xl px-6 py-10">
-          <div className="mb-8 flex items-center justify-between">
+        <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-10">
+          <div className="mb-6 flex items-center justify-between sm:mb-8">
             <div>
               <Skeleton className="h-7 w-24" />
               <Skeleton className="mt-2 h-4 w-16" />
@@ -1779,8 +1779,8 @@ export function ShotListEditor({
       >
       <Navbar />
       {/* Page Header */}
-      <header className="border-b border-border px-6 py-2.5">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-border px-3 py-2.5 md:px-6">
+        <div className="flex items-center gap-2 md:gap-3">
           <button
             onClick={() => {
               // Flush pending save immediately before leaving
@@ -1819,7 +1819,7 @@ export function ShotListEditor({
       </header>
 
       {/* Command Bar */}
-      <div className="px-6 py-3">
+      <div className="px-3 py-3 md:px-6">
         <div className="rounded-xl border border-border bg-surface/50 p-2">
           {/* Top row: actions + stats + controls */}
           <div className="flex flex-wrap items-center gap-2">
@@ -1851,7 +1851,7 @@ export function ShotListEditor({
 
             {/* Stats */}
             {shots.length > 0 && (
-              <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-1.5 text-[11px] text-muted">
+              <div className="hidden items-center gap-2 rounded-lg bg-background px-3 py-1.5 text-[11px] text-muted md:flex">
                 <span>{shots.length} shot{shots.length !== 1 ? "s" : ""}</span>
                 <span className="text-border">|</span>
                 <span>
@@ -2218,7 +2218,7 @@ export function ShotListEditor({
           )}
 
           {/* Always-visible: Master Reference + Prompt Prefix as bento sub-cells */}
-          <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr]">
             {/* Master Reference Cell */}
             <div
               className="min-w-[240px] rounded-lg border border-border bg-background p-3"
@@ -2297,7 +2297,7 @@ export function ShotListEditor({
         </h2>
         <div className="h-px flex-1 bg-border" />
       </div>
-      <div className={viewMode === "storyboard" ? "relative px-6 pb-[50vh]" : "px-6 pb-[50vh]"}>
+      <div className={viewMode === "storyboard" ? "relative px-3 pb-[50vh] md:px-6" : "px-3 pb-[50vh] md:px-6"}>
         {shots.length === 0 ? (
           <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed border-border">
             <div className="text-center text-muted">
