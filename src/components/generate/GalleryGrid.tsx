@@ -17,30 +17,35 @@ function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
   onLoaded: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
-  // Only mount <video> and start playing on hover
+  // Mount video on hover, unmount on leave
   useEffect(() => {
-    if (!hovered) { setPlaying(false); return; }
-    setPlaying(true);
+    if (hovered) {
+      setMounted(true);
+    } else {
+      setMounted(false);
+      setVideoReady(false);
+    }
   }, [hovered]);
 
   // Play/pause the video element
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (playing) {
+    if (mounted) {
       el.play().catch(() => {});
     } else {
       el.pause();
       el.currentTime = 0;
     }
-  }, [playing]);
+  }, [mounted]);
 
   return (
     <>
-      {/* Static thumbnail: instant load, zero video overhead */}
-      {thumbnailUrl && !playing && (
+      {/* Static thumbnail: stays visible until video is actually playing */}
+      {thumbnailUrl && !videoReady && (
         <Image
           src={thumbnailUrl}
           alt=""
@@ -52,14 +57,15 @@ function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
           onLoad={onLoaded}
         />
       )}
-      {/* Video element: only mounted when hovering for playback */}
-      {playing && (
+      {/* Video element: mounted on hover, hidden until first frame renders */}
+      {mounted && (
         <video
           ref={videoRef}
           src={src}
-          className="h-full w-full rounded-lg object-cover"
+          className={`h-full w-full rounded-lg object-cover transition-opacity duration-150 ${videoReady ? "opacity-100" : "opacity-0"}`}
           muted
           loop
+          onPlaying={() => setVideoReady(true)}
           playsInline
           autoPlay
           preload="auto"
@@ -67,11 +73,11 @@ function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
         />
       )}
       {/* Fallback for videos without thumbnail: lazy-load video metadata */}
-      {!thumbnailUrl && !playing && (
+      {!thumbnailUrl && !mounted && (
         <VideoMetadataLoader src={src} onLoaded={onLoaded} />
       )}
       {/* Play icon overlay */}
-      {!playing && (
+      {!videoReady && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="white" stroke="none">
