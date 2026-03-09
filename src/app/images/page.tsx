@@ -2009,6 +2009,12 @@ export default function GeneratePage() {
           }}
           onDelete={() => deleteImage(selectedResult.requestId)}
           onAddToShots={() => { setSelectedResult(null); }}
+          onUpscale={() => {
+            sessionStorage.setItem("dreamsun_upscale_image", selectedResult.imageUrl);
+            setSelectedResult(null);
+            setActiveMode("upscale");
+            saveStorage(STORAGE_KEYS.mode, "upscale");
+          }}
           copied={copiedId === selectedResult.requestId}
           onPrev={() => {
             const idx = history.findIndex((r) => r.requestId === selectedResult.requestId);
@@ -2067,6 +2073,7 @@ function ImageLightbox({
   onUseAsReference,
   onDelete,
   onAddToShots,
+  onUpscale,
   copied,
   onPrev,
   onNext,
@@ -2081,6 +2088,7 @@ function ImageLightbox({
   onUseAsReference: () => void;
   onDelete: () => void;
   onAddToShots: (imageUrl: string) => void;
+  onUpscale: () => void;
   copied: boolean;
   onPrev: () => void;
   onNext: () => void;
@@ -2233,7 +2241,7 @@ function ImageLightbox({
               </svg>
             }
             label="Upscale"
-            onClick={() => {/* TODO */}}
+            onClick={onUpscale}
           />
           <div className="mx-1 h-6 w-px bg-white/10" />
           {/* Add to Shots */}
