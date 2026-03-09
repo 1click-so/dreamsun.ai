@@ -27,6 +27,8 @@ function NavBlobs() {
 export function Navbar() {
   const pathname = usePathname();
   const isShotsActive = pathname?.startsWith("/shots");
+  const isAudioActive = pathname?.startsWith("/audio");
+  const isAvatarsActive = pathname?.startsWith("/avatars");
   const { openPricing } = usePricingOverlay();
 
   return (
@@ -78,6 +80,42 @@ export function Navbar() {
               SHOTS
               <span className="rounded-sm bg-accent px-1.5 py-px text-[9px] font-bold uppercase leading-tight text-black shadow-[0_0_8px_var(--color-accent)]">
                 Hot
+              </span>
+            </span>
+          </Link>
+        </div>
+
+        <div>
+          <Link
+            href="/audio"
+            className={`group relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
+              isAudioActive
+                ? "bg-accent/15 text-accent-text"
+                : "text-muted hover:text-foreground hover:bg-white/[0.04]"
+            }`}
+          >
+            <span className="relative flex items-center gap-2">
+              Audio
+              <span className="rounded-sm bg-muted/20 px-1.5 py-px text-[9px] font-bold uppercase leading-tight text-muted">
+                Soon
+              </span>
+            </span>
+          </Link>
+        </div>
+
+        <div>
+          <Link
+            href="/avatars"
+            className={`group relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${
+              isAvatarsActive
+                ? "bg-accent/15 text-accent-text"
+                : "text-muted hover:text-foreground hover:bg-white/[0.04]"
+            }`}
+          >
+            <span className="relative flex items-center gap-2">
+              Avatars
+              <span className="rounded-sm bg-muted/20 px-1.5 py-px text-[9px] font-bold uppercase leading-tight text-muted">
+                Soon
               </span>
             </span>
           </Link>
