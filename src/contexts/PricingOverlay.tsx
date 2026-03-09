@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 
 interface PricingOverlayCtx {
   isOpen: boolean;
@@ -34,8 +34,13 @@ export function PricingOverlayProvider({ children }: { children: ReactNode }) {
     setIsOpen(false);
   }, []);
 
+  const value = useMemo(
+    () => ({ isOpen, openPricing, closePricing, activeTab }),
+    [isOpen, openPricing, closePricing, activeTab]
+  );
+
   return (
-    <Ctx.Provider value={{ isOpen, openPricing, closePricing, activeTab }}>
+    <Ctx.Provider value={value}>
       {children}
     </Ctx.Provider>
   );

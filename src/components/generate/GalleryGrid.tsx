@@ -5,6 +5,66 @@ import Image from "next/image";
 import type { GenerationResult } from "@/types/generations";
 import { IconRegenerate, IconUpscale, IconCopy, IconDownload, IconEdit } from "./Icons";
 
+// --- Video Thumbnail (lazy load via IntersectionObserver) ---
+// Videos render with preload="none" initially. An IntersectionObserver triggers
+// loading when the element scrolls into view. This prevents 30+ concurrent video
+// requests from saturating the browser's connection pool and blocking navigation.
+
+function VideoThumb({ src, hovered, onLoaded }: { src: string; hovered: boolean; onLoaded: () => void }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  // Trigger metadata load when element enters viewport
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || shouldLoad) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setShouldLoad(true); obs.disconnect(); } },
+      { rootMargin: "200px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [shouldLoad]);
+
+  // Play/pause on hover
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !shouldLoad) return;
+    if (hovered) {
+      el.play().catch(() => {});
+    } else {
+      el.pause();
+      el.currentTime = 0;
+    }
+  }, [hovered, shouldLoad]);
+
+  return (
+    <>
+      <video
+        ref={ref}
+        src={src}
+        className={`h-full w-full rounded-lg object-cover transition-opacity duration-300 ${shouldLoad ? "opacity-100" : "opacity-0"}`}
+        muted
+        loop
+        playsInline
+        preload={shouldLoad ? "metadata" : "none"}
+        draggable={false}
+        onLoadedData={onLoaded}
+      />
+      {/* Play icon overlay — visible when not playing */}
+      {!hovered && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="white" stroke="none">
+              <path d="M4 2.5l8 4.5-8 4.5V2.5z" />
+            </svg>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // --- Gallery Card ---
 
 export function GalleryCard({
@@ -99,31 +159,11 @@ export function GalleryCard({
         <div className="absolute inset-0 animate-pulse rounded-lg bg-surface" />
       )}
       {!result.pending && (result.type === "video" ? (
-        <>
-          <video
-            src={result.imageUrl}
-            className={`h-full w-full rounded-lg object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            draggable={false}
-            onLoadedData={handleMediaReady}
-            onLoadedMetadata={handleMediaReady}
-            onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
-            onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
-          />
-          {/* Play icon overlay */}
-          {loaded && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover:opacity-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="white" stroke="none">
-                  <path d="M4 2.5l8 4.5-8 4.5V2.5z" />
-                </svg>
-              </div>
-            </div>
-          )}
-        </>
+        <VideoThumb
+          src={result.imageUrl}
+          hovered={hovered}
+          onLoaded={handleMediaReady}
+        />
       ) : (
         <Image
           src={result.imageUrl || "/placeholder.svg"}

@@ -441,24 +441,27 @@ export default function VideoPage() {
     return Math.round(unitCost * effectiveDuration);
   }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration]);
 
-  // Filter gallery — exclude pending items (shown as generatingSlots instead)
-  let filteredHistory = history.filter((r) => !r.pending);
-  if (galleryFilter === "loved") {
-    filteredHistory = filteredHistory.filter((r) => r.favorited);
-  } else if (galleryFilter === "videos") {
-    filteredHistory = filteredHistory.filter((r) => r.type === "video");
-  } else if (galleryFilter === "images") {
-    filteredHistory = filteredHistory.filter((r) => !r.type || r.type === "image");
-  } else if (galleryFilter === "audio") {
-    filteredHistory = filteredHistory.filter((r) => r.type === "audio");
-  }
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase();
-    filteredHistory = filteredHistory.filter((r) =>
-      r.prompt?.toLowerCase().includes(q) ||
-      r.model.toLowerCase().includes(q)
-    );
-  }
+  // Filter gallery — memoized to avoid recalculating on every render
+  const filteredHistory = useMemo(() => {
+    let filtered = history.filter((r) => !r.pending);
+    if (galleryFilter === "loved") {
+      filtered = filtered.filter((r) => r.favorited);
+    } else if (galleryFilter === "videos") {
+      filtered = filtered.filter((r) => r.type === "video");
+    } else if (galleryFilter === "images") {
+      filtered = filtered.filter((r) => !r.type || r.type === "image");
+    } else if (galleryFilter === "audio") {
+      filtered = filtered.filter((r) => r.type === "audio");
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((r) =>
+        r.prompt?.toLowerCase().includes(q) ||
+        r.model.toLowerCase().includes(q)
+      );
+    }
+    return filtered;
+  }, [history, galleryFilter, searchQuery]);
 
   const latestBatch = currentBatchId
     ? filteredHistory.filter((r) => r.batchId === currentBatchId)
