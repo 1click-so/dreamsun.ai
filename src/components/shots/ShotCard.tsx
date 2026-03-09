@@ -82,7 +82,7 @@ function LazyVideo({ src, className, style }: { src: string; className?: string;
   return (
     <div ref={containerRef} className="relative overflow-hidden" style={style}>
       {!loaded && (
-        <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />
+        <div className="absolute inset-0 skeleton-shimmer rounded-md" />
       )}
       <video
         src={visible ? src : undefined}
@@ -108,7 +108,7 @@ function VideoThumb({ url, isActive, aspectRatio, index, onClick }: {
   return (
     <div className="relative shrink-0 cursor-pointer" onClick={onClick}>
       {!loaded && (
-        <div className="absolute inset-0 animate-pulse rounded-md bg-surface" style={{ aspectRatio }} />
+        <div className="absolute inset-0 skeleton-shimmer rounded-md" style={{ aspectRatio }} />
       )}
       <video
         src={url}
@@ -438,7 +438,7 @@ export function ShotCard({
                       className="h-full w-full object-cover"
                       onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = "1"; _loadedUrlCache.add(ref.preview); }}
                       style={{ opacity: _loadedUrlCache.has(ref.preview) ? 1 : 0, transition: "opacity 0.2s" }} />
-                    {!_loadedUrlCache.has(ref.preview) && !ref.uploading && <div className="absolute inset-0 animate-pulse bg-surface" />}
+                    {!_loadedUrlCache.has(ref.preview) && !ref.uploading && <div className="absolute inset-0 skeleton-shimmer" />}
                     {ref.uploading && <div className="absolute inset-0 flex items-center justify-center bg-background/60"><div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" /></div>}
                     <button onClick={() => onRefRemove(ref.id)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
                     <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 font-mono text-[7px] font-bold leading-tight text-accent">@{masterRefOffset + i + 1}</span>
@@ -460,7 +460,7 @@ export function ShotCard({
                     <div key={i} draggable onDragStart={(e) => handleDragStart(e, url)} className="relative shrink-0 cursor-grab">
                       <button onClick={() => onOpenLightbox(url, "image")} className="block">
                         <div className="relative" style={{ width: genW, height: 64 }}>
-                          {!genLoaded[i] && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                          {!genLoaded[i] && <div className="absolute inset-0 skeleton-shimmer rounded-md" />}
                           <Image src={url} alt={`Generation ${i + 1}`}
                             fill
                             sizes={`${genW}px`}
@@ -753,7 +753,7 @@ export function ShotCard({
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.imageUrl!)}>
                 <button onClick={() => onOpenLightbox(shot.imageUrl!, "image")} className="block">
                   <div className="relative" style={{ width: outputW, height: outputH }}>
-                    {!firstLoaded && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                    {!firstLoaded && <div className="absolute inset-0 skeleton-shimmer rounded-md" />}
                     <Image src={shot.imageUrl} alt={`Shot ${shot.number}`}
                       fill
                       sizes={`${outputW}px`}
@@ -771,7 +771,7 @@ export function ShotCard({
                 style={{ width: outputW, height: outputH }}>
                 {isImageBusy ? (
                   <div className="absolute inset-0 overflow-hidden rounded-md">
-                    <div className="absolute inset-0 animate-pulse bg-accent/[0.04]" />
+                    <div className="absolute inset-0 skeleton-shimmer" />
                     <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
                   </div>
                 ) : <span className="text-[8px] text-muted/40">Drop or<br/>click</span>}
@@ -805,7 +805,7 @@ export function ShotCard({
                   <div className="relative" style={{ width: outputW, height: outputH }}>
                     {isRemoteUrl(endFrameSrc) ? (
                       <>
-                        {!lastLoaded && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                        {!lastLoaded && <div className="absolute inset-0 skeleton-shimmer rounded-md" />}
                         <Image src={endFrameSrc} alt="End frame"
                           fill
                           sizes={`${outputW}px`}
@@ -815,7 +815,7 @@ export function ShotCard({
                     ) : (
                       /* Blob / data URI preview — keep as raw img */
                       <>
-                        {!lastLoaded && <div className="absolute inset-0 animate-pulse rounded-md bg-surface" />}
+                        {!lastLoaded && <div className="absolute inset-0 skeleton-shimmer rounded-md" />}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={endFrameSrc} alt="End frame"
                           onLoad={() => markLastLoaded(endFrameSrc)}
@@ -865,7 +865,7 @@ export function ShotCard({
                 style={{ width: vidOutputW, height: vidOutputH }}>
                 {isVideoBusy ? (
                   <>
-                    <div className="absolute inset-0 animate-pulse bg-accent/[0.04]" />
+                    <div className="absolute inset-0 skeleton-shimmer" />
                     <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
                   </>
                 ) : <span className="text-[8px] text-muted/40">No video</span>}

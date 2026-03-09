@@ -361,7 +361,7 @@ function SceneOverview({
                   >
                     {thumbUrl ? (
                       <>
-                        {!loadedThumbs.has(scene.id) && <div className="absolute inset-0 animate-pulse rounded-lg bg-surface" />}
+                        {!loadedThumbs.has(scene.id) && <div className="absolute inset-0 skeleton-shimmer rounded-lg" />}
                         <Image
                           src={thumbUrl}
                           alt=""
@@ -2467,7 +2467,7 @@ export function ShotListEditor({
             <h2 className="mb-3 text-sm font-semibold">New Shot from Reference</h2>
             <div className="mb-4 flex items-center gap-3">
               <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md border border-border">
-                {!newShotRefLoaded && <div className="absolute inset-0 animate-pulse bg-surface" />}
+                {!newShotRefLoaded && <div className="absolute inset-0 skeleton-shimmer" />}
                 <Image
                   src={newShotModal.imageUrl}
                   alt="Ref"

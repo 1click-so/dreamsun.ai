@@ -201,6 +201,25 @@ textarea:focus {
   100% { transform: translateX(100%); }
 }
 
+/* Smooth skeleton shimmer — replaces animate-pulse everywhere */
+@keyframes skeleton-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.06) 20%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.06) 80%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.8s linear infinite;
+}
+
 /* Shimmer text — accent text with a bright highlight sweeping across */
 .shimmer-text {
   background: linear-gradient(

@@ -181,7 +181,7 @@ export function StoryboardCard({
         {shot.videoUrl && heroMode === "video" ? (
           <div className="group relative">
             {!heroVideoLoaded && (
-              <div className="absolute inset-0 animate-pulse rounded-t-lg bg-surface" style={{ aspectRatio: `${arW}/${arH}`, maxHeight: "360px" }} />
+              <div className="absolute inset-0 skeleton-shimmer rounded-t-lg" style={{ aspectRatio: `${arW}/${arH}`, maxHeight: "360px" }} />
             )}
             <video
               ref={videoRef}
@@ -249,7 +249,7 @@ export function StoryboardCard({
           <div className="group relative" draggable onDragStart={(e) => handleDragStart(e, shot.imageUrl!)}>
             <button onClick={() => onOpenLightbox(shot.imageUrl!, "image")} className="relative block w-full"
               style={{ aspectRatio: `${arW}/${arH}`, maxHeight: "360px" }}>
-              {!heroImgLoaded && <div className="absolute inset-0 animate-pulse rounded-t-lg bg-surface" />}
+              {!heroImgLoaded && <div className="absolute inset-0 skeleton-shimmer rounded-t-lg" />}
               <Image src={shot.imageUrl!} alt={`Shot ${shot.number}`} fill sizes="200px"
                 onLoad={markHeroImgLoaded}
                 className={`rounded-t-lg object-cover cursor-grab transition-opacity ${heroImgLoaded ? "opacity-100" : "opacity-0"}`} />
@@ -294,7 +294,7 @@ export function StoryboardCard({
             style={{ aspectRatio: `${arW}/${arH}`, maxHeight: "360px" }}>
             {isImageBusy ? (
               <div className="absolute inset-0 overflow-hidden rounded-t-lg">
-                <div className="absolute inset-0 animate-pulse bg-accent/[0.04]" />
+                <div className="absolute inset-0 skeleton-shimmer" />
                 <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
               </div>
             ) : (
@@ -334,7 +334,7 @@ export function StoryboardCard({
             onDrop={(e) => handleDrop(e, "last")}>
             {isBlobUrl(endFrameSrc) ? (
               <>
-                {!_loadedUrlCache.has(endFrameSrc) && <div className="absolute inset-0 animate-pulse bg-surface" />}
+                {!_loadedUrlCache.has(endFrameSrc) && <div className="absolute inset-0 skeleton-shimmer" />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={endFrameSrc} alt="Last"
                   className="h-full w-full object-cover"
@@ -343,7 +343,7 @@ export function StoryboardCard({
               </>
             ) : (
               <div className="relative h-full w-full">
-                {!endFrameOverlayLoaded && <div className="absolute inset-0 animate-pulse bg-surface" />}
+                {!endFrameOverlayLoaded && <div className="absolute inset-0 skeleton-shimmer" />}
                 <Image src={endFrameSrc} alt="Last" fill sizes="28px"
                   onLoad={() => setEndFrameOverlayLoaded(true)}
                   className={`object-cover transition-opacity ${endFrameOverlayLoaded ? "opacity-100" : "opacity-0"}`} />

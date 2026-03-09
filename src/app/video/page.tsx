@@ -1282,7 +1282,7 @@ export default function VideoPage() {
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div
                         key={i}
-                        className="animate-pulse rounded-lg bg-surface"
+                        className="skeleton-shimmer rounded-lg"
                         style={{ aspectRatio: 16 / 9 }}
                       />
                     ))}
@@ -1330,7 +1330,7 @@ export default function VideoPage() {
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div
                         key={i}
-                        className="animate-pulse rounded-lg bg-surface"
+                        className="skeleton-shimmer rounded-lg"
                         style={{ aspectRatio: 16 / 9 }}
                       />
                     ))}

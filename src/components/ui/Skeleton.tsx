@@ -1,8 +1,8 @@
-/** Shimmer skeleton placeholder — matches the shape you give it via className */
+/** Smooth shimmer skeleton — continuous gradient sweep, no pauses */
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-white/[0.06] ${className}`}
+      className={`skeleton-shimmer rounded-md ${className}`}
     />
   );
 }

@@ -211,7 +211,7 @@ export function GalleryCard({
       )}
       {/* Skeleton placeholder until media loads */}
       {!result.pending && !loaded && (
-        <div className="absolute inset-0 animate-pulse rounded-lg bg-surface" />
+        <div className="absolute inset-0 skeleton-shimmer rounded-lg" />
       )}
       {!result.pending && (result.type === "video" ? (
         <VideoThumb
@@ -597,10 +597,10 @@ export function GalleryGrid({
                         className="relative min-w-0 overflow-hidden rounded-lg"
                         style={{ flex: `1 1 ${rowHeight * entry.aspectRatio}px`, height: rowHeight }}
                       >
-                        <div className="absolute inset-0 animate-pulse bg-surface" />
+                        <div className="absolute inset-0 skeleton-shimmer" />
                         <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.07] to-transparent" />
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                          <div className="h-6 w-24 animate-pulse rounded-md bg-border/40" />
+                          <div className="h-6 w-24 skeleton-shimmer rounded-md" />
                           <span className="animate-pulse text-[10px] font-medium text-muted/50">
                             {entry.modelName}
                           </span>

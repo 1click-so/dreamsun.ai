@@ -264,7 +264,7 @@ export function StoryboardShotModal({
                   >
                     {refImages.map((ref, i) => (
                       <div key={ref.id} className="relative h-10 w-10 overflow-hidden rounded-lg border border-border">
-                        {!_loadedUrlCache.has(ref.preview) && <div className="absolute inset-0 animate-pulse bg-surface" />}
+                        {!_loadedUrlCache.has(ref.preview) && <div className="absolute inset-0 skeleton-shimmer" />}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={ref.preview}
