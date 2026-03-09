@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { fal } from "@fal-ai/client";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
@@ -94,6 +94,17 @@ export function UpscalePanel({
     const dims = await getImageDimensions(src);
     setImageDims(dims);
   }, []);
+
+  // Pre-load image from sessionStorage (lightbox "Upscale" button)
+  useEffect(() => {
+    const stored = sessionStorage.getItem("dreamsun_upscale_image");
+    if (stored) {
+      sessionStorage.removeItem("dreamsun_upscale_image");
+      setImagePreview(stored);
+      setImageUrl(stored);
+      detectDimensions(stored);
+    }
+  }, [detectDimensions]);
 
   // Upload image to fal storage
   const handleFileSelect = useCallback(

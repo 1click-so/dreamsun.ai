@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface LightboxProps {
   src: string;
@@ -39,6 +40,7 @@ export function Lightbox({
   onNewShotFromRef,
   onEditImage,
 }: LightboxProps) {
+  const router = useRouter();
   const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
   const [mediaLoaded, setMediaLoaded] = useState(false);
@@ -192,7 +194,11 @@ export function Lightbox({
               </svg>
             }
             label="Upscale"
-            onClick={() => {/* TODO */}}
+            onClick={() => {
+              sessionStorage.setItem("dreamsun_upscale_image", src);
+              onClose();
+              router.push("/images?mode=upscale");
+            }}
           />
         )}
         <div className="mx-1 h-6 w-px bg-white/10" />

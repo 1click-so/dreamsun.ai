@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { GenerationResult } from "@/types/generations";
 
@@ -66,6 +67,7 @@ export function MediaLightbox({
   hasPrev,
   hasNext,
 }: MediaLightboxProps) {
+  const router = useRouter();
   const [promptCopied, setPromptCopied] = useState(false);
   const [imageMeta, setImageMeta] = useState<{ w: number; h: number; sizeKB: number | null }>({ w: result.width, h: result.height, sizeKB: null });
   const [lightboxImgLoaded, setLightboxImgLoaded] = useState(false);
@@ -203,7 +205,11 @@ export function MediaLightbox({
           <LightboxToolbarButton
             icon={<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l4-4 3 3 5-5" /><path d="M11 5h4v4" /></svg>}
             label="Upscale"
-            onClick={() => {/* TODO */}}
+            onClick={() => {
+              sessionStorage.setItem("dreamsun_upscale_image", result.imageUrl);
+              onClose();
+              router.push("/images?mode=upscale");
+            }}
           />
           {onAddToShots && (
             <>
