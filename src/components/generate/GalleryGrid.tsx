@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Image from "next/image";
 import type { GenerationResult } from "@/types/generations";
 import { IconRegenerate, IconUpscale, IconCopy, IconDownload, IconEdit } from "./Icons";
@@ -378,7 +378,39 @@ export function GalleryGrid({
     }),
   ];
 
-  const rows = buildJustifiedRows(entries, containerWidth, targetRowHeight, gap);
+  const allRows = buildJustifiedRows(entries, containerWidth, targetRowHeight, gap);
+
+  // Progressive rendering — mount first INITIAL_ROWS immediately,
+  // reveal more as user scrolls. Keeps DOM light and prevents
+  // hundreds of image/video requests from saturating the browser.
+  const INITIAL_ROWS = 8;
+  const ROWS_PER_BATCH = 6;
+  const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_ROWS);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when total rows change (e.g., filter change)
+  useEffect(() => {
+    setVisibleRowCount(INITIAL_ROWS);
+  }, [allRows.length]);
+
+  // IntersectionObserver to load more rows on scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    if (visibleRowCount >= allRows.length) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisibleRowCount((prev) => Math.min(prev + ROWS_PER_BATCH, allRows.length));
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [visibleRowCount, allRows.length]);
+
+  const rows = allRows.slice(0, visibleRowCount);
 
   return (
     <div ref={containerRef} className="overflow-hidden">
@@ -515,6 +547,10 @@ export function GalleryGrid({
             );
           })}
         </div>
+      )}
+      {/* Sentinel for infinite scroll — triggers loading more rows */}
+      {visibleRowCount < allRows.length && (
+        <div ref={sentinelRef} className="h-px" />
       )}
     </div>
   );

@@ -2628,7 +2628,28 @@ function GalleryGrid({
     }),
   ];
 
-  const rows = buildJustifiedRows(entries, containerWidth, targetRowHeight, gap);
+  const allRows = buildJustifiedRows(entries, containerWidth, targetRowHeight, gap);
+
+  // Progressive rendering — mount first INITIAL_ROWS, reveal more on scroll
+  const INITIAL_ROWS = 8;
+  const ROWS_PER_BATCH = 6;
+  const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_ROWS);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setVisibleRowCount(INITIAL_ROWS); }, [allRows.length]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || visibleRowCount >= allRows.length) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleRowCount((prev) => Math.min(prev + ROWS_PER_BATCH, allRows.length)); },
+      { rootMargin: "400px" }
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [visibleRowCount, allRows.length]);
+
+  const rows = allRows.slice(0, visibleRowCount);
 
   return (
     <div ref={containerRef} className="overflow-hidden">
@@ -2765,6 +2786,9 @@ function GalleryGrid({
             );
           })}
         </div>
+      )}
+      {visibleRowCount < allRows.length && (
+        <div ref={sentinelRef} className="h-px" />
       )}
     </div>
   );
