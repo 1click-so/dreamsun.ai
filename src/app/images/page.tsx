@@ -638,6 +638,7 @@ export default function GeneratePage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<GenerationResult | null>(null);
   const [upscaleImageUrl, setUpscaleImageUrl] = useState<string | null>(null);
+  const [upscaleKey, setUpscaleKey] = useState(0);
   const [promptBarDragOver, setPromptBarDragOver] = useState(false);
   const [refsDragOver, setRefsDragOver] = useState(false);
   const [galleryRowHeight, setGalleryRowHeight] = useState(() => {
@@ -1344,7 +1345,7 @@ export default function GeneratePage() {
           {/* Scrollable settings area */}
           <div className="flex-1 overflow-y-auto p-4">
             {activeMode === "upscale" ? (
-              <UpscalePanel key="upscale" category="upscale" initialImageUrl={upscaleImageUrl} />
+              <UpscalePanel key={`upscale-${upscaleKey}`} category="upscale" initialImageUrl={upscaleImageUrl} />
             ) : activeMode === "skin" ? (
               <UpscalePanel key="skin" category="skin" />
             ) : activeMode === "create" ? (
@@ -1757,6 +1758,7 @@ export default function GeneratePage() {
                 onDelete={deleteImage}
                 onUpscale={(r) => {
                   setUpscaleImageUrl(r.imageUrl);
+                  setUpscaleKey((k) => k + 1);
                   setActiveMode("upscale");
                   saveStorage(STORAGE_KEYS.mode, "upscale");
                 }}
@@ -1858,7 +1860,8 @@ export default function GeneratePage() {
                   onFavorite={toggleFavorite}
                   onDelete={deleteImage}
                   onUpscale={(r) => {
-                    sessionStorage.setItem("dreamsun_upscale_image", r.imageUrl);
+                    setUpscaleImageUrl(r.imageUrl);
+                    setUpscaleKey((k) => k + 1);
                     setActiveMode("upscale");
                     saveStorage(STORAGE_KEYS.mode, "upscale");
                   }}
@@ -2022,6 +2025,7 @@ export default function GeneratePage() {
           onAddToShots={() => { setSelectedResult(null); }}
           onUpscale={() => {
             setUpscaleImageUrl(selectedResult.imageUrl);
+            setUpscaleKey((k) => k + 1);
             setSelectedResult(null);
             setActiveMode("upscale");
             saveStorage(STORAGE_KEYS.mode, "upscale");
