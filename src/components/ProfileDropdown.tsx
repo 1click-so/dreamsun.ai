@@ -6,6 +6,7 @@ import { useCredits } from "@/hooks/useCredits";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { CreditIcon } from "@/components/ModelSelector";
 import { usePricingOverlay } from "@/contexts/PricingOverlay";
 
@@ -58,18 +59,25 @@ function CreditRing({ ratio, size = 36 }: { ratio: number; size?: number }) {
 export function ProfileDropdown() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useTheme();
   const { total: credits, subscription, topup, tier, loading: creditsLoading } = useCredits();
   const router = useRouter();
   const { openPricing } = usePricingOverlay();
 
-  // Fetch user email
+  // Fetch user info + avatar
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       setEmail(data.user?.email ?? null);
     });
+    fetch("/api/account/profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      })
+      .catch(() => {});
   }, []);
 
   // Close on outside click
@@ -118,9 +126,19 @@ export function ProfileDropdown() {
         style={{ width: avatarSize, height: avatarSize }}
       >
         <CreditRing ratio={creditsLoading ? 1 : ratio} size={avatarSize} />
-        <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full bg-surface text-xs font-semibold text-foreground">
-          {initial}
-        </span>
+        {avatarUrl ? (
+          <Image
+            src={avatarUrl}
+            alt=""
+            width={28}
+            height={28}
+            className="relative h-[28px] w-[28px] rounded-full object-cover"
+          />
+        ) : (
+          <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full bg-surface text-xs font-semibold text-foreground">
+            {initial}
+          </span>
+        )}
       </button>
 
       {/* Dropdown */}

@@ -1,20 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/hooks/useTheme";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export function AccountTab() {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Avatar
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // Display name
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  // Username
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameSuccess, setUsernameSuccess] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
 
   // Password
   const [newPassword, setNewPassword] = useState("");
@@ -37,6 +49,8 @@ export function AccountTab() {
       .then((data) => {
         setEmail(data.email || "");
         setDisplayName(data.display_name || "");
+        setUsername(data.username || "");
+        setAvatarUrl(data.avatar_url || null);
         setCreatedAt(data.created_at || "");
       })
       .finally(() => setLoading(false));
@@ -63,6 +77,49 @@ export function AccountTab() {
       setNameError("Network error");
     } finally {
       setNameSaving(false);
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/account/avatar", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.avatar_url) {
+        setAvatarUrl(data.avatar_url);
+      }
+    } catch {
+      // silent — avatar upload is non-critical
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const saveUsername = async () => {
+    setUsernameSaving(true);
+    setUsernameError(null);
+    setUsernameSuccess(false);
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setUsernameError(data.error || "Failed to save");
+      } else {
+        const data = await res.json();
+        setUsername(data.username);
+        setUsernameSuccess(true);
+        setTimeout(() => setUsernameSuccess(false), 2000);
+      }
+    } catch {
+      setUsernameError("Network error");
+    } finally {
+      setUsernameSaving(false);
     }
   };
 
@@ -129,14 +186,53 @@ export function AccountTab() {
 
   return (
     <div className="space-y-6">
-      {/* Profile header */}
+      {/* Profile header with avatar */}
       <div className="rounded-xl border border-border bg-surface p-5">
         <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-xl font-bold text-accent">
-            {initial}
-          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarUploading}
+            className="group relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 transition hover:ring-2 hover:ring-accent/40"
+          >
+            {avatarUrl ? (
+              <Image
+                src={avatarUrl}
+                alt="Avatar"
+                width={64}
+                height={64}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-xl font-bold text-accent">{initial}</span>
+            )}
+            {/* Hover overlay */}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
+              {avatarUploading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M2 11l3.5-3.5a1 1 0 011.4 0L10 10.5" />
+                  <path d="M9.5 10l1-1a1 1 0 011.4 0L14 11" />
+                  <rect x="1" y="2" width="14" height="12" rx="2" />
+                </svg>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadAvatar(file);
+                e.target.value = "";
+              }}
+            />
+          </button>
           <div>
             <p className="font-semibold">{displayName || email}</p>
+            {username && <p className="text-xs text-accent">@{username}</p>}
             <p className="text-xs text-muted">{email}</p>
             {memberSince && (
               <p className="mt-0.5 text-xs text-muted">
@@ -172,6 +268,37 @@ export function AccountTab() {
         </div>
         {nameError && (
           <p className="mt-2 text-xs text-destructive">{nameError}</p>
+        )}
+      </div>
+
+      {/* Username */}
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h3 className="text-sm font-semibold">Username</h3>
+        <p className="mt-0.5 text-xs text-muted">
+          Your unique handle for the community. Lowercase letters, numbers, and underscores only.
+        </p>
+        <div className="mt-3 flex gap-3">
+          <div className="relative flex-1">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted">@</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, 30))}
+              placeholder="your_username"
+              maxLength={30}
+              className="w-full rounded-lg border border-border bg-background py-2.5 pl-8 pr-4 text-sm text-foreground placeholder:text-muted outline-none transition focus:border-accent"
+            />
+          </div>
+          <button
+            onClick={saveUsername}
+            disabled={usernameSaving || username.length < 3}
+            className="rounded-lg bg-accent px-5 py-2.5 text-xs font-semibold text-black transition hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {usernameSaving ? "Saving..." : usernameSuccess ? "Saved" : "Save"}
+          </button>
+        </div>
+        {usernameError && (
+          <p className="mt-2 text-xs text-destructive">{usernameError}</p>
         )}
       </div>
 
