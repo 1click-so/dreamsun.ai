@@ -34,7 +34,7 @@ export function Navbar() {
       <NavBlobs />
 
       <div className="relative">
-        <Link href="/" className="flex items-center gap-2.5 transition hover:opacity-80">
+        <Link href="/explore" className="flex items-center gap-2.5 transition hover:opacity-80">
           <Logo size={22} />
           <span className="font-display text-base font-bold tracking-tight text-foreground">
             DreamSun

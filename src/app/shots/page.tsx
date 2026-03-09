@@ -475,17 +475,26 @@ export default function ShotsPage() {
   const [scenesLoaded, setScenesLoaded] = useState(false);
 
   // Redirect to last active scene if one exists
+  const [redirecting, setRedirecting] = useState(() => {
+    try {
+      return !!localStorage.getItem(LAST_SCENE_KEY);
+    } catch { return false; }
+  });
+
   useEffect(() => {
     try {
       const lastScene = localStorage.getItem(LAST_SCENE_KEY);
       if (lastScene) {
         router.replace(`/shots/${lastScene}`);
+        return;
       }
     } catch {}
+    setRedirecting(false);
   }, [router]);
 
-  // Load scenes from Supabase on mount, migrate localStorage if needed
+  // Load scenes from Supabase on mount — skip if redirecting to a scene
   useEffect(() => {
+    if (redirecting) return;
     let cancelled = false;
     (async () => {
       // 1. Fetch from Supabase
@@ -569,7 +578,7 @@ export default function ShotsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [redirecting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scene CRUD — optimistic UI + async Supabase save
   const createScene = () => {
@@ -607,6 +616,18 @@ export default function ShotsPage() {
   const openScene = (id: string) => {
     router.push(`/shots/${id}`);
   };
+
+  // Show minimal shell while redirecting to last active scene
+  if (redirecting) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Navbar />
+        <div className="flex items-center justify-center pt-32">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
 
   if (!scenesLoaded) {
     return (
