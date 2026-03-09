@@ -2032,15 +2032,15 @@ export default function GeneratePage() {
           }}
           copied={copiedId === selectedResult.requestId}
           onPrev={() => {
-            const idx = history.findIndex((r) => r.requestId === selectedResult.requestId);
-            if (idx < history.length - 1) setSelectedResult(history[idx + 1]);
+            const idx = filteredHistory.findIndex((r) => r.requestId === selectedResult.requestId);
+            if (idx < filteredHistory.length - 1) setSelectedResult(filteredHistory[idx + 1]);
           }}
           onNext={() => {
-            const idx = history.findIndex((r) => r.requestId === selectedResult.requestId);
-            if (idx > 0) setSelectedResult(history[idx - 1]);
+            const idx = filteredHistory.findIndex((r) => r.requestId === selectedResult.requestId);
+            if (idx > 0) setSelectedResult(filteredHistory[idx - 1]);
           }}
-          hasPrev={(() => { const idx = history.findIndex((r) => r.requestId === selectedResult.requestId); return idx < history.length - 1; })()}
-          hasNext={(() => { const idx = history.findIndex((r) => r.requestId === selectedResult.requestId); return idx > 0; })()}
+          hasPrev={(() => { const idx = filteredHistory.findIndex((r) => r.requestId === selectedResult.requestId); return idx < filteredHistory.length - 1; })()}
+          hasNext={(() => { const idx = filteredHistory.findIndex((r) => r.requestId === selectedResult.requestId); return idx > 0; })()}
         />
       )}
 
