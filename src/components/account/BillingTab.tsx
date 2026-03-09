@@ -72,6 +72,79 @@ export function BillingTab() {
     );
   }
 
+  // ── Free plan: upgrade-focused view ──────────────────────────
+  if (!isSubscribed) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Current plan — upgrade push */}
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <h3 className="text-sm font-semibold">Current plan</h3>
+            <div className="mt-3">
+              <span className="text-2xl font-bold">Free</span>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+              <CreditIcon size={12} />
+              <span>100 credits (one-time trial)</span>
+            </div>
+            <p className="mt-3 text-xs text-muted">
+              Upgrade to a plan to get monthly credits, buy top-ups, and unlock full access.
+            </p>
+            <button
+              onClick={() => openPricing("plans")}
+              className="mt-4 w-full rounded-lg bg-accent py-2 text-xs font-semibold text-black transition hover:bg-accent-hover"
+            >
+              Upgrade Plan
+            </button>
+          </div>
+
+          {/* Credit balance — read-only, no buy */}
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <h3 className="text-sm font-semibold">Credit balance</h3>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="text-2xl font-bold">
+                {total.toLocaleString()}
+              </span>
+              <span className="text-sm text-muted">credits</span>
+            </div>
+
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-border/50">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${Math.min((total / 100) * 100, 100)}%`,
+                  backgroundColor:
+                    total < 15
+                      ? "var(--color-destructive)"
+                      : total < 40
+                        ? "#f59e0b"
+                        : "var(--color-accent)",
+                }}
+              />
+            </div>
+
+            {topup > 0 && (
+              <div className="mt-3 flex justify-between text-xs text-muted">
+                <span>Top-up</span>
+                <span className="font-medium text-foreground">
+                  {topup.toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <button
+              onClick={() => openPricing("plans")}
+              className="mt-4 w-full rounded-lg border border-accent py-2 text-xs font-semibold text-accent transition hover:bg-accent/10"
+            >
+              Upgrade to Buy Credits
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Subscribed: full billing view ────────────────────────────
   return (
     <div className="space-y-6">
       {/* Two-column: Plan + Credits */}
@@ -80,7 +153,7 @@ export function BillingTab() {
         <div className="rounded-xl border border-border bg-surface p-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Current plan</h3>
-            {isSubscribed && profile.subscription_status && (
+            {profile.subscription_status && (
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                   profile.subscription_status === "active"
@@ -107,12 +180,11 @@ export function BillingTab() {
           <div className="mt-2 flex items-center gap-1.5 text-xs text-muted">
             <CreditIcon size={12} />
             <span>
-              {plan.credits.toLocaleString()} credits
-              {plan.price > 0 ? "/month" : " (one-time)"}
+              {plan.credits.toLocaleString()} credits/month
             </span>
           </div>
 
-          {isSubscribed && profile.subscription_ends_at && (
+          {profile.subscription_ends_at && (
             <p className="mt-2 text-xs text-muted">
               {profile.subscription_status === "canceled"
                 ? "Access until"

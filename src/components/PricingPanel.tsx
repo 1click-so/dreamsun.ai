@@ -328,7 +328,24 @@ export function PricingPanel({ initialTab = "topup" }: PricingPanelProps) {
       )}
 
       {/* ═══════════ Top-up Credits Tab ═══════════ */}
-      {tab === "topup" && (
+      {tab === "topup" && !isSubscribed && (
+        <div className="mx-auto max-w-md rounded-xl border border-border bg-surface p-8 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+            <CreditIcon size={20} />
+          </div>
+          <h3 className="text-lg font-semibold">Subscribe to buy credits</h3>
+          <p className="mt-2 text-sm text-muted">
+            Top-up credits are available for subscribers. Choose a plan to get monthly credits and unlock credit purchases.
+          </p>
+          <button
+            onClick={() => setTab("plans")}
+            className="mt-5 w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-black transition hover:bg-accent-hover"
+          >
+            View Plans
+          </button>
+        </div>
+      )}
+      {tab === "topup" && isSubscribed && (
         <div className="space-y-3">
           {/* Custom amount card */}
           {(() => {
@@ -548,7 +565,7 @@ export function PricingPanel({ initialTab = "topup" }: PricingPanelProps) {
 
           {/* Footer note */}
           <p className="pt-2 text-center text-[11px] text-muted">
-            Top-up credits never expire for 1 year. All models included. No subscription required.
+            Top-up credits are valid for 1 year. All models included.
           </p>
 
           {/* ═══════════ Auto Top-up ═══════════ */}
