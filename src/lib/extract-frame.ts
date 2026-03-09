@@ -105,3 +105,22 @@ export async function extractLastFrameAndUpload(
   if (!data.url) throw new Error(data.error || "Upload failed");
   return data.url;
 }
+
+/**
+ * Extract first frame from a video, upload via /api/upload, return the CDN URL.
+ * Useful for generating thumbnails for videos missing source_image_url.
+ */
+export async function extractFirstFrameAndUpload(
+  videoUrl: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const blob = await extractFrame(videoUrl, "first", signal);
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  const file = new File([blob], `first-frame-${Date.now()}.png`, { type: "image/png" });
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch("/api/upload", { method: "POST", body: formData, signal });
+  const data = await res.json();
+  if (!data.url) throw new Error(data.error || "Upload failed");
+  return data.url;
+}

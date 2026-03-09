@@ -713,6 +713,7 @@ export default function VideoPage() {
         shot_number: null,
         project_id: null,
         source_image_url: firstFrame.url,
+        thumbnail_url: null,
         reference_image_urls: refUrls,
       }]);
 

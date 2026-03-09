@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Outfit, Gochi_Hand } from "next/font/google";
 import { Providers } from "@/components/Providers";
+import { NavigationProgress } from "@/components/NavigationProgress";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -56,7 +57,10 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
-        <Providers>{children}</Providers>
+        <Providers>
+          <NavigationProgress />
+          {children}
+        </Providers>
       </body>
     </html>
   );

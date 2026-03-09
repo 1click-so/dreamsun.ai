@@ -53,6 +53,8 @@ interface GenerationResult {
   favorited?: boolean;
   sceneId?: string | null;
   shotNumber?: string | null;
+  pending?: boolean;
+  thumbnailUrl?: string | null;
 }
 
 interface UploadedImage {
@@ -155,6 +157,8 @@ function generationToResult(g: Generation): GenerationResult {
     favorited: g.favorited,
     sceneId: g.scene_id,
     shotNumber: g.shot_number,
+    pending: !g.url,
+    thumbnailUrl: g.thumbnail_url ?? (g.type === "video" ? g.source_image_url : null),
   };
 }
 
@@ -266,7 +270,66 @@ const IMAGE_MODES: ModeConfig[] = [
 
 // --- Video Thumbnail (lazy load via IntersectionObserver) ---
 
-function VideoThumb({ src, hovered, onLoaded }: { src: string; hovered: boolean; onLoaded: () => void }) {
+function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
+  src: string;
+  thumbnailUrl?: string | null;
+  hovered: boolean;
+  onLoaded: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!hovered) { setPlaying(false); return; }
+    setPlaying(true);
+  }, [hovered]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (playing) { el.play().catch(() => {}); } else { el.pause(); el.currentTime = 0; }
+  }, [playing]);
+
+  return (
+    <>
+      {thumbnailUrl && !playing && (
+        <Image
+          src={thumbnailUrl}
+          alt=""
+          fill
+          sizes="(max-width: 768px) 50vw, 33vw"
+          quality={60}
+          className="rounded-lg object-cover"
+          draggable={false}
+          onLoad={onLoaded}
+        />
+      )}
+      {playing && (
+        <video
+          ref={videoRef}
+          src={src}
+          className="h-full w-full rounded-lg object-cover"
+          muted loop playsInline autoPlay preload="auto"
+          draggable={false}
+        />
+      )}
+      {!thumbnailUrl && !playing && (
+        <VideoMetadataLoader src={src} onLoaded={onLoaded} />
+      )}
+      {!playing && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="white" stroke="none">
+              <path d="M4 2.5l8 4.5-8 4.5V2.5z" />
+            </svg>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function VideoMetadataLoader({ src, onLoaded }: { src: string; onLoaded: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
 
@@ -281,35 +344,16 @@ function VideoThumb({ src, hovered, onLoaded }: { src: string; hovered: boolean;
     return () => obs.disconnect();
   }, [shouldLoad]);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !shouldLoad) return;
-    if (hovered) { el.play().catch(() => {}); } else { el.pause(); el.currentTime = 0; }
-  }, [hovered, shouldLoad]);
-
   return (
-    <>
-      <video
-        ref={ref}
-        src={src}
-        className={`h-full w-full rounded-lg object-cover transition-opacity duration-300 ${shouldLoad ? "opacity-100" : "opacity-0"}`}
-        muted
-        loop
-        playsInline
-        preload={shouldLoad ? "metadata" : "none"}
-        draggable={false}
-        onLoadedData={onLoaded}
-      />
-      {!hovered && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="white" stroke="none">
-              <path d="M4 2.5l8 4.5-8 4.5V2.5z" />
-            </svg>
-          </div>
-        </div>
-      )}
-    </>
+    <video
+      ref={ref}
+      src={src}
+      className={`h-full w-full rounded-lg object-cover transition-opacity duration-300 ${shouldLoad ? "opacity-100" : "opacity-0"}`}
+      muted playsInline
+      preload={shouldLoad ? "metadata" : "none"}
+      draggable={false}
+      onLoadedData={onLoaded}
+    />
   );
 }
 
@@ -401,6 +445,7 @@ function GalleryCard({
       {result.type === "video" ? (
         <VideoThumb
           src={result.imageUrl}
+          thumbnailUrl={result.thumbnailUrl}
           hovered={hovered}
           onLoaded={handleMediaReady}
         />
@@ -692,6 +737,7 @@ export default function GeneratePage() {
             shot_number: null,
             project_id: null,
             source_image_url: null,
+            thumbnail_url: null,
             reference_image_urls: null,
           });
         } catch (e) {
@@ -1023,6 +1069,7 @@ export default function GeneratePage() {
               shot_number: null,
               project_id: null,
               source_image_url: null,
+              thumbnail_url: null,
               reference_image_urls: hasRefs ? referenceImages.filter((r) => r.url).map((r) => r.url!) : null,
             });
           } catch (e) {

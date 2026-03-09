@@ -26,6 +26,7 @@ export interface Generation {
   shot_number: string | null;
   project_id: string | null;
   source_image_url: string | null;
+  thumbnail_url: string | null;
   reference_image_urls: string[] | null;
 }
 

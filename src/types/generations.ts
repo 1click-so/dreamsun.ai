@@ -30,6 +30,7 @@ export interface GenerationResult {
   sceneId?: string | null;
   shotNumber?: string | null;
   pending?: boolean;
+  thumbnailUrl?: string | null;
 }
 
 export interface UploadedImage {
@@ -64,5 +65,7 @@ export function generationToResult(g: Generation): GenerationResult {
     sceneId: g.scene_id,
     shotNumber: g.shot_number,
     pending: !g.url,
+    // For videos: use dedicated thumbnail, or fall back to source image (first frame)
+    thumbnailUrl: g.thumbnail_url ?? (g.type === "video" ? g.source_image_url : null),
   };
 }
