@@ -59,6 +59,7 @@ function CreditRing({ ratio, size = 36 }: { ratio: number; size?: number }) {
 export function ProfileDropdown() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useTheme();
@@ -76,6 +77,7 @@ export function ProfileDropdown() {
       .then((r) => r.json())
       .then((data) => {
         if (data.avatar_url) setAvatarUrl(data.avatar_url);
+        if (data.display_name) setDisplayName(data.display_name);
       })
       .catch(() => {});
   }, []);
@@ -144,12 +146,15 @@ export function ProfileDropdown() {
       {/* Dropdown */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-60 rounded-xl border border-border bg-surface py-1.5 shadow-xl z-50">
-          {/* Email */}
-          {email && (
-            <div className="px-3 py-2 border-b border-border">
+          {/* User info */}
+          <div className="px-3 py-2 border-b border-border">
+            {displayName && (
+              <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
+            )}
+            {email && (
               <p className="text-xs text-muted truncate">{email}</p>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Credit balance */}
           <div className="px-3 py-2.5 border-b border-border">
