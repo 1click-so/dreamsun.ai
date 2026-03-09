@@ -2136,6 +2136,8 @@ function ImageLightbox({
 
   // Load real dimensions + file size from the image itself
   useEffect(() => {
+    // Reset file size but keep w/h from result to avoid layout shift
+    setImageMeta({ w: result.width || 1024, h: result.height || 1024, sizeKB: null });
     setLightboxImgLoaded(false);
     const img = document.createElement("img");
     img.onload = () => {
@@ -2148,7 +2150,7 @@ function ImageLightbox({
       const len = res.headers.get("content-length");
       if (len) setImageMeta((prev) => ({ ...prev, sizeKB: Math.round(Number(len) / 1024) }));
     }).catch(() => {});
-  }, [result.imageUrl]);
+  }, [result.imageUrl, result.width, result.height]);
 
   const createdDate = result.createdAt
     ? new Date(result.createdAt).toLocaleString()
@@ -2207,11 +2209,6 @@ function ImageLightbox({
             />
           ) : (
             <div className="relative">
-              {!lightboxImgLoaded && (
-                <div className="flex max-h-[75vh] items-center justify-center" style={{ width: imageMeta.w ? Math.min(imageMeta.w, 1200) : 600, height: imageMeta.h ? Math.min(imageMeta.h, 800) : 400 }}>
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                </div>
-              )}
               <Image
                 src={result.imageUrl}
                 alt="Preview"
@@ -2219,7 +2216,7 @@ function ImageLightbox({
                 height={imageMeta.h || result.height || 1024}
                 quality={90}
                 sizes="75vw"
-                className={`max-h-[75vh] w-auto rounded-xl object-contain shadow-2xl transition-opacity duration-300 ${lightboxImgLoaded ? "opacity-100" : "opacity-0"}`}
+                className="max-h-[75vh] w-auto rounded-xl object-contain shadow-2xl"
                 onLoad={() => setLightboxImgLoaded(true)}
               />
             </div>
