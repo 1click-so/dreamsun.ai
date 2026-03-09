@@ -19,6 +19,7 @@ import { useGenerations, type Generation } from "@/hooks/useGenerations";
 import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
+import { UpscalePanel } from "@/components/generate/UpscalePanel";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
@@ -75,6 +76,7 @@ interface Character {
 // --- localStorage helpers ---
 
 const STORAGE_KEYS = {
+  mode: "dreamsun_gen_mode",
   models: "dreamsun_gen_models",
   ratio: "dreamsun_gen_ratio",
   resolution: "dreamsun_gen_resolution",
@@ -246,7 +248,8 @@ const IMAGE_MODES: ModeConfig[] = [
     label: "Upscale",
     icon: <IconUpscale />,
     description: "Enhance resolution and detail",
-    ready: false,
+    ready: true,
+    hasPrompt: false,
   },
   {
     id: "edit",
@@ -563,7 +566,9 @@ function PillButton({
 
 export default function GeneratePage() {
   // Mode
-  const [activeMode, setActiveMode] = useState<ImageMode>("create");
+  const [activeMode, setActiveMode] = useState<ImageMode>(() =>
+    loadStorage<ImageMode>(STORAGE_KEYS.mode, "create")
+  );
 
   // Settings state (persisted)
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
@@ -1312,12 +1317,14 @@ export default function GeneratePage() {
         <aside className="hidden w-[28%] min-w-[280px] max-w-[400px] shrink-0 flex-col border-r border-border lg:flex">
           {/* Mode bar — fixed at top */}
           <div className="border-b border-border px-2 py-2">
-            <ModeBar modes={IMAGE_MODES} active={activeMode} onChange={(id) => setActiveMode(id as ImageMode)} columns={2} />
+            <ModeBar modes={IMAGE_MODES} active={activeMode} onChange={(id) => { setActiveMode(id as ImageMode); saveStorage(STORAGE_KEYS.mode, id); }} columns={2} />
           </div>
 
           {/* Scrollable settings area */}
           <div className="flex-1 overflow-y-auto p-4">
-            {activeMode === "create" ? (
+            {activeMode === "upscale" ? (
+              <UpscalePanel />
+            ) : activeMode === "create" ? (
             <div className="space-y-5">
               {/* Model */}
               <div>
@@ -1850,6 +1857,7 @@ export default function GeneratePage() {
           {/* ============================================================
               FLOATING PROMPT BAR — overlays bottom of gallery
               ============================================================ */}
+          {(IMAGE_MODES.find((m) => m.id === activeMode)?.hasPrompt !== false) && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-6 pb-5">
             <div
               className={`pointer-events-auto w-full max-w-2xl rounded-2xl border bg-background backdrop-blur-xl transition-all duration-300 ${
@@ -1957,6 +1965,7 @@ export default function GeneratePage() {
               </div>
             </div>
           </div>
+          )}
         </main>
       </div>
 

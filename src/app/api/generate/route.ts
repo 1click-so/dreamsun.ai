@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getModelById } from "@/lib/models";
 import { createClient } from "@/lib/supabase-server";
-import { calculateCost, deductCredits, refundCredits, tryAutoTopup } from "@/lib/credits";
+import { calculateCost, deductCredits, refundCredits, tryAutoTopup, getApiProvider } from "@/lib/credits";
+import { getKieModelId, kieCreateTask, kiePollUntilDone, kieParseResultUrls } from "@/lib/kie-ai";
 
 fal.config({
   credentials: process.env.FAL_KEY,
 });
+
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   let userId = "";
@@ -110,6 +113,53 @@ export async function POST(req: NextRequest) {
       Object.assign(input, model.extraInput);
     }
 
+    // Determine API provider
+    const apiProvider = await getApiProvider(modelId, { resolution: imageResolution as string | undefined });
+
+    if (apiProvider === "kie") {
+      // ── Kie.ai path ──────────────────────────────────────────
+      const kieInput: Record<string, unknown> = { prompt };
+
+      if (aspectRatio) kieInput.aspect_ratio = aspectRatio;
+
+      // Kie.ai uses "1K", "2K", "4K" (uppercase)
+      if (imageResolution) {
+        kieInput.resolution = (imageResolution as string).toUpperCase();
+      }
+
+      kieInput.output_format = "png";
+
+      // Reference images for edit mode
+      if (referenceImageUrls && Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0) {
+        kieInput.image_input = referenceImageUrls;
+      }
+
+      if (negativePrompt && model.supportsNegativePrompt) {
+        kieInput.negative_prompt = negativePrompt;
+      }
+
+      const kieModel = getKieModelId(modelId);
+      const taskId = await kieCreateTask(kieModel, kieInput);
+      const result = await kiePollUntilDone(taskId);
+      const urls = kieParseResultUrls(result.resultJson);
+
+      if (urls.length === 0) {
+        return NextResponse.json({ error: "No images generated" }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        imageUrl: urls[0],
+        allImageUrls: urls,
+        width: null,
+        height: null,
+        seed: null,
+        model: model.name,
+        requestId: taskId,
+        creditsUsed: cost,
+      });
+    }
+
+    // ── fal.ai path (default) ────────────────────────────────
     // Safety checker — off by default, toggle in UI
     input.enable_safety_checker = safetyChecker === true;
 

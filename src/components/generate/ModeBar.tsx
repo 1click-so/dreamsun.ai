@@ -6,6 +6,8 @@ export interface ModeConfig {
   icon: React.ReactNode;
   description: string;
   ready: boolean;
+  /** Whether this mode uses the floating prompt bar. Defaults to true. */
+  hasPrompt?: boolean;
 }
 
 interface ModeBarProps {

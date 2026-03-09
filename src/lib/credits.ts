@@ -44,7 +44,7 @@ interface RefundResult {
  */
 export async function calculateCost(
   modelId: string,
-  opts: { numImages?: number; duration?: number; resolution?: string; audioTier?: string } = {}
+  opts: { numImages?: number; duration?: number; resolution?: string; audioTier?: string; megapixels?: number } = {}
 ): Promise<number> {
   const supabase = await createClient();
   const hasFilters = !!(opts.resolution || opts.audioTier);
@@ -53,7 +53,7 @@ export async function calculateCost(
   if (hasFilters) {
     let query = supabase
       .from("model_pricing")
-      .select("base_price_credits, capability")
+      .select("base_price_credits, capability, pricing_unit")
       .eq("model_id", modelId)
       .eq("is_active", true);
 
@@ -63,10 +63,7 @@ export async function calculateCost(
     const { data: rows } = await query.order("base_price_credits", { ascending: true }).limit(1);
 
     if (rows && rows.length > 0) {
-      const row = rows[0];
-      const unitCost = row.base_price_credits ?? 0;
-      const isVideo = row.capability?.includes("video") || row.capability?.includes("audio");
-      return isVideo ? unitCost * (opts.duration ?? 5) : unitCost * (opts.numImages ?? 1);
+      return computeCredits(rows[0], opts);
     }
     // No tier-specific row found — fall through to base model lookup
   }
@@ -74,7 +71,7 @@ export async function calculateCost(
   // Base lookup (no resolution/audio filter) — for models without tier-specific pricing
   const { data: rows } = await supabase
     .from("model_pricing")
-    .select("base_price_credits, capability")
+    .select("base_price_credits, capability, pricing_unit")
     .eq("model_id", modelId)
     .eq("is_active", true)
     .order("base_price_credits", { ascending: true })
@@ -82,11 +79,49 @@ export async function calculateCost(
 
   if (!rows || rows.length === 0) return 0;
 
-  const row = rows[0];
-  const unitCost = row.base_price_credits ?? 0;
-  const isVideo = row.capability?.includes("video") || row.capability?.includes("audio");
+  return computeCredits(rows[0], opts);
+}
 
-  return isVideo ? unitCost * (opts.duration ?? 5) : unitCost * (opts.numImages ?? 1);
+function computeCredits(
+  row: { base_price_credits: number; capability?: string; pricing_unit?: string },
+  opts: { numImages?: number; duration?: number; megapixels?: number }
+): number {
+  const unitCost = row.base_price_credits ?? 0;
+  const unit = row.pricing_unit ?? "per_generation";
+
+  if (unit === "per_megapixel") {
+    return Math.ceil(unitCost * (opts.megapixels ?? 1));
+  }
+  if (unit === "per_second") {
+    return unitCost * (opts.duration ?? 5);
+  }
+  // per_generation
+  return unitCost * (opts.numImages ?? 1);
+}
+
+// ── Provider Lookup ──────────────────────────────────────────
+
+/**
+ * Get the API provider for a model (fal or kie).
+ * Checks model_pricing table for the api_provider column.
+ */
+export async function getApiProvider(
+  modelId: string,
+  opts: { resolution?: string; audioTier?: string } = {}
+): Promise<"fal" | "kie"> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("model_pricing")
+    .select("api_provider")
+    .eq("model_id", modelId)
+    .eq("is_active", true);
+
+  if (opts.resolution) query = query.eq("resolution", opts.resolution);
+  if (opts.audioTier) query = query.eq("audio_tier", opts.audioTier);
+
+  const { data } = await query.limit(1);
+  const provider = data?.[0]?.api_provider;
+  return provider === "kie" ? "kie" : "fal";
 }
 
 // ── Balance ────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ export interface ModelPricing {
   discount_pct: number;
   is_promo: boolean;
   promo_label: string | null;
-  pricing_unit: string;          // 'per_generation' | 'per_second'
+  pricing_unit: string;          // 'per_generation' | 'per_second' | 'per_megapixel'
 }
 
 /** Build a composite key for tier lookups: "model_id", "model_id:1080p", "model_id::on", "model_id:720p:on" */

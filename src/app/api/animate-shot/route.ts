@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
 import { createClient } from "@/lib/supabase-server";
-import { calculateCost, deductCredits, refundCredits, tryAutoTopup } from "@/lib/credits";
+import { calculateCost, deductCredits, refundCredits, tryAutoTopup, getApiProvider } from "@/lib/credits";
+import { getKieModelId, kieCreateTask } from "@/lib/kie-ai";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -156,17 +157,63 @@ export async function POST(req: NextRequest) {
       }));
     }
 
-    // Resolve endpoint — for Kling, 720p→Standard, 1080p→Pro
-    const endpoint = resolveVideoEndpoint(model, resolution);
+    // Determine API provider (audioTier already declared above)
+    const apiProvider = await getApiProvider(videoModelId, { resolution: resolution || undefined, audioTier });
 
-    console.log(`[animate-shot] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
+    let requestId: string;
+    let endpoint: string;
 
-    // Submit to fal.ai QUEUE (returns immediately with request_id)
-    const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
-      input,
-    });
+    if (apiProvider === "kie") {
+      // ── Kie.ai path ──────────────────────────────────────────
+      const kieModel = getKieModelId(videoModelId);
+      const kieInput: Record<string, unknown> = {
+        prompt: prompt || "",
+        duration: String(duration || model.defaultDuration),
+        sound: generateAudio !== false,
+        multi_shots: !!multiShot,
+      };
 
-    console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}`);
+      // mode: std=720p, pro=1080p
+      kieInput.mode = resolution === "720p" ? "std" : "pro";
+
+      // image_urls: [start, end?]
+      const kieImageUrls: string[] = [imageUrl];
+      if (endImageUrl) kieImageUrls.push(endImageUrl);
+      kieInput.image_urls = kieImageUrls;
+
+      if (aspectRatio) kieInput.aspect_ratio = aspectRatio;
+
+      // Multi-shot prompts
+      if (multiShot && multiPrompt && Array.isArray(multiPrompt)) {
+        kieInput.multi_prompt = multiPrompt;
+      }
+
+      // Elements (character consistency)
+      if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
+        kieInput.kling_elements = elementUrls.map((url: string, i: number) => ({
+          name: `element_${i}`,
+          element_input_urls: [url],
+        }));
+      }
+
+      const taskId = await kieCreateTask(kieModel, kieInput);
+      requestId = taskId;
+      endpoint = kieModel;
+
+      console.log(`[animate-shot] Queued on Kie.ai: taskId=${taskId}`);
+    } else {
+      // ── fal.ai path (default) ────────────────────────────────
+      endpoint = resolveVideoEndpoint(model, resolution);
+
+      console.log(`[animate-shot] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
+
+      const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
+        input,
+      });
+      requestId = falRequestId;
+
+      console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}`);
+    }
 
     // Build settings/reference data
     const refUrls: string[] = [];
@@ -177,8 +224,9 @@ export async function POST(req: NextRequest) {
     const settings: Record<string, unknown> = {
       modelId: videoModelId,
       mode: videoUrl ? "motion" : "create",
+      apiProvider,
       falEndpoint: endpoint,
-      falRequestId,
+      falRequestId: requestId,
     };
     if (!videoUrl) {
       Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
@@ -198,7 +246,7 @@ export async function POST(req: NextRequest) {
         model_id: videoModelId,
         model_name: model.name,
         seed: null,
-        request_id: falRequestId,
+        request_id: requestId,
         width: null,
         height: null,
         duration: duration || null,
@@ -224,7 +272,7 @@ export async function POST(req: NextRequest) {
     // Return immediately — client will poll /api/generation-poll
     return NextResponse.json({
       generationId,
-      falRequestId,
+      falRequestId: requestId,
       model: model.name,
       creditsUsed: cost,
       status: "processing",
