@@ -374,6 +374,7 @@ function GalleryCard({
   onRegenerate,
   onFavorite,
   onDelete,
+  onUpscale,
   onClick,
   copied,
   onImageLoad,
@@ -391,6 +392,7 @@ function GalleryCard({
   onRegenerate: () => void;
   onFavorite: () => void;
   onDelete: () => void;
+  onUpscale?: () => void;
   onClick: () => void;
   copied: boolean;
   onImageLoad?: (url: string, w: number, h: number) => void;
@@ -505,7 +507,7 @@ function GalleryCard({
         <button onClick={onDownload} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Download">
           <IconDownload />
         </button>
-        <button onClick={() => {/* TODO */}} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Upscale">
+        <button onClick={onUpscale} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Upscale">
           <IconUpscale />
         </button>
         <button onClick={onCopyUrl} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Copy URL">
@@ -635,6 +637,7 @@ export default function GeneratePage() {
   const [editPromptValue, setEditPromptValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<GenerationResult | null>(null);
+  const [upscaleImageUrl, setUpscaleImageUrl] = useState<string | null>(null);
   const [promptBarDragOver, setPromptBarDragOver] = useState(false);
   const [refsDragOver, setRefsDragOver] = useState(false);
   const [galleryRowHeight, setGalleryRowHeight] = useState(() => {
@@ -1341,7 +1344,7 @@ export default function GeneratePage() {
           {/* Scrollable settings area */}
           <div className="flex-1 overflow-y-auto p-4">
             {activeMode === "upscale" ? (
-              <UpscalePanel key="upscale" category="upscale" />
+              <UpscalePanel key="upscale" category="upscale" initialImageUrl={upscaleImageUrl} />
             ) : activeMode === "skin" ? (
               <UpscalePanel key="skin" category="skin" />
             ) : activeMode === "create" ? (
@@ -1752,10 +1755,14 @@ export default function GeneratePage() {
                 onClickImage={setSelectedResult}
                 onFavorite={toggleFavorite}
                 onDelete={deleteImage}
+                onUpscale={(r) => {
+                  setUpscaleImageUrl(r.imageUrl);
+                  setActiveMode("upscale");
+                  saveStorage(STORAGE_KEYS.mode, "upscale");
+                }}
                 selectMode={selectMode}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
-
               />
             )}
           </div>
@@ -1850,10 +1857,14 @@ export default function GeneratePage() {
                   onClickImage={setSelectedResult}
                   onFavorite={toggleFavorite}
                   onDelete={deleteImage}
+                  onUpscale={(r) => {
+                    sessionStorage.setItem("dreamsun_upscale_image", r.imageUrl);
+                    setActiveMode("upscale");
+                    saveStorage(STORAGE_KEYS.mode, "upscale");
+                  }}
                   selectMode={selectMode}
                   selectedIds={selectedIds}
                   onToggleSelect={toggleSelect}
-  
                 />
                 )}
               </div>
@@ -2010,7 +2021,7 @@ export default function GeneratePage() {
           onDelete={() => deleteImage(selectedResult.requestId)}
           onAddToShots={() => { setSelectedResult(null); }}
           onUpscale={() => {
-            sessionStorage.setItem("dreamsun_upscale_image", selectedResult.imageUrl);
+            setUpscaleImageUrl(selectedResult.imageUrl);
             setSelectedResult(null);
             setActiveMode("upscale");
             saveStorage(STORAGE_KEYS.mode, "upscale");
@@ -2652,6 +2663,7 @@ function GalleryGrid({
   onClickImage,
   onFavorite,
   onDelete,
+  onUpscale,
   selectMode,
   selectedIds,
   onToggleSelect,
@@ -2676,6 +2688,7 @@ function GalleryGrid({
   onClickImage: (r: GenerationResult) => void;
   onFavorite: (requestId: string) => void;
   onDelete: (requestId: string) => void;
+  onUpscale?: (r: GenerationResult) => void;
   selectMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (requestId: string) => void;
@@ -2884,6 +2897,7 @@ function GalleryGrid({
                         onRegenerate={onRegenerate}
                         onFavorite={() => onFavorite(r.requestId)}
                         onDelete={() => onDelete(r.requestId)}
+                        onUpscale={onUpscale ? () => onUpscale(r) : undefined}
                         onClick={() => onClickImage(r)}
                         copied={copiedId === r.requestId}
                         onImageLoad={onImageLoad}

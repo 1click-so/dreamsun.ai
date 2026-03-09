@@ -39,10 +39,13 @@ function getImageDimensions(src: string): Promise<{ width: number; height: numbe
 
 export function UpscalePanel({
   category = "upscale",
+  initialImageUrl,
   onResult,
 }: {
   /** Which category of models to show */
   category?: "upscale" | "skin";
+  /** Pre-load this image URL (from lightbox/gallery upscale button) */
+  initialImageUrl?: string | null;
   /** Called when upscale completes — parent can add to gallery */
   onResult?: (result: UpscaleResult) => void;
 }) {
@@ -95,16 +98,17 @@ export function UpscalePanel({
     setImageDims(dims);
   }, []);
 
-  // Pre-load image from sessionStorage (lightbox "Upscale" button)
+  // Pre-load image from prop or sessionStorage (lightbox/gallery "Upscale" button)
   useEffect(() => {
-    const stored = sessionStorage.getItem("dreamsun_upscale_image");
-    if (stored) {
+    const url = initialImageUrl || sessionStorage.getItem("dreamsun_upscale_image");
+    if (url) {
       sessionStorage.removeItem("dreamsun_upscale_image");
-      setImagePreview(stored);
-      setImageUrl(stored);
-      detectDimensions(stored);
+      setImagePreview(url);
+      setImageUrl(url);
+      setImageDims(null);
+      detectDimensions(url);
     }
-  }, [detectDimensions]);
+  }, [initialImageUrl, detectDimensions]);
 
   // Upload image to fal storage
   const handleFileSelect = useCallback(

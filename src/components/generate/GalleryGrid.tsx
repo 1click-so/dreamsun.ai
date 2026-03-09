@@ -131,6 +131,7 @@ export function GalleryCard({
   onRegenerate,
   onFavorite,
   onDelete,
+  onUpscale,
   onClick,
   copied,
   onImageLoad,
@@ -148,6 +149,7 @@ export function GalleryCard({
   onRegenerate: () => void;
   onFavorite: () => void;
   onDelete: () => void;
+  onUpscale?: () => void;
   onClick: () => void;
   copied: boolean;
   onImageLoad?: (url: string, w: number, h: number) => void;
@@ -270,7 +272,7 @@ export function GalleryCard({
         <button onClick={onDownload} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Download">
           <IconDownload />
         </button>
-        <button onClick={() => {/* TODO */}} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Upscale">
+        <button onClick={onUpscale} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Upscale">
           <IconUpscale />
         </button>
         <button onClick={onCopyUrl} className="rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white" title="Copy URL">
@@ -388,6 +390,7 @@ export interface GalleryGridProps {
   onClickImage: (r: GenerationResult) => void;
   onFavorite: (requestId: string) => void;
   onDelete: (requestId: string) => void;
+  onUpscale?: (r: GenerationResult) => void;
   // Select mode
   selectMode?: boolean;
   selectedIds?: Set<string>;
@@ -415,6 +418,7 @@ export function GalleryGrid({
   onClickImage,
   onFavorite,
   onDelete,
+  onUpscale,
   selectMode,
   selectedIds,
   onToggleSelect,
@@ -627,6 +631,7 @@ export function GalleryGrid({
                         onRegenerate={onRegenerate}
                         onFavorite={() => onFavorite(r.requestId)}
                         onDelete={() => onDelete(r.requestId)}
+                        onUpscale={onUpscale ? () => onUpscale(r) : undefined}
                         onClick={() => onClickImage(r)}
                         copied={copiedId === r.requestId}
                         onImageLoad={onImageLoad}
