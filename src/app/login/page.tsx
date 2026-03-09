@@ -16,72 +16,69 @@ export default function LoginPage() {
   );
 }
 
-/** Atmospheric left panel — floating gradient orbs */
+/** Visual showcase left panel — image collage */
+const SHOWCASE_IMAGES = [
+  { src: "https://picsum.photos/seed/cyberpunk/400/500", alt: "Cyberpunk city" },
+  { src: "https://picsum.photos/seed/portrait/400/300", alt: "AI portrait" },
+  { src: "https://picsum.photos/seed/fantasy/400/500", alt: "Fantasy landscape" },
+  { src: "https://picsum.photos/seed/neon/400/300", alt: "Neon abstract" },
+  { src: "https://picsum.photos/seed/surreal/400/500", alt: "Surreal art" },
+  { src: "https://picsum.photos/seed/space/400/300", alt: "Space scene" },
+];
+
 function DreamPanel() {
   return (
-    <div className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-background">
-      {/* Base gradient layer */}
-      <div className="absolute inset-0 bg-gradient-to-br from-accent/[0.06] via-transparent to-accent/[0.03]" />
-
-      {/* Floating orbs */}
-      <div className="login-orb-1 absolute top-[15%] left-[20%] h-64 w-64 rounded-full bg-accent/[0.12] blur-[80px]" />
-      <div className="login-orb-2 absolute top-[50%] right-[10%] h-48 w-48 rounded-full bg-accent/[0.08] blur-[60px]" />
-      <div className="login-orb-3 absolute bottom-[20%] left-[10%] h-56 w-56 rounded-full bg-accent/[0.10] blur-[70px]" />
-      <div className="login-orb-4 absolute top-[30%] right-[30%] h-32 w-32 rounded-full bg-accent/[0.15] blur-[50px]" />
-
-      {/* Grid overlay for structure */}
-      <div
-        className="absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-          `,
-          backgroundSize: "60px 60px",
-        }}
-      />
-
-      {/* Content */}
-      <div className="relative z-10 flex flex-1 flex-col justify-between p-10">
-        {/* Top — branding */}
-        <div>
-          <Link href="/" className="inline-flex items-center gap-2.5 transition hover:opacity-80">
-            <Logo size={20} />
-            <span className="font-display text-sm font-bold tracking-tight text-foreground">
-              DreamSun
-            </span>
-          </Link>
+    <div className="relative hidden lg:flex overflow-hidden bg-background">
+      {/* Image collage — 2 columns, offset masonry */}
+      <div className="absolute inset-0 grid grid-cols-2 gap-2 p-2">
+        {/* Column 1 */}
+        <div className="flex flex-col gap-2 -mt-8 login-col-1">
+          {[...SHOWCASE_IMAGES.filter((_, i) => i % 2 === 0), ...SHOWCASE_IMAGES.filter((_, i) => i % 2 === 0)].map((img, i) => (
+            <div key={i} className="relative overflow-hidden rounded-lg" style={{ aspectRatio: "4/5" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={img.src}
+                alt={img.alt}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          ))}
         </div>
-
-        {/* Center — tagline */}
-        <div className="max-w-xs">
-          <h2 className="font-display text-3xl font-bold leading-tight tracking-tight text-foreground">
-            Imagine it.
-            <br />
-            <span className="text-accent">Create it.</span>
-          </h2>
-          <p className="mt-4 text-sm leading-relaxed text-muted">
-            AI-powered image, video, and audio generation for creators who think visually.
-          </p>
+        {/* Column 2 — offset */}
+        <div className="flex flex-col gap-2 mt-12 login-col-2">
+          {[...SHOWCASE_IMAGES.filter((_, i) => i % 2 === 1), ...SHOWCASE_IMAGES.filter((_, i) => i % 2 === 1)].map((img, i) => (
+            <div key={i} className="relative overflow-hidden rounded-lg" style={{ aspectRatio: "4/3" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={img.src}
+                alt={img.alt}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          ))}
         </div>
+      </div>
 
-        {/* Bottom — social proof or subtle detail */}
-        <div className="flex items-center gap-3">
-          <div className="flex -space-x-2">
-            {["D", "S", "A", "M"].map((letter, i) => (
-              <div
-                key={letter}
-                className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-surface text-[10px] font-semibold text-muted"
-                style={{ zIndex: 4 - i }}
-              >
-                {letter}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted">
-            Join creators making the impossible visible
-          </p>
-        </div>
+      {/* Gradient overlays for depth */}
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent z-10" />
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent to-background/40 z-10" />
+
+      {/* Floating orb glow on top */}
+      <div className="login-orb-1 absolute top-[20%] left-[30%] h-48 w-48 rounded-full bg-accent/[0.15] blur-[80px] z-10" />
+      <div className="login-orb-2 absolute bottom-[30%] right-[20%] h-36 w-36 rounded-full bg-accent/[0.10] blur-[60px] z-10" />
+
+      {/* Bottom content — tagline over the collage */}
+      <div className="relative z-20 flex flex-col justify-end p-10">
+        <h2 className="font-display text-3xl font-bold leading-tight tracking-tight text-foreground">
+          Imagine it.
+          <br />
+          <span className="text-accent">Create it.</span>
+        </h2>
+        <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
+          AI-powered image, video, and audio generation for creators who think visually.
+        </p>
       </div>
     </div>
   );
@@ -89,7 +86,8 @@ function DreamPanel() {
 
 function LoginContent() {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<Mode>("signin");
+  const initialMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

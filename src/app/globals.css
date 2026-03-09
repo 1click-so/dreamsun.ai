@@ -397,6 +397,14 @@ textarea:focus {
 .login-orb-3 { animation: login-orb-3 14s ease-in-out 4s infinite; }
 .login-orb-4 { animation: login-orb-4 18s ease-in-out 1s infinite; }
 
+@keyframes login-col-drift {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+.login-col-1 { animation: login-col-drift 40s linear infinite; }
+.login-col-2 { animation: login-col-drift 50s linear infinite; }
+
 @keyframes login-fade-up {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }

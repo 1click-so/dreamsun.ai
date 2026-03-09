@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 export function Hero() {
@@ -68,13 +68,23 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.5 }}
           className="flex flex-col sm:flex-row items-center gap-4"
         >
-          <Link href="/images" className="h-14 px-8 rounded-full bg-accent text-black font-semibold text-lg flex items-center gap-2 hover:scale-105 transition-transform">
-            Generate Now <ArrowRight size={20} />
+          <Link href="/login?mode=signup" className="group h-14 px-10 rounded-full bg-accent text-black font-semibold text-lg flex items-center gap-2 hover:scale-105 hover:shadow-[0_0_30px_rgba(161,252,223,0.3)] transition-all">
+            Start Creating — Free <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </Link>
-          <button className="h-14 px-8 rounded-full glass text-white font-semibold text-lg flex items-center gap-2 hover:bg-white/10 transition-colors">
-            <Play size={20} className="fill-white" /> Watch Showreel
-          </button>
+          <Link href="/login" className="h-14 px-8 rounded-full glass text-white font-semibold text-lg flex items-center gap-2 hover:bg-white/10 transition-colors">
+            Sign In
+          </Link>
         </motion.div>
+
+        {/* Trust signal */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.7 }}
+          className="mt-6 text-xs text-white/30"
+        >
+          No credit card required · 100 free credits to start
+        </motion.p>
       </div>
 
       {/* Scroll indicator */}

@@ -27,10 +27,10 @@ export function LandingNavbar() {
 
       <div className="flex items-center gap-4">
         <Link href="/login" className="text-sm font-medium hover:text-accent transition-colors hidden sm:block">
-          Log in
+          Sign in
         </Link>
-        <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full text-sm font-semibold hover:bg-accent transition-colors">
-          Start Creating
+        <Link href="/login?mode=signup" className="bg-accent text-black px-5 py-2 rounded-full text-sm font-bold hover:shadow-[0_0_20px_rgba(161,252,223,0.25)] hover:scale-105 transition-all">
+          Get Started Free
         </Link>
       </div>
     </motion.nav>
