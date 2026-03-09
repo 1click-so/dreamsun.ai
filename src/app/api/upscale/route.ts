@@ -68,18 +68,32 @@ export async function POST(req: NextRequest) {
     const result = await fal.subscribe(model.endpoint, { input, logs: true });
     const data = result.data as Record<string, unknown>;
 
-    // Both Topaz and SeedVR2 return { image: { url, width, height } }
-    const image = data.image as { url: string; width: number; height: number } | undefined;
+    // Extract result URL based on response format
+    let resultUrl: string | undefined;
+    let resultWidth: number | undefined;
+    let resultHeight: number | undefined;
 
-    if (!image?.url) {
+    if (model.responseFormat === "images_array") {
+      // Crystal Upscaler returns { images: [url] }
+      const images = data.images as string[] | undefined;
+      resultUrl = images?.[0];
+    } else {
+      // Topaz / SeedVR2 return { image: { url, width, height } }
+      const image = data.image as { url: string; width: number; height: number } | undefined;
+      resultUrl = image?.url;
+      resultWidth = image?.width;
+      resultHeight = image?.height;
+    }
+
+    if (!resultUrl) {
       return NextResponse.json({ error: "No upscaled image returned" }, { status: 500 });
     }
 
     return NextResponse.json({
-      imageUrl: image.url,
-      allImageUrls: [image.url],
-      width: image.width,
-      height: image.height,
+      imageUrl: resultUrl,
+      allImageUrls: [resultUrl],
+      width: resultWidth ?? inputW * effectiveScale,
+      height: resultHeight ?? inputH * effectiveScale,
       seed: null,
       model: model.name,
       requestId: result.requestId,

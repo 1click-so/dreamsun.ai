@@ -17,6 +17,10 @@ export interface UpscaleModelConfig {
   extraInput?: Record<string, unknown>;
   /** Tags for the model selector */
   tags?: string[];
+  /** Which tabs this model appears in */
+  categories: ("upscale" | "skin")[];
+  /** How to extract the result URL from the API response */
+  responseFormat?: "image" | "images_array";
 }
 
 export const UPSCALE_MODELS: UpscaleModelConfig[] = [
@@ -31,6 +35,7 @@ export const UPSCALE_MODELS: UpscaleModelConfig[] = [
     scales: [2, 3, 4],
     defaultScale: 2,
     tags: ["Face Enhance", "Premium"],
+    categories: ["upscale"],
     extraInput: {
       model: "Standard V2",
       face_enhancement: true,
@@ -49,9 +54,44 @@ export const UPSCALE_MODELS: UpscaleModelConfig[] = [
     scales: [2, 3, 4, 6, 8, 10],
     defaultScale: 2,
     tags: ["Fast", "Up to 10x"],
+    categories: ["upscale"],
     extraInput: {
       upscale_mode: "factor",
       output_format: "png",
+    },
+  },
+  {
+    id: "crystal-upscaler",
+    name: "Crystal Upscaler",
+    endpoint: "clarityai/crystal-upscaler",
+    description: "Portrait-optimized — skin texture, eye clarity, facial detail.",
+    provider: "ClarityAI",
+    imageParam: "image_url",
+    scaleParam: "scale_factor",
+    scales: [2, 4],
+    defaultScale: 2,
+    tags: ["Portraits", "Skin & Eyes"],
+    categories: ["upscale", "skin"],
+    responseFormat: "images_array",
+    extraInput: {
+      creativity: 0,
+    },
+  },
+  {
+    id: "crystal-skin-enhance",
+    name: "Crystal Skin Enhance",
+    endpoint: "clarityai/crystal-upscaler",
+    description: "Enhance skin, eyes, and facial features with creative refinement.",
+    provider: "ClarityAI",
+    imageParam: "image_url",
+    scaleParam: "scale_factor",
+    scales: [2],
+    defaultScale: 2,
+    tags: ["Skin", "Face Refine"],
+    categories: ["skin"],
+    responseFormat: "images_array",
+    extraInput: {
+      creativity: 5,
     },
   },
 ];
@@ -60,8 +100,12 @@ export function getUpscaleModelById(id: string): UpscaleModelConfig | undefined 
   return UPSCALE_MODELS.find((m) => m.id === id);
 }
 
-export function upscaleModelsToSelectorItems(): SelectorModel[] {
-  return UPSCALE_MODELS.map((m) => ({
+export function getModelsByCategory(category: "upscale" | "skin"): UpscaleModelConfig[] {
+  return UPSCALE_MODELS.filter((m) => m.categories.includes(category));
+}
+
+export function modelsToSelectorItems(category: "upscale" | "skin"): SelectorModel[] {
+  return getModelsByCategory(category).map((m) => ({
     id: m.id,
     name: m.name,
     description: m.description,

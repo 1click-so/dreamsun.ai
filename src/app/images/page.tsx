@@ -268,7 +268,8 @@ const IMAGE_MODES: ModeConfig[] = [
       </svg>
     ),
     description: "Enhance skin texture and lighting",
-    ready: false,
+    ready: true,
+    hasPrompt: false,
   },
 ];
 
@@ -1340,7 +1341,9 @@ export default function GeneratePage() {
           {/* Scrollable settings area */}
           <div className="flex-1 overflow-y-auto p-4">
             {activeMode === "upscale" ? (
-              <UpscalePanel />
+              <UpscalePanel category="upscale" />
+            ) : activeMode === "skin" ? (
+              <UpscalePanel category="skin" />
             ) : activeMode === "create" ? (
             <div className="space-y-5">
               {/* Model */}

@@ -8,9 +8,9 @@ import { usePricing } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
 import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 import {
-  UPSCALE_MODELS,
   getUpscaleModelById,
-  upscaleModelsToSelectorItems,
+  getModelsByCategory,
+  modelsToSelectorItems,
 } from "@/lib/upscale-models";
 
 // --- Types ---
@@ -38,14 +38,18 @@ function getImageDimensions(src: string): Promise<{ width: number; height: numbe
 // --- Component ---
 
 export function UpscalePanel({
+  category = "upscale",
   onResult,
 }: {
+  /** Which category of models to show */
+  category?: "upscale" | "skin";
   /** Called when upscale completes — parent can add to gallery */
   onResult?: (result: UpscaleResult) => void;
 }) {
-  // Model selection
-  const [selectedModelId, setSelectedModelId] = useState(UPSCALE_MODELS[0].id);
-  const selectedModel = getUpscaleModelById(selectedModelId) ?? UPSCALE_MODELS[0];
+  // Model selection — filtered by category
+  const categoryModels = getModelsByCategory(category);
+  const [selectedModelId, setSelectedModelId] = useState(categoryModels[0]?.id ?? "");
+  const selectedModel = getUpscaleModelById(selectedModelId) ?? categoryModels[0];
 
   // Scale factor
   const [scale, setScale] = useState(selectedModel.defaultScale);
@@ -66,7 +70,7 @@ export function UpscalePanel({
   const [showCreditsModal, setShowCreditsModal] = useState(false);
 
   // Models for selector
-  const selectorModels = upscaleModelsToSelectorItems();
+  const selectorModels = modelsToSelectorItems(category);
 
   // Handle model change — reset scale to new model's default if current scale isn't available
   const handleModelChange = useCallback(
@@ -355,11 +359,11 @@ export function UpscalePanel({
           {generating ? (
             <>
               <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              Upscaling...
+              {category === "skin" ? "Enhancing..." : "Upscaling..."}
             </>
           ) : (
             <>
-              Upscale
+              {category === "skin" ? "Enhance" : "Upscale"}
               {estimatedCredits > 0 && (
                 <span className="flex items-center gap-1 opacity-60">
                   <CreditIcon size={10} /> {estimatedCredits}
