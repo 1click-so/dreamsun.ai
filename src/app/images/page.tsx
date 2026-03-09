@@ -299,7 +299,7 @@ function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
           fill
           sizes="(max-width: 768px) 50vw, 33vw"
           quality={60}
-          className="rounded-lg object-cover"
+          className={`rounded-lg object-cover transition-opacity duration-150 ${videoReady ? "opacity-0" : "opacity-100"}`}
           draggable={false}
           onLoad={onLoaded}
         />
