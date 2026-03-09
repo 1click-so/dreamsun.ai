@@ -105,7 +105,7 @@ export function Select<T extends string>({
           <div
             ref={panelRef}
             className={cn(
-              "scrollbar-none z-50 max-h-56 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-xl shadow-black/30",
+              "scrollbar-none z-[60] max-h-56 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-xl shadow-black/30",
             )}
             style={panelStyle}
           >

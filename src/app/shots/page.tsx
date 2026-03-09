@@ -2400,6 +2400,12 @@ export function ShotListEditor({
             onVideoSettingsChange={(updates) => updateShotVideoSettings(modalShot.id, updates)}
             onClose={() => setStoryboardModal(null)}
             onSetMode={(mode) => setStoryboardModal({ shotId: storyboardModal.shotId, mode })}
+            onGenerateImage={() => generateSingleShot(modalShot)}
+            onAnimateShot={() => animateSingleShot(modalShot)}
+            onCancelImage={() => cancelShot(modalShot.id, "image")}
+            onCancelVideo={() => cancelShot(modalShot.id, "video")}
+            imgCredits={pricing[tierKey(selectedImageModel.id, imageResolution)]?.base_price_credits ?? pricing[selectedImageModel.id]?.base_price_credits ?? 0}
+            vidCredits={Math.round((pricing[tierKey(selectedVideoModel.id, resolution, selectedVideoModel.supportsGenerateAudio ? (generateAudio ? "on" : "off") : null)]?.base_price_credits ?? pricing[selectedVideoModel.id]?.base_price_credits ?? 0) * duration)}
           />
         );
       })()}

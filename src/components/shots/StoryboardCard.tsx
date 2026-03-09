@@ -389,7 +389,7 @@ export function StoryboardCard({
         {isVideoBusy ? (
           <Button variant="destructive" size="xs" className="flex-1" onClick={onCancelVideo}>Cancel</Button>
         ) : (
-          <Button variant="secondary" size="xs" className="flex-1" onClick={onAnimateShot} disabled={!canAnimate}>
+          <Button variant="secondary" size="xs" className="flex-1 whitespace-nowrap" onClick={onAnimateShot} disabled={!canAnimate}>
             {shot.videoStatus === "done" ? "Re-Animate" : "Animate"}
             {vidCredits > 0 && (
               <span className="ml-0.5 flex items-center gap-0.5 opacity-60">

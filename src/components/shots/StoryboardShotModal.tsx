@@ -10,6 +10,9 @@ import { VIDEO_MODELS, getCreateModels } from "@/lib/video-models";
 import { getSelectableModels, resolveModel } from "@/lib/models";
 import { TaggableTextarea } from "@/components/ui/TaggableTextarea";
 import { Select } from "@/components/ui/Select";
+import { Button } from "@/components/ui/Button";
+import { Toggle } from "@/components/ui/Toggle";
+import { CreditIcon } from "@/components/ModelSelector";
 
 interface StoryboardShotModalProps {
   shot: Shot;
@@ -33,6 +36,12 @@ interface StoryboardShotModalProps {
   onVideoSettingsChange: (updates: Partial<VideoSettings>) => void;
   onClose: () => void;
   onSetMode: (mode: "image" | "video") => void;
+  onGenerateImage: () => void;
+  onAnimateShot: () => void;
+  onCancelImage?: () => void;
+  onCancelVideo?: () => void;
+  imgCredits?: number;
+  vidCredits?: number;
 }
 
 /** Module-level cache of URLs that have already loaded */
@@ -60,6 +69,12 @@ export function StoryboardShotModal({
   onVideoSettingsChange,
   onClose,
   onSetMode,
+  onGenerateImage,
+  onAnimateShot,
+  onCancelImage,
+  onCancelVideo,
+  imgCredits = 0,
+  vidCredits = 0,
 }: StoryboardShotModalProps) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose();
@@ -112,21 +127,21 @@ export function StoryboardShotModal({
 
       {/* Modal content */}
       <div
-        className="relative z-10 flex w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
+        className="relative z-10 mx-4 flex w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         style={{ maxHeight: "85vh" }}
       >
         {/* Left: Image preview */}
-        <div className="flex w-[280px] shrink-0 flex-col border-r border-border bg-background/50">
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4">
+        <div className="hidden w-[240px] shrink-0 flex-col border-r border-border bg-background/50 sm:flex md:w-[280px]">
+          <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4">
             {shot.imageUrl ? (
-              <div className="relative w-full overflow-hidden rounded-lg" style={{ aspectRatio: "auto" }}>
+              <div className="relative w-full overflow-hidden rounded-lg">
                 <Image
                   src={shot.imageUrl}
                   alt={`Shot ${shot.number}`}
                   width={260}
                   height={400}
-                  className="h-auto w-full rounded-lg object-contain"
+                  className="h-auto max-h-[55vh] w-full rounded-lg object-contain"
                 />
               </div>
             ) : (
@@ -136,28 +151,10 @@ export function StoryboardShotModal({
             )}
           </div>
 
-          {/* End frame preview (video mode) */}
-          {mode === "video" && endFrameSrc && (
-            <div className="border-t border-border p-3">
-              <div className="mb-1.5 text-[10px] font-medium uppercase text-muted">Last Frame</div>
-              <div className="relative h-16 w-full overflow-hidden rounded-md border border-accent/20">
-                {isBlobUrl(endFrameSrc) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={endFrameSrc} alt="End frame" className="h-full w-full object-cover" />
-                ) : (
-                  <Image src={endFrameSrc} alt="End frame" fill sizes="260px" className="object-cover" />
-                )}
-                <button
-                  onClick={onEndFrameRemove}
-                  className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-[8px] text-white/80 hover:text-white"
-                >x</button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right: Settings panel */}
-        <div className="flex flex-1 flex-col overflow-y-auto [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60">
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -402,7 +399,21 @@ export function StoryboardShotModal({
                   />
                 </div>
 
-                {/* Duration / Ratio / Res / Model — only show options the effective model supports */}
+                {/* Model override — first so dropdown isn't clipped */}
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Model</label>
+                  <Select
+                    value={vidSettings.modelId ?? ""}
+                    options={[
+                      { value: "", label: videoModel.name },
+                      ...getCreateModels().filter((m) => m.id !== videoModel.id).map((m) => ({ value: m.id, label: m.name })),
+                    ]}
+                    onChange={(v) => onVideoSettingsChange({ modelId: v || null })}
+                    compact
+                  />
+                </div>
+
+                {/* Duration / Ratio / Resolution */}
                 {(() => {
                   const durations = effVideoModel.durations ?? [];
                   const aspectRatios = effVideoModel.aspectRatios ?? [];
@@ -459,54 +470,73 @@ export function StoryboardShotModal({
                   ) : null;
                 })()}
 
-                {/* Model override */}
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase text-muted">Model</label>
-                  <Select
-                    value={vidSettings.modelId ?? ""}
-                    options={[
-                      { value: "", label: videoModel.name },
-                      ...getCreateModels().filter((m) => m.id !== videoModel.id).map((m) => ({ value: m.id, label: m.name })),
-                    ]}
-                    onChange={(v) => onVideoSettingsChange({ modelId: v || null })}
-                    compact
-                  />
-                </div>
-
-                {/* Sound toggle — only if the effective model supports it */}
+                {/* Toggles — Sound + Camera */}
                 {effVideoModel.supportsGenerateAudio && (() => {
                   const effAudio = vidSettings.generateAudio ?? globalGenerateAudio;
                   return (
-                    <button
-                      onClick={() => onVideoSettingsChange({ generateAudio: effAudio ? false : true })}
-                      className={`w-full rounded-lg border py-1.5 text-xs font-medium uppercase transition ${
-                        effAudio
-                          ? "border-accent/30 bg-accent/10 text-accent"
-                          : "border-border bg-background text-muted hover:border-muted"
-                      }`}
-                    >
-                      {effAudio ? "Sound on" : "Sound off"}
-                    </button>
+                    <Toggle
+                      checked={effAudio}
+                      onChange={(v) => onVideoSettingsChange({ generateAudio: v })}
+                      label="Sound"
+                      size="sm"
+                      className="w-full"
+                    />
                   );
                 })()}
-
-                {/* Camera fixed — only if the effective model supports it */}
                 {effVideoModel.supportsCameraFixed && (() => {
                   const effFixed = vidSettings.cameraFixed ?? false;
                   return (
-                    <button
-                      onClick={() => onVideoSettingsChange({ cameraFixed: !effFixed })}
-                      className={`w-full rounded-lg border py-1.5 text-xs font-medium uppercase transition ${
-                        effFixed
-                          ? "border-accent/30 bg-accent/10 text-accent"
-                          : "border-border bg-background text-muted hover:border-muted"
-                      }`}
-                    >
-                      {effFixed ? "Camera fixed" : "Camera free"}
-                    </button>
+                    <Toggle
+                      checked={effFixed}
+                      onChange={(v) => onVideoSettingsChange({ cameraFixed: v })}
+                      label="Lock camera"
+                      size="sm"
+                      className="w-full"
+                    />
                   );
                 })()}
               </>
+            )}
+          </div>
+
+          {/* ---- Sticky action button ---- */}
+          <div className="border-t border-border px-5 py-3">
+            {mode === "image" ? (
+              shot.imageStatus === "generating" ? (
+                <Button variant="destructive" size="md" className="w-full" onClick={onCancelImage}>
+                  Cancel Generation
+                </Button>
+              ) : (
+                <Button variant="primary" size="md" className="w-full" onClick={onGenerateImage}>
+                  {shot.imageStatus === "done" ? "Regenerate" : "Generate"}
+                  {imgCredits > 0 && (
+                    <span className="ml-1.5 flex items-center gap-0.5 opacity-70">
+                      <CreditIcon size={10} />{imgCredits}
+                    </span>
+                  )}
+                </Button>
+              )
+            ) : (
+              shot.videoStatus === "generating" ? (
+                <Button variant="destructive" size="md" className="w-full" onClick={onCancelVideo}>
+                  Cancel Animation
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full"
+                  onClick={onAnimateShot}
+                  disabled={shot.imageStatus !== "done" || !shot.imageUrl}
+                >
+                  {shot.videoStatus === "done" ? "Re-Animate" : "Animate"}
+                  {vidCredits > 0 && (
+                    <span className="ml-1.5 flex items-center gap-0.5 opacity-70">
+                      <CreditIcon size={10} />{vidCredits}
+                    </span>
+                  )}
+                </Button>
+              )
             )}
           </div>
         </div>
