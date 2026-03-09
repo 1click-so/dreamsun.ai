@@ -44,8 +44,8 @@ function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
 
   return (
     <>
-      {/* Static thumbnail: stays visible until video is actually playing */}
-      {thumbnailUrl && !videoReady && (
+      {/* Static thumbnail: always mounted, video layers on top when playing */}
+      {thumbnailUrl && (
         <Image
           src={thumbnailUrl}
           alt=""

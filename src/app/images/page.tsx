@@ -292,7 +292,7 @@ function VideoThumb({ src, thumbnailUrl, hovered, onLoaded }: {
 
   return (
     <>
-      {thumbnailUrl && !videoReady && (
+      {thumbnailUrl && (
         <Image
           src={thumbnailUrl}
           alt=""
