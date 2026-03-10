@@ -30,18 +30,21 @@ export const PLANS: Record<string, PlanConfig> = {
     priceInCents: 1000,
     credits: 1000,
     bonusPct: 0,
+    stripePriceId: "price_1T9SMx4YHq2MwaOICHBdLhhA",
   },
   creator: {
     name: "Creator",
     priceInCents: 4000,
     credits: 4400,
     bonusPct: 10,
+    stripePriceId: "price_1T9SMy4YHq2MwaOI8vHrIE93",
   },
   pro: {
     name: "Pro",
     priceInCents: 8000,
     credits: 9200,
     bonusPct: 15,
+    stripePriceId: "price_1T9SMy4YHq2MwaOIAPliAvvi",
   },
 };
 

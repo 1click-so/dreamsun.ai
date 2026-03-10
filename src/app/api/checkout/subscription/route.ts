@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     const { planId } = await req.json();
     const plan = PLANS[planId as string];
-    if (!plan) {
+    if (!plan || !plan.stripePriceId) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
 
@@ -46,15 +46,7 @@ export async function POST(req: NextRequest) {
       allow_promotion_codes: true,
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            recurring: { interval: "month" },
-            unit_amount: plan.priceInCents,
-            product_data: {
-              name: `DreamSun ${plan.name}`,
-              description: `${plan.credits.toLocaleString()} credits/month`,
-            },
-          },
+          price: plan.stripePriceId,
           quantity: 1,
         },
       ],
