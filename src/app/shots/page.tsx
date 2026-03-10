@@ -1740,9 +1740,8 @@ export function ShotListEditor({
   useEffect(() => {
     const UP_THRESHOLD = 600;
     const onScroll = () => {
-      // Storyboard is horizontal — never hide header
       // Fewer than 5 shots — always keep header visible
-      if (viewMode === "storyboard" || shots.length < 5) {
+      if (shots.length < 5) {
         setHeaderVisible(true);
         return;
       }
@@ -1768,17 +1767,24 @@ export function ShotListEditor({
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [shots.length, viewMode]);
+  }, [shots.length]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Navbar — always visible, never hides */}
+      <div className="sticky top-0 z-40 bg-background">
+        <Navbar />
+      </div>
+
+      {/* Settings bar — hides on scroll in list view, always visible in storyboard */}
       <div
         ref={headerRef}
-        className={`sticky top-0 z-30 bg-background transition-transform duration-300 ${
-          headerVisible ? "translate-y-0" : "-translate-y-full"
+        className={`z-30 bg-background ${
+          viewMode === "list"
+            ? `sticky top-0 transition-transform duration-300 ${headerVisible ? "translate-y-0" : "-translate-y-full"}`
+            : ""
         }`}
       >
-      <Navbar />
       {/* Page Header */}
       <header className="border-b border-border px-3 py-2.5 md:px-6">
         <div className="flex items-center gap-2 md:gap-3">
@@ -2218,8 +2224,8 @@ export function ShotListEditor({
             </div>
           )}
 
-          {/* Always-visible: Master Reference + Prompt Prefix as bento sub-cells */}
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr]">
+          {/* Master Reference + Prompt Prefix — hidden behind Settings toggle in storyboard view */}
+          <div className={`mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr] ${viewMode === "storyboard" && !showSettings ? "hidden" : ""}`}>
             {/* Master Reference Cell */}
             <div
               className="min-w-[240px] rounded-lg border border-border bg-surface p-3"
