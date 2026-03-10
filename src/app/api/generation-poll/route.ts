@@ -39,11 +39,22 @@ export async function GET(req: NextRequest) {
     }
 
     // Already completed
-    if (gen.url) {
+    if (gen.url && gen.url !== "error") {
       return NextResponse.json({
         status: "completed",
         generationId: gen.id,
         url: gen.url,
+      });
+    }
+
+    // Already marked as failed
+    if (gen.url === "error") {
+      const settings = gen.settings as Record<string, unknown> | null;
+      return NextResponse.json({
+        status: "failed",
+        generationId: gen.id,
+        error: (settings?.error_message as string) || "Generation failed",
+        refunded: !!settings?.refunded,
       });
     }
 
@@ -76,8 +87,12 @@ export async function GET(req: NextRequest) {
           if (gen.cost_estimate && gen.cost_estimate > 0) {
             await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
           }
-          await supabase.from("generations").delete().eq("id", gen.id);
-          return NextResponse.json({ status: "failed", generationId: gen.id, error: "No video generated" });
+          const errorMsg = "No video generated";
+          await supabase.from("generations").update({
+            url: "error",
+            settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+          }).eq("id", gen.id);
+          return NextResponse.json({ status: "failed", generationId: gen.id, error: errorMsg, refunded: true });
         }
 
         // Upload to Supabase storage
@@ -112,8 +127,12 @@ export async function GET(req: NextRequest) {
       if (gen.cost_estimate && gen.cost_estimate > 0) {
         await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
       }
-      await supabase.from("generations").delete().eq("id", gen.id);
-      return NextResponse.json({ status: "failed", generationId: gen.id, error: kieResult.failMsg || "Generation failed" });
+      const errorMsg = kieResult.failMsg || "Generation failed";
+      await supabase.from("generations").update({
+        url: "error",
+        settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+      }).eq("id", gen.id);
+      return NextResponse.json({ status: "failed", generationId: gen.id, error: errorMsg, refunded: true });
     }
 
     // ── fal.ai polling (default) ───────────────────────────────
@@ -155,8 +174,12 @@ export async function GET(req: NextRequest) {
         if (gen.cost_estimate && gen.cost_estimate > 0) {
           await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
         }
-        await supabase.from("generations").delete().eq("id", gen.id);
-        return NextResponse.json({ status: "failed", generationId: gen.id, error: "No video generated" });
+        const errorMsg = "No video generated";
+        await supabase.from("generations").update({
+          url: "error",
+          settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+        }).eq("id", gen.id);
+        return NextResponse.json({ status: "failed", generationId: gen.id, error: errorMsg, refunded: true });
       }
 
       let permanentUrl = videoUrl;
@@ -189,12 +212,17 @@ export async function GET(req: NextRequest) {
     if (gen.cost_estimate && gen.cost_estimate > 0) {
       await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
     }
-    await supabase.from("generations").delete().eq("id", gen.id);
+    const errorMsg = `Generation failed with status: ${statusStr}`;
+    await supabase.from("generations").update({
+      url: "error",
+      settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+    }).eq("id", gen.id);
 
     return NextResponse.json({
       status: "failed",
       generationId: gen.id,
-      error: `Generation failed with status: ${statusStr}`,
+      error: errorMsg,
+      refunded: true,
     });
   } catch (error) {
     console.error("[generation-poll] Error:", error);

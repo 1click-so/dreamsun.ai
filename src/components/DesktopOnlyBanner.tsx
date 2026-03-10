@@ -6,14 +6,14 @@ import { Monitor } from "lucide-react";
  * Banner shown on mobile for pages that require desktop.
  * Two modes:
  * - "full" — takes over the entire page (shots)
- * - "inline" — sits above a gallery (images, video)
+ * - "inline" — mint ribbon above content (images, video)
  */
 export function DesktopOnlyBanner({ mode = "inline" }: { mode?: "full" | "inline" }) {
   if (mode === "full") {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center lg:hidden">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface">
-          <Monitor size={24} className="text-muted" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10">
+          <Monitor size={24} className="text-accent" />
         </div>
         <div>
           <p className="text-sm font-medium text-foreground">Desktop only</p>
@@ -26,10 +26,10 @@ export function DesktopOnlyBanner({ mode = "inline" }: { mode?: "full" | "inline
   }
 
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3 lg:hidden">
-      <Monitor size={16} className="shrink-0 text-muted" />
-      <p className="text-xs text-muted">
-        Generation tools are available on desktop. Browse your gallery below.
+    <div className="flex items-center justify-center gap-2 bg-accent px-4 py-2 lg:hidden">
+      <Monitor size={13} className="shrink-0 text-black/70" />
+      <p className="text-[11px] font-medium text-black/80">
+        Create on desktop - browse your gallery below
       </p>
     </div>
   );

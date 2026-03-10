@@ -204,18 +204,31 @@ export function GalleryCard({
       )}
 
       {/* Pending generation — show generating indicator */}
-      {result.pending && (
+      {result.pending && !result.errorMessage && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-surface">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <span className="text-[10px] font-medium text-muted">Generating...</span>
           <span className="text-[8px] text-muted">{result.model}</span>
         </div>
       )}
+      {/* Failed generation — show error card */}
+      {result.errorMessage && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-surface px-3 text-center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-400">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span className="text-[10px] font-medium text-red-400">Generation failed</span>
+          <span className="text-[9px] text-muted">Credits refunded</span>
+          <span className="text-[8px] text-muted">{result.model}</span>
+        </div>
+      )}
       {/* Skeleton placeholder until media loads */}
-      {!result.pending && !loaded && (
+      {!result.pending && !result.errorMessage && !loaded && (
         <div className="absolute inset-0 skeleton-shimmer rounded-lg" />
       )}
-      {!result.pending && (result.type === "video" ? (
+      {!result.pending && !result.errorMessage && (result.type === "video" ? (
         <VideoThumb
           src={result.imageUrl}
           thumbnailUrl={result.thumbnailUrl}

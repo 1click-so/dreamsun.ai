@@ -16,13 +16,19 @@ function getApiKey(): string {
 // ── Model ID mapping: our model_id → Kie.ai model name ──────────
 
 const KIE_MODEL_MAP: Record<string, string> = {
+  // Image generation
   "nano-banana-pro": "nano-banana-pro",
   "nano-banana-pro-edit": "nano-banana-pro",
   "nano-banana-2": "nano-banana-2",
   "nano-banana-2-edit": "nano-banana-2",
   "grok-imagine": "grok-imagine",
   "grok-imagine-edit": "grok-imagine",
+  // Video generation (image-to-video)
+  "kling-2-6": "kling-2.6/video",
   "kling-3": "kling-3.0/video",
+  // Motion control
+  "kling-2-6-mc": "kling-2.6/motion-control",
+  "kling-3-mc": "kling-3.0/motion-control",
 };
 
 export function getKieModelId(ourModelId: string): string {

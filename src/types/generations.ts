@@ -30,6 +30,7 @@ export interface GenerationResult {
   sceneId?: string | null;
   shotNumber?: string | null;
   pending?: boolean;
+  errorMessage?: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -67,6 +68,7 @@ export function generationToResult(g: Generation): GenerationResult {
     sceneId: g.scene_id,
     shotNumber: g.shot_number,
     pending: !g.url,
+    errorMessage: g.url === "error" ? ((g.settings as Record<string, unknown>)?.error_message as string || "Generation failed") : null,
     // For videos: use dedicated thumbnail, or fall back to source image (first frame)
     thumbnailUrl: g.thumbnail_url ?? (g.type === "video" ? g.source_image_url : null),
   };

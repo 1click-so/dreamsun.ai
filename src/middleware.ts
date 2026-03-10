@@ -56,15 +56,14 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Use getSession() for middleware — reads from cookie only, no network call.
-  // This is fast and sufficient for route protection. API routes that need
-  // verified auth should call getUser() themselves.
+  // Use getUser() to verify and auto-refresh the session.
+  // This keeps the user logged in as long as the refresh token is valid.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // Not authenticated — redirect pages to login, reject API calls
-  if (!session) {
+  if (!user) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: "Unauthorized" },

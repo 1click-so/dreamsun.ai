@@ -59,6 +59,19 @@ export function Navbar() {
       {/* Track auth events (signup/login) from OAuth callback */}
       <Suspense><AuthEventTracker /></Suspense>
 
+      {/* Announcement ribbon — hidden for now, design TBD */}
+      {/* <div className="flex items-center justify-center gap-2.5 bg-accent px-4 py-1.5">
+        <span className="text-[11px] font-semibold text-black/90">
+          New: Kling 3.0 + VEOS video models are live
+        </span>
+        <Link
+          href="/video"
+          className="rounded-full bg-black/15 px-2.5 py-0.5 text-[10px] font-semibold text-black/80 transition hover:bg-black/25"
+        >
+          Try now
+        </Link>
+      </div> */}
+
       <nav className="relative flex items-center gap-3 border-b border-border px-4 py-3 md:gap-5 md:px-5">
         <NavBlobs />
 

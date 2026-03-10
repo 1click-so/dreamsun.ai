@@ -229,6 +229,21 @@ export async function POST(req: NextRequest) {
 
       if (aspectRatio) kieInput.aspect_ratio = aspectRatio;
 
+      // Motion control — reference video
+      if (videoUrl) {
+        kieInput.video_url = videoUrl;
+      }
+
+      // Camera fixed
+      if (cameraFixed === true && model.supportsCameraFixed) {
+        kieInput.camera_fixed = true;
+      }
+
+      // Negative prompt
+      if (body.negativePrompt && model.supportsNegativePrompt) {
+        kieInput.negative_prompt = body.negativePrompt;
+      }
+
       // Multi-shot prompts
       if (multiShot && multiPrompt && Array.isArray(multiPrompt)) {
         kieInput.multi_prompt = multiPrompt;

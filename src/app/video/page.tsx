@@ -388,9 +388,10 @@ export default function VideoPage() {
         }
 
         if (data.status === "failed") {
-          setError(data.error || "Video generation failed");
+          // Update the generation in local state to show error card (DB already updated by poll endpoint)
+          updateDbGeneration(genId, { url: "error" });
+          invalidateCredits();
           setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
-          dbDeleteGeneration(genId);
           return;
         }
       } catch {
@@ -400,7 +401,7 @@ export default function VideoPage() {
 
     setError("Generation timed out — it may still complete. Refresh to check.");
     setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
-  }, [updateDbGeneration, dbDeleteGeneration]);
+  }, [updateDbGeneration]);
 
   // Resume polling for pending generations on page load
   const resumedRef = useRef(false);
