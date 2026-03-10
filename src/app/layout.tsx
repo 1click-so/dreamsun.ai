@@ -31,7 +31,7 @@ const gochiHand = Gochi_Hand({
 });
 
 export const metadata: Metadata = {
-  title: "DreamSun.ai — AI Image & Video Generator",
+  title: "DreamSun - AI Image & Video Generator",
   description:
     "Artistic AI image and video generation platform for creatives.",
 };
