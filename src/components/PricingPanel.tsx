@@ -192,10 +192,10 @@ export function PricingPanel({ initialTab = "topup" }: PricingPanelProps) {
 
   if (checkoutType) {
     return (
-      <div className="mx-auto w-full max-w-xl px-4 py-12">
+      <div className="mx-auto w-full max-w-xl px-4 py-4">
         <button
           onClick={() => setCheckoutType(null)}
-          className="mb-6 text-xs text-muted hover:text-foreground transition"
+          className="mb-3 text-xs text-muted hover:text-foreground transition"
         >
           &larr; Back to pricing
         </button>
