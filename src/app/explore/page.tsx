@@ -10,7 +10,7 @@ import {
   Wand2,
   ScanEye,
   ArrowRight,
-  Sparkles,
+  // Sparkles, — re-enable when marquee section is shown
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -32,7 +32,7 @@ const PROMO_BANNERS = [
   {
     title: "NanoBanana 2",
     subtitle: "Pro quality at flash speed",
-    description: "Google's fastest model. $0.08 per image.",
+    description: "Google's fastest model. Pro quality at flash speed.",
     badge: "Hot",
     image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=800&q=80",
     href: "/images",
@@ -42,7 +42,7 @@ const PROMO_BANNERS = [
   {
     title: "Grok Imagine",
     subtitle: "Aesthetic generation by xAI",
-    description: "Highly aesthetic results. Just $0.02 per image.",
+    description: "Highly aesthetic results from xAI's image model.",
     badge: null,
     image: "https://images.unsplash.com/photo-1549490349-8643362247b5?w=800&q=80",
     href: "/images",
@@ -259,9 +259,9 @@ export default function ExplorePage() {
         </motion.div>
 
         {/* ============================================================ */}
-        {/*  SHOWCASE MARQUEE                                             */}
+        {/*  SHOWCASE MARQUEE — hidden until we have real user content     */}
         {/* ============================================================ */}
-        <motion.div {...stagger(6)} className="mt-6 overflow-hidden rounded-xl border border-border bg-surface py-4">
+        {/* <motion.div {...stagger(6)} className="mt-6 overflow-hidden rounded-xl border border-border bg-surface py-4">
           <div className="mb-3 flex items-center justify-between px-5">
             <div className="flex items-center gap-2">
               <Sparkles size={14} className="text-accent" />
@@ -278,12 +278,12 @@ export default function ExplorePage() {
             <MarqueeStrip images={MARQUEE_ROW_1} speed={40} />
             <MarqueeStrip images={MARQUEE_ROW_2} reverse speed={45} />
           </div>
-        </motion.div>
+        </motion.div> */}
 
         {/* ============================================================ */}
-        {/*  GET INSPIRED — image grid with type badges                   */}
+        {/*  GET INSPIRED — hidden until we have real user content         */}
         {/* ============================================================ */}
-        <motion.div {...stagger(7)} className="mt-6">
+        {/* <motion.div {...stagger(7)} className="mt-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Get inspired</h2>
             <div className="flex items-center gap-1.5">
@@ -307,7 +307,6 @@ export default function ExplorePage() {
               <motion.div key={i} {...stagger(8 + i)}>
                 <Link href="/images" className="group block">
                   <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-border">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={item.src}
                       alt=""
@@ -316,7 +315,6 @@ export default function ExplorePage() {
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-                    {/* Type badge */}
                     <span className="absolute left-2.5 top-2.5 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
                       {item.label}
                     </span>
@@ -325,7 +323,7 @@ export default function ExplorePage() {
               </motion.div>
             ))}
           </div>
-        </motion.div>
+        </motion.div> */}
 
         {/* ============================================================ */}
         {/*  BOTTOM CTA — image-backed with Gochi Hand                   */}
