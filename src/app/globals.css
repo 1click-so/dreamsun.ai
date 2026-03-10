@@ -32,7 +32,7 @@
 
 /* Dark mode — controlled by html.dark class (toggled via useTheme hook) */
 html.dark {
-  --color-background: #0e0e0e;
+  --color-background: #080808;
   --color-foreground: #ededed;
   --color-surface: #1c1c1c;
   --color-surface-hover: #252525;
