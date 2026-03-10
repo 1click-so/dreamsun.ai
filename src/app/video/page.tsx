@@ -176,10 +176,15 @@ function UploadZone({ file, onRemove, onUpload, inputRef, label, dragOver, setDr
 
 // --- Page ---
 
+const VALID_VIDEO_MODES: VideoMode[] = ["create", "motion", "relight"];
+
 export default function VideoPage() {
-  const [activeMode, setActiveModeRaw] = useState<VideoMode>(() =>
-    loadStorage(STORAGE_KEYS.activeMode, "create") as VideoMode
-  );
+  const [activeMode, setActiveModeRaw] = useState<VideoMode>(() => {
+    if (typeof window === "undefined") return "create";
+    const urlMode = new URLSearchParams(window.location.search).get("mode") as VideoMode | null;
+    if (urlMode && VALID_VIDEO_MODES.includes(urlMode)) return urlMode;
+    return loadStorage(STORAGE_KEYS.activeMode, "create") as VideoMode;
+  });
 
   // Model — separate for each mode
   const [createModelId, setCreateModelId] = useState(() =>

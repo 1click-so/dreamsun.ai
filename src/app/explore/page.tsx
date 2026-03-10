@@ -9,6 +9,7 @@ import {
   Clapperboard,
   Wand2,
   ScanEye,
+  Sun,
   ArrowRight,
   // Sparkles, — re-enable when marquee section is shown
 } from "lucide-react";
@@ -81,7 +82,8 @@ const QUICK_TOOLS = [
   { icon: Film, label: "Video Generator", href: "/video", badge: null },
   { icon: Clapperboard, label: "Shot Scenes", href: "/shots", badge: "Hot" },
   { icon: Wand2, label: "Edit with Refs", href: "/images", badge: null },
-  { icon: ScanEye, label: "Upscale", href: "/images?mode=upscale", badge: "New" },
+  { icon: ScanEye, label: "Upscale", href: "/images?mode=upscale", badge: null },
+  { icon: Sun, label: "Relight", href: "/video?mode=relight", badge: "New" },
 ];
 
 /* ------------------------------------------------------------------ */
