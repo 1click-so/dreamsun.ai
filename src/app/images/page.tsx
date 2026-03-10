@@ -22,6 +22,7 @@ import { GalleryToolbar, type GalleryFilter } from "@/components/generate/Galler
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 import { UpscalePanel } from "@/components/generate/UpscalePanel";
+import { DesktopOnlyBanner } from "@/components/DesktopOnlyBanner";
 import { IconBolt } from "@/components/generate/Icons";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
@@ -1640,96 +1641,10 @@ export default function GeneratePage() {
         </aside>
 
         {/* ================================================================
-            MOBILE — controls drawer (below lg)
+            MOBILE — gallery only, no generation controls
             ================================================================ */}
         <div className="flex w-full flex-col lg:hidden">
-          {/* Mobile top bar with essential controls */}
-          <div className="border-b border-border px-3 py-2">
-            <div className="flex items-center gap-2">
-              <div className="w-36">
-                <ModelSelector
-                  models={selectableModels}
-                  selectedIds={selectedModelIds}
-                  onChange={handleModelsChange}
-                  pricing={pricing}
-                  creditRanges={creditRanges}
-                />
-              </div>
-              <div className="flex gap-1">
-                {primaryModel.aspectRatios.slice(0, 4).map((ratio) => (
-                  <PillButton
-                    key={ratio}
-                    active={aspectRatio === ratio}
-                    onClick={() => {
-                      setAspectRatio(ratio);
-                      saveStorage(STORAGE_KEYS.ratio, ratio);
-                    }}
-                  >
-                    {ratio}
-                  </PillButton>
-                ))}
-              </div>
-              <div className="flex gap-1">
-                {(["1k", "2k"] as const).map((res) => (
-                  <PillButton
-                    key={res}
-                    active={imageResolution === res}
-                    onClick={() => {
-                      setImageResolution(res);
-                      saveStorage(STORAGE_KEYS.resolution, res);
-                    }}
-                    className="uppercase"
-                  >
-                    {res}
-                  </PillButton>
-                ))}
-              </div>
-            </div>
-            {/* Mobile prompt */}
-            <div className="mt-2 rounded-xl border border-border bg-surface transition-all focus-within:border-accent/40">
-              <textarea
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value);
-                  const el = e.target;
-                  el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 100) + "px";
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (canGenerate) handleGenerate();
-                  }
-                }}
-                placeholder="Describe your image..."
-                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-3 pt-2.5 pb-0.5 text-sm text-foreground outline-none placeholder:text-muted"
-                style={{ minHeight: "38px", maxHeight: "100px" }}
-              />
-              <div className="flex items-center justify-end px-2 pb-2 pt-0.5">
-                <button
-                  onClick={() => handleGenerate()}
-                  disabled={!canGenerate}
-                  className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold transition ${
-                    canGenerate
-                      ? "bg-accent text-black hover:bg-accent-hover"
-                      : "cursor-not-allowed bg-surface-hover text-muted"
-                  }`}
-                >
-                  {isGenerating ? (
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-                  ) : (
-                    <IconBolt size={14} />
-                  )}
-                  Generate
-                  {estimatedCredits > 0 && !isGenerating && (
-                    <span className="flex items-center gap-1">
-                      <CreditIcon size={10} /> {estimatedCredits}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+          <DesktopOnlyBanner />
 
           {/* Mobile gallery */}
           <div className="flex-1 overflow-y-auto p-3">

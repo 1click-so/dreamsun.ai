@@ -10,6 +10,7 @@ import JSZip from "jszip";
 import { VIDEO_MODELS, getCreateModels, type VideoModelConfig } from "@/lib/video-models";
 import { parseShotList, type ParsedShot } from "@/lib/shot-parser";
 import { Navbar } from "@/components/Navbar";
+import { DesktopOnlyBanner } from "@/components/DesktopOnlyBanner";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -1780,6 +1781,11 @@ export function ShotListEditor({
         <Navbar />
       </div>
 
+      {/* Mobile — shots not available */}
+      <DesktopOnlyBanner mode="full" />
+
+      {/* Desktop — full shots interface */}
+      <div className="hidden lg:block">
       {/* Settings bar — hides on scroll in list view, always visible in storyboard */}
       <div
         ref={headerRef}
@@ -2797,6 +2803,7 @@ export function ShotListEditor({
         required={creditsShortfall?.required}
         available={creditsShortfall?.available}
       />
+      </div>{/* end hidden lg:block */}
     </div>
   );
 }

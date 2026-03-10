@@ -16,6 +16,7 @@ import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { MediaLightbox } from "@/components/generate/MediaLightbox";
 import { IconBolt, IconChevron, IconUpscale, IconVideo, IconMotion, IconRelight } from "@/components/generate/Icons";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
+import { DesktopOnlyBanner } from "@/components/DesktopOnlyBanner";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
 import { usePricing, tierKey } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
@@ -1644,7 +1645,47 @@ export default function VideoPage() {
         </aside>
 
         {/* ================================================================
-            RIGHT SIDE — Gallery
+            MOBILE — gallery only, no generation controls
+            ================================================================ */}
+        <div className="flex w-full flex-col lg:hidden">
+          <DesktopOnlyBanner />
+          <div className="flex-1 overflow-y-auto p-3">
+            {hasAnyContent ? (
+              <GalleryGrid
+                results={filteredHistory}
+                latestBatchId={currentBatchId}
+                generatingSlots={generatingSlots}
+                isGenerating={isGenerating}
+                showEditPrompt={showEditPrompt}
+                editPromptValue={editPromptValue}
+                setEditPromptValue={setEditPromptValue}
+                error={error}
+                copiedId={copiedId}
+                targetRowHeight={160}
+                slotAspectRatio={slotAspectRatio}
+                onRegenerate={handleRegenerate}
+                onEdit={handleEdit}
+                onEditSubmit={handleEditSubmit}
+                setShowEditPrompt={setShowEditPrompt}
+                onDownload={handleDownload}
+                onCopyUrl={handleCopyUrl}
+                onClickImage={setSelectedResult}
+                onFavorite={toggleFavorite}
+                onDelete={deleteVideo}
+                selectMode={false}
+                selectedIds={new Set()}
+                onToggleSelect={() => {}}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-muted">No videos yet</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ================================================================
+            RIGHT SIDE — Gallery (desktop)
             ================================================================ */}
         <main ref={galleryRef} className="relative hidden min-w-0 flex-1 flex-col lg:flex">
           {!hasAnyContent ? (
