@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that don't require auth
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/reset-password", "/api/webhooks"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/reset-password", "/api/webhooks", "/privacy", "/terms", "/contact"];
 
 // Exact paths that are public (landing page)
 const PUBLIC_EXACT = ["/"];
