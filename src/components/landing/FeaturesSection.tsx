@@ -1,50 +1,103 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Image as ImageIcon, Film, LayoutGrid, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
-const features = [
+interface Feature {
+  title: string;
+  subtitle: string;
+  description: string;
+  image: string;
+  video?: string;
+  href: string;
+  badge: string | null;
+  span: string;
+  tall?: boolean;
+}
+
+const features: Feature[] = [
   {
-    icon: <ImageIcon size={22} />,
     title: "Image Generation",
-    description:
-      "Create stunning images from text with multiple state-of-the-art models. Choose between Google, xAI, and Black Forest Labs — each with unique strengths.",
-    tags: ["Text-to-Image", "Reference Images", "Negative Prompts", "Up to 4K"],
+    subtitle: "Text to stunning visuals",
+    description: "4 models from Google, xAI & Black Forest Labs. Negative prompts, 4K output, reference images.",
+    image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=900&q=80",
+    href: "/images",
+    badge: null,
+    span: "col-span-12 md:col-span-7 row-span-2",
+    tall: true,
   },
   {
-    icon: <Film size={22} />,
     title: "Video Generation",
-    description:
-      "Transform any image into cinematic video. Control duration, resolution, camera movement, and generate synchronized audio — all from a single frame.",
-    tags: ["Image-to-Video", "Motion Control", "Audio Sync", "Up to 2160p"],
+    subtitle: "Animate any image",
+    description: "Kling 3.0, Seedance, LTX — up to 2160p. First & last frame control, audio generation.",
+    image: "https://images.unsplash.com/photo-1518676590747-1e3dcf5a0bbb?w=900&q=80",
+    video: "https://videos.pexels.com/video-files/3129671/3129671-uhd_2560_1440_30fps.mp4",
+    href: "/video",
+    badge: "Hot",
+    span: "col-span-12 md:col-span-5",
+    tall: false,
   },
   {
-    icon: <LayoutGrid size={22} />,
-    title: "Shots & Storyboarding",
-    description:
-      "Plan multi-shot sequences with per-shot prompts. Generate images, then animate each shot into video. Build complete visual narratives scene by scene.",
-    tags: ["Multi-Shot", "Per-Shot Prompts", "Scene Planning", "Batch Generate"],
+    title: "Shots & Storyboard",
+    subtitle: "Plan. Generate. Animate.",
+    description: "Multi-shot scenes with per-shot prompts. Build visual narratives frame by frame.",
+    image: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=900&q=80",
+    href: "/shots",
+    badge: "New",
+    span: "col-span-12 md:col-span-5",
+    tall: false,
   },
   {
-    icon: <ArrowUpRight size={22} />,
     title: "Upscale & Edit",
-    description:
-      "Enhance resolution, edit with reference images, and refine outputs with image-to-image models. Up to 14 reference images for precise control.",
-    tags: ["Super Resolution", "Image-to-Image", "Multi-Reference", "Precision Edit"],
+    subtitle: "Refine with precision",
+    description: "Image-to-image editing with up to 14 reference images. Enhance resolution across all models.",
+    image: "https://images.unsplash.com/photo-1549490349-8643362247b5?w=900&q=80",
+    href: "/images",
+    badge: null,
+    span: "col-span-6 md:col-span-4",
+    tall: false,
+  },
+  {
+    title: "Motion Control",
+    subtitle: "Transfer any movement",
+    description: "Copy motion from reference videos. Facial consistency with Kling Elements.",
+    image: "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?w=900&q=80",
+    href: "/video",
+    badge: null,
+    span: "col-span-6 md:col-span-4",
+    tall: false,
+  },
+  {
+    title: "Audio Sync",
+    subtitle: "Sound meets vision",
+    description: "Generate audio for video or sync to an existing track. Built into every video model.",
+    image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=900&q=80",
+    href: "/video",
+    badge: null,
+    span: "col-span-12 md:col-span-4",
+    tall: false,
   },
 ];
 
+const stagger = (i: number) => ({
+  initial: { opacity: 0, y: 16 } as const,
+  whileInView: { opacity: 1, y: 0 } as const,
+  viewport: { once: true, margin: "-60px" as const },
+  transition: { duration: 0.45, delay: 0.06 * i },
+});
+
 export function FeaturesSection() {
   return (
-    <section id="features" className="py-28 px-6 md:px-12">
-      <div className="max-w-6xl mx-auto">
+    <section id="features" className="py-24 px-5 md:px-10">
+      <div className="max-w-[1200px] mx-auto">
         {/* Section header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.6 }}
-          className="mb-16"
+          className="mb-10"
         >
           <p className="text-accent text-sm font-medium tracking-wide uppercase mb-3">
             What you can do
@@ -54,44 +107,71 @@ export function FeaturesSection() {
           </h2>
         </motion.div>
 
-        {/* Feature cards — 2×2 grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+        {/* Bento grid */}
+        <div className="grid auto-rows-[180px] grid-cols-12 gap-3">
           {features.map((feature, i) => (
-            <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
-              className="group relative rounded-xl border border-border bg-surface/50 p-7 sm:p-8 hover:border-accent/30 transition-colors"
-            >
-              {/* Icon */}
-              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent mb-5">
-                {feature.icon}
-              </div>
+            <motion.div key={feature.title} {...stagger(i)} className={feature.span}>
+              <Link href={feature.href} className="group block h-full">
+                <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-border">
+                  {/* Background — video or image */}
+                  {feature.video ? (
+                    <>
+                      <video
+                        src={feature.video}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={feature.image}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover opacity-0"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    </>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={feature.image}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      loading={i < 2 ? "eager" : "lazy"}
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10" />
 
-              <h3 className="font-display text-xl font-semibold mb-3 tracking-tight">
-                {feature.title}
-              </h3>
+                  {/* Content */}
+                  <div className="relative mt-auto p-5 md:p-6">
+                    {feature.badge && (
+                      <span className="mb-2 inline-block rounded-sm bg-accent px-1.5 py-px text-[9px] font-bold uppercase leading-tight text-black shadow-[0_0_8px_var(--color-accent)]">
+                        {feature.badge}
+                      </span>
+                    )}
+                    <h3 className="font-display text-lg font-bold tracking-tight text-white md:text-xl">
+                      {feature.title}
+                    </h3>
+                    <p
+                      className="mt-0.5 text-sm text-accent/90"
+                      style={{ fontFamily: "var(--font-hand)" }}
+                    >
+                      {feature.subtitle}
+                    </p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-white/50 max-w-sm">
+                      {feature.description}
+                    </p>
+                  </div>
 
-              <p className="text-muted text-sm leading-relaxed mb-5">
-                {feature.description}
-              </p>
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2">
-                {feature.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-[11px] px-2.5 py-1 rounded-full bg-accent/5 text-accent/70 border border-accent/10 font-medium"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              {/* Hover glow */}
-              <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-accent/10 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  {/* Hover arrow */}
+                  <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <ArrowRight size={14} className="text-white" />
+                  </div>
+                </div>
+              </Link>
             </motion.div>
           ))}
         </div>

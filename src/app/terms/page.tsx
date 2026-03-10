@@ -1,6 +1,6 @@
 import { Metadata } from "next";
-import Link from "next/link";
-import { Logo } from "@/components/Logo";
+import { LandingNavbar } from "@/components/landing/LandingNavbar";
+import { Footer } from "@/components/landing/Footer";
 
 export const metadata: Metadata = {
   title: "Terms of Service — DreamSun AI",
@@ -10,18 +10,9 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <main className="min-h-screen bg-background">
-      {/* Nav */}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5 border-b border-border">
-        <Link href="/" className="flex items-center gap-2">
-          <Logo size={14} />
-          <span className="font-display font-bold text-lg tracking-tight">DreamSun</span>
-        </Link>
-        <Link href="/" className="text-sm text-muted hover:text-accent transition-colors">
-          Back to Home
-        </Link>
-      </nav>
+      <LandingNavbar />
 
-      <article className="max-w-3xl mx-auto px-6 py-16">
+      <article className="max-w-3xl mx-auto px-6 pt-28 pb-20">
         <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-2">
           Terms of Service
         </h1>
@@ -144,6 +135,8 @@ export default function TermsPage() {
           </section>
         </div>
       </article>
+
+      <Footer />
     </main>
   );
 }

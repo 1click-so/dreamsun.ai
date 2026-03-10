@@ -1,6 +1,6 @@
 import { Metadata } from "next";
-import Link from "next/link";
-import { Logo } from "@/components/Logo";
+import { LandingNavbar } from "@/components/landing/LandingNavbar";
+import { Footer } from "@/components/landing/Footer";
 import { Mail } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -11,18 +11,9 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <main className="min-h-screen bg-background">
-      {/* Nav */}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5 border-b border-border">
-        <Link href="/" className="flex items-center gap-2">
-          <Logo size={14} />
-          <span className="font-display font-bold text-lg tracking-tight">DreamSun</span>
-        </Link>
-        <Link href="/" className="text-sm text-muted hover:text-accent transition-colors">
-          Back to Home
-        </Link>
-      </nav>
+      <LandingNavbar />
 
-      <div className="max-w-2xl mx-auto px-6 py-20 text-center">
+      <div className="max-w-2xl mx-auto px-6 pt-28 pb-20 text-center">
         <div className="w-14 h-14 rounded-xl bg-accent/10 flex items-center justify-center text-accent mx-auto mb-6">
           <Mail size={24} />
         </div>
@@ -67,6 +58,8 @@ export default function ContactPage() {
           </div>
         </div>
       </div>
+
+      <Footer />
     </main>
   );
 }
