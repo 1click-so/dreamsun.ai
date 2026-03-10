@@ -226,10 +226,7 @@ export default function VideoPage() {
   const [rlPromptText, setRlPromptText] = useState<string>(() =>
     loadStorage(STORAGE_KEYS.rlPrompt, "Sunlight")
   );
-  const [rlVideo, setRlVideoRaw] = useState<UploadedImage | null>(() => {
-    const url = loadStorage<string | null>(STORAGE_KEYS.rlVideoUrl, null);
-    return url ? { id: "restored_rl", preview: url, url, uploading: false } : null;
-  });
+  const [rlVideo, setRlVideoRaw] = useState<UploadedImage | null>(null);
   const [rlCondImage, setRlCondImage] = useState<UploadedImage | null>(null);
   const [rlVideoDragOver, setRlVideoDragOver] = useState(false);
   const [rlCondDragOver, setRlCondDragOver] = useState(false);
@@ -239,6 +236,18 @@ export default function VideoPage() {
   const setRlVideo = useCallback((img: UploadedImage | null) => {
     setRlVideoRaw(img);
     saveStorage(STORAGE_KEYS.rlVideoUrl, img?.url ?? null);
+    if (img?.duration) saveStorage("dreamsun_vid_rl_dur", img.duration);
+  }, []);
+
+  // Restore relight video from localStorage with duration
+  const rlRestoredRef = useRef(false);
+  useEffect(() => {
+    if (rlRestoredRef.current) return;
+    rlRestoredRef.current = true;
+    const url = loadStorage<string | null>(STORAGE_KEYS.rlVideoUrl, null);
+    if (!url) return;
+    const savedDur = loadStorage<number>("dreamsun_vid_rl_dur", 0);
+    setRlVideoRaw({ id: "restored_rl", preview: url, url, uploading: false, duration: savedDur || undefined });
   }, []);
 
   // Wrapped setters that persist to localStorage
