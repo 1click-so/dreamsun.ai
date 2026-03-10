@@ -55,6 +55,11 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('dreamsun_theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){document.documentElement.classList.add('dark')}})()`,
           }}
         />
+        <script
+          src="https://analytics.fam.social/api/script.js"
+          data-site-id="87fa7ec42978"
+          defer
+        />
       </head>
       <body className="antialiased">
         <Providers>
