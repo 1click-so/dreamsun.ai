@@ -2209,7 +2209,7 @@ export function ShotListEditor({
                       value={outputFolder}
                       onChange={(e) => handleOutputFolderChange(e.target.value)}
                       placeholder="G:\My Drive\Shorts\PROJECT"
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
+                      className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
                     />
                   </div>
                 )}
@@ -2221,7 +2221,7 @@ export function ShotListEditor({
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr]">
             {/* Master Reference Cell */}
             <div
-              className="min-w-[240px] rounded-lg border border-border bg-background p-3"
+              className="min-w-[240px] rounded-lg border border-border bg-surface p-3"
               onDragOver={(e) => {
                 if (e.dataTransfer.types.includes("Files")) {
                   e.preventDefault();
@@ -2267,7 +2267,7 @@ export function ShotListEditor({
             </div>
 
             {/* Prompt Prefix Cell */}
-            <div className="rounded-lg border border-border bg-background p-3">
+            <div className="rounded-lg border border-border bg-surface p-3">
               <p className="mb-2 text-[11px] font-medium text-muted">Prompt Prefix</p>
               <p className="mb-2.5 text-[9px] text-muted/50">Prepended to every shot prompt</p>
               <input
@@ -2277,7 +2277,7 @@ export function ShotListEditor({
                   setPromptPrefix(e.target.value);
                 }}
                 placeholder="e.g. The same donkey with the same animated characteristics. Do not modify the animation style..."
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
               />
             </div>
           </div>

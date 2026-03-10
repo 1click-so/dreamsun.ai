@@ -387,7 +387,7 @@ export function ShotCard({
               onChange={(v) => onUpdate({ imagePrompt: v })}
               rows={3}
               placeholder="Image prompt... (@ to reference images)"
-              className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+              className="w-full resize-y rounded-lg border border-border bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
               images={tagImages}
             />
             {imageSupportsNeg && !shot.imageNegativePrompt && (
@@ -406,7 +406,7 @@ export function ShotCard({
                   onChange={(e) => onUpdate({ imageNegativePrompt: e.target.value })}
                   rows={2}
                   placeholder="no blur, no artifacts, no distortion..."
-                  className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                  className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
                 />
                 <button
                   onClick={() => onUpdate({ imageNegativePrompt: "" })}
@@ -533,7 +533,7 @@ export function ShotCard({
             <textarea value={shot.videoPrompt}
               onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
               rows={3} placeholder="Video/motion prompt..."
-              className="w-full resize-y rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
+              className="w-full resize-y rounded-lg border border-border bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
             {videoSupportsNeg && !shot.videoNegativePrompt && (
               <button
                 onClick={() => onUpdate({ videoNegativePrompt: " " })}
@@ -550,7 +550,7 @@ export function ShotCard({
                   onChange={(e) => onUpdate({ videoNegativePrompt: e.target.value })}
                   rows={2}
                   placeholder="blur, distort, low quality..."
-                  className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                  className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
                 />
                 <button
                   onClick={() => onUpdate({ videoNegativePrompt: "" })}
@@ -615,7 +615,7 @@ export function ShotCard({
                       className={`rounded-lg border px-1.5 py-0.5 text-[9px] font-medium uppercase transition ${
                         effAudio
                           ? "border-accent/30 bg-accent/10 text-accent"
-                          : "border-border bg-background text-muted hover:border-muted"
+                          : "border-border bg-input text-muted hover:border-muted"
                       }`}
                     >{effAudio ? "Sound on" : "Sound off"}</button>
                   );

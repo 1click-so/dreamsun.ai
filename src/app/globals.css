@@ -24,6 +24,7 @@
   --color-accent-text: #0E8A62;
   --color-muted: #636363;
   --color-card: #f5f5f5;
+  --color-input: #e8e8e8;
 
   /* Semantic */
   --color-destructive: #ef4444;
@@ -34,14 +35,15 @@
 html.dark {
   --color-background: #080808;
   --color-foreground: #ededed;
-  --color-surface: #1c1c1c;
-  --color-surface-hover: #252525;
+  --color-surface: #121212;
+  --color-surface-hover: #1a1a1a;
   --color-border: rgba(255, 255, 255, 0.1);
   --color-accent: #A1FCDF;
   --color-accent-hover: #C8FEE9;
   --color-accent-text: #A1FCDF;
   --color-muted: #a3a3a3;
-  --color-card: #1c1c1c;
+  --color-card: #121212;
+  --color-input: #0e0e0e;
   --color-destructive: #ef4444;
   --color-destructive-hover: #dc2626;
 }
@@ -59,6 +61,7 @@ html.dark {
   --color-accent-text: var(--color-accent-text);
   --color-muted: var(--color-muted);
   --color-card: var(--color-card);
+  --color-input: var(--color-input);
   --color-destructive: var(--color-destructive);
   --color-destructive-hover: var(--color-destructive-hover);
 
