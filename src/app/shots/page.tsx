@@ -1794,9 +1794,10 @@ export function ShotListEditor({
         <div className="flex items-center gap-2 md:gap-3">
           <button
             onClick={() => {
-              // Flush pending save immediately before leaving
+              // Flush pending save in background — don't trigger re-render before navigating
               if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-              onSave(shotsRef.current, getCurrentSettings());
+              const settings = getCurrentSettings();
+              saveSceneToDB({ ...scene, shots: shotsRef.current as unknown as Record<string, unknown>[], settings, updatedAt: Date.now() });
               onBack();
             }}
             className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted transition hover:bg-surface hover:text-foreground"
