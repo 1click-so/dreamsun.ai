@@ -6,6 +6,7 @@ import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
 import { usePricing } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
+import { trackUpscaleCompleted } from "@/lib/analytics";
 import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 import {
   getUpscaleModelById,
@@ -207,6 +208,7 @@ export function UpscalePanel({
         throw new Error(data.error || "Upscale failed");
       }
 
+      trackUpscaleCompleted(selectedModelId);
       invalidateCredits();
 
       const result: UpscaleResult = {

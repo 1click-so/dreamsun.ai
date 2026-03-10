@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fal } from "@fal-ai/client";
 import { MODELS, type ModelConfig, getSelectableModels, resolveModel } from "@/lib/models";
+import { trackShotGenerated, trackShotAnimated } from "@/lib/analytics";
 import { Settings2, Plus, ClipboardList, LayoutList, LayoutGrid, Zap, Film, ChevronDown, Download } from "lucide-react";
 import JSZip from "jszip";
 import { VIDEO_MODELS, getCreateModels, type VideoModelConfig } from "@/lib/video-models";
@@ -1283,6 +1284,7 @@ export function ShotListEditor({
         });
         return;
       }
+      trackShotGenerated(model.id);
       invalidateCredits();
 
       // All generated image URLs (first is primary, rest are alternatives)
@@ -1409,6 +1411,7 @@ export function ShotListEditor({
         });
         return;
       }
+      trackShotGenerated(model.id);
       invalidateCredits();
 
       const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
@@ -1504,6 +1507,7 @@ export function ShotListEditor({
         }
         throw new Error(data.error || "Animation failed");
       }
+      trackShotAnimated(selectedVideoModelId, videoDuration);
       invalidateCredits();
 
       const generationId = data.generationId as string;

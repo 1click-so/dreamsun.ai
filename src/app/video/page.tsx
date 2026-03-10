@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { fal } from "@fal-ai/client";
 import { type VideoModelConfig, VIDEO_MODELS, getCreateModels, getMotionControlModels, videoModelsToSelectorItems } from "@/lib/video-models";
 import { loadStorage, saveStorage } from "@/lib/storage";
+import { trackVideoGenerated } from "@/lib/analytics";
 import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
 import { Select } from "@/components/ui/Select";
@@ -670,6 +671,7 @@ export default function VideoPage() {
         }
         throw new Error(data.error || "Video generation failed");
       }
+      trackVideoGenerated(currentModel.id, duration);
       invalidateCredits();
 
       const generationId = data.generationId;

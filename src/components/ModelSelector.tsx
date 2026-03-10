@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import type { ModelPricing, CreditRange } from "@/hooks/usePricing";
+import { trackModelSelected } from "@/lib/analytics";
 
 export function CreditIcon({ size = 10 }: { size?: number }) {
   return (
@@ -165,6 +166,8 @@ export function ModelSelector({
         : `${selectedModels.length} models`;
 
   const handleSelect = (id: string) => {
+    const m = models.find((x) => x.id === id);
+    trackModelSelected(id, m?.provider);
     if (mode === "single") {
       onChange([id]);
       setOpen(false);

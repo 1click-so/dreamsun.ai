@@ -5,6 +5,7 @@ import { useCredits } from "@/hooks/useCredits";
 import { CreditIcon } from "@/components/ModelSelector";
 import { CREDIT_PACKAGES, TOPUP_RATE, TOPUP_MIN_DOLLARS, TOPUP_MAX_DOLLARS, getCreditsForDollars, getTopupDiscount } from "@/lib/stripe";
 import { AutoTopupCard } from "@/components/account/AutoTopupCard";
+import { trackCheckoutStarted } from "@/lib/analytics";
 
 const StripeCheckoutForm = lazy(() =>
   import("@/components/StripeCheckout").then((m) => ({ default: m.StripeCheckoutForm }))
@@ -127,16 +128,21 @@ export function PricingPanel({ initialTab = "topup" }: PricingPanelProps) {
 
   const handleSubscribe = (planId: string) => {
     if (planId === "free") return;
+    const plan = PLANS.find((p) => p.id === planId);
+    trackCheckoutStarted("subscription", planId, plan?.price);
     setCheckoutPlanId(planId);
     setCheckoutType("subscription");
   };
 
   const handleBuyPackage = (packageId: string) => {
+    const pkg = CREDIT_PACKAGES.find((p) => p.id === packageId);
+    trackCheckoutStarted("topup", packageId, pkg?.dollars);
     setCheckoutPackageId(packageId);
     setCheckoutType("topup");
   };
 
   const handleBuyCustom = () => {
+    trackCheckoutStarted("custom", undefined, customDollars);
     setCheckoutType("custom");
   };
 

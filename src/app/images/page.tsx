@@ -10,6 +10,7 @@ import {
   getSelectableModels,
   resolveModel,
 } from "@/lib/models";
+import { trackImageGenerated } from "@/lib/analytics";
 import { Navbar } from "@/components/Navbar";
 import { Toggle } from "@/components/ui/Toggle";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
@@ -1037,7 +1038,8 @@ export default function GeneratePage() {
           }
           throw new Error(data.error || "Generation failed");
         }
-        // Refresh credit display after successful generation
+        // Track + refresh credit display after successful generation
+        trackImageGenerated(effectiveModel.id, numImages);
         invalidateCredits();
 
         const imageUrls: string[] = data.allImageUrls && data.allImageUrls.length > 0

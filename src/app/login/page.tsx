@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { Logo } from "@/components/Logo";
 import Link from "next/link";
+import { trackLoginCompleted, trackSignupCompleted, trackGoogleAuth, trackPasswordReset } from "@/lib/analytics";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -120,6 +121,7 @@ function LoginContent() {
       return;
     }
 
+    trackLoginCompleted();
     router.push(next);
     router.refresh();
   }
@@ -143,6 +145,7 @@ function LoginContent() {
       return;
     }
 
+    trackSignupCompleted();
     setMessage("Check your email for a confirmation link.");
     setLoading(false);
   }
@@ -165,12 +168,14 @@ function LoginContent() {
       return;
     }
 
+    trackPasswordReset();
     setMessage("Check your email for a password reset link.");
     setLoading(false);
   }
 
   async function handleGoogleSignIn() {
     setError(null);
+    trackGoogleAuth();
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
