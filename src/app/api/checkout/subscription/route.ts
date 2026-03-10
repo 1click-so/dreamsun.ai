@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       customer: customerId,
       mode: "subscription",
       ui_mode: "embedded",
-      // allow_promotion_codes: true, // TODO: re-enable after creating Stripe coupons
+      // allow_promotion_codes: true, // disabled — caused 500, re-enable after debugging
       line_items: [
         {
           price_data: {

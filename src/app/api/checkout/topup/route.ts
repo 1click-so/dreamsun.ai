@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       customer: customerId,
       mode: "payment",
       ui_mode: "embedded",
-      // allow_promotion_codes: true, // TODO: re-enable after creating Stripe coupons
+      // allow_promotion_codes: true, // disabled — caused 500, re-enable after debugging
       payment_intent_data: {
         setup_future_usage: "off_session", // Save card for auto-topup
       },

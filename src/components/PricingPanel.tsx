@@ -164,6 +164,10 @@ export function PricingPanel({ initialTab = "topup" }: PricingPanelProps) {
       body: JSON.stringify({ planId: checkoutPlanId }),
     });
     const data = await res.json();
+    if (!res.ok || !data.clientSecret) {
+      console.error("[checkout] subscription error:", data);
+      throw new Error(data.error || "Failed to create checkout session");
+    }
     return data.clientSecret;
   };
 
@@ -177,6 +181,10 @@ export function PricingPanel({ initialTab = "topup" }: PricingPanelProps) {
       body: JSON.stringify(body),
     });
     const data = await res.json();
+    if (!res.ok || !data.clientSecret) {
+      console.error("[checkout] topup error:", data);
+      throw new Error(data.error || "Failed to create checkout session");
+    }
     return data.clientSecret;
   };
 
