@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     customer: customerId,
     mode: "subscription",
     ui_mode: "embedded",
+    allow_promotion_codes: true,
     line_items: [
       {
         price_data: {

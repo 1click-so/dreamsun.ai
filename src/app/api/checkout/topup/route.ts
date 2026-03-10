@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     customer: customerId,
     mode: "payment",
     ui_mode: "embedded",
+    allow_promotion_codes: true,
     payment_intent_data: {
       setup_future_usage: "off_session", // Save card for auto-topup
     },
