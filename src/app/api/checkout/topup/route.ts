@@ -3,80 +3,78 @@ import { createClient } from "@/lib/supabase-server";
 import { stripe, TOPUP_MIN_DOLLARS, TOPUP_MAX_DOLLARS, CREDIT_PACKAGES, getCreditsForDollars } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await req.json();
-
-  let amount: number;
-  let credits: number;
-  let packageId: string | undefined;
-
-  if (body.packageId) {
-    // Preset package
-    const pkg = CREDIT_PACKAGES.find((p) => p.id === body.packageId);
-    if (!pkg) {
-      return NextResponse.json({ error: "Invalid package" }, { status: 400 });
-    }
-    amount = pkg.dollars;
-    credits = pkg.credits;
-    packageId = pkg.id;
-  } else if (body.dollars) {
-    // Custom amount (slider) — same discount curve as packages
-    amount = Math.round(Number(body.dollars));
-    credits = getCreditsForDollars(amount);
-    packageId = undefined;
-  } else {
-    return NextResponse.json({ error: "Provide packageId or dollars" }, { status: 400 });
-  }
-
-  if (amount < TOPUP_MIN_DOLLARS || amount > TOPUP_MAX_DOLLARS) {
-    return NextResponse.json(
-      { error: `Amount must be between $${TOPUP_MIN_DOLLARS} and $${TOPUP_MAX_DOLLARS}` },
-      { status: 400 }
-    );
-  }
-
-  // Get or create Stripe customer
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("stripe_customer_id, subscription_tier")
-    .eq("id", user.id)
-    .single();
-
-  let customerId = profile?.stripe_customer_id;
-
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email!,
-      metadata: { supabase_user_id: user.id },
-    });
-    customerId = customer.id;
-    await supabase
-      .from("profiles")
-      .update({ stripe_customer_id: customerId })
-      .eq("id", user.id);
-  }
-
-  const origin = req.headers.get("origin") || "https://dreamsunai.com";
-
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+
+    let amount: number;
+    let credits: number;
+    let packageId: string | undefined;
+
+    if (body.packageId) {
+      const pkg = CREDIT_PACKAGES.find((p) => p.id === body.packageId);
+      if (!pkg) {
+        return NextResponse.json({ error: "Invalid package" }, { status: 400 });
+      }
+      amount = pkg.dollars;
+      credits = pkg.credits;
+      packageId = pkg.id;
+    } else if (body.dollars) {
+      amount = Math.round(Number(body.dollars));
+      credits = getCreditsForDollars(amount);
+      packageId = undefined;
+    } else {
+      return NextResponse.json({ error: "Provide packageId or dollars" }, { status: 400 });
+    }
+
+    if (amount < TOPUP_MIN_DOLLARS || amount > TOPUP_MAX_DOLLARS) {
+      return NextResponse.json(
+        { error: `Amount must be between $${TOPUP_MIN_DOLLARS} and $${TOPUP_MAX_DOLLARS}` },
+        { status: 400 }
+      );
+    }
+
+    // Get or create Stripe customer
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("stripe_customer_id, subscription_tier")
+      .eq("id", user.id)
+      .single();
+
+    let customerId = profile?.stripe_customer_id;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email!,
+        metadata: { supabase_user_id: user.id },
+      });
+      customerId = customer.id;
+      await supabase
+        .from("profiles")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", user.id);
+    }
+
+    const origin = req.headers.get("origin") || "https://dreamsunai.com";
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "payment",
       ui_mode: "embedded",
-      // allow_promotion_codes: true, // disabled — caused 500, re-enable after debugging
+      allow_promotion_codes: true,
       payment_intent_data: {
-        setup_future_usage: "off_session", // Save card for auto-topup
+        setup_future_usage: "off_session",
       },
       line_items: [
         {
           price_data: {
             currency: "usd",
-            unit_amount: amount * 100, // cents
+            unit_amount: amount * 100,
             product_data: {
               name: `${credits.toLocaleString()} DreamSun Credits`,
               description: `Top-up: ${credits.toLocaleString()} credits`,
