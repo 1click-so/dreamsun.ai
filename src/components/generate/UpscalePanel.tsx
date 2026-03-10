@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { fal } from "@fal-ai/client";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
-import { IconSparkle } from "@/components/generate/Icons";
+import { IconBolt } from "@/components/generate/Icons";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
 import { usePricing } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
@@ -411,7 +411,7 @@ export function UpscalePanel({
             </>
           ) : (
             <>
-              <IconSparkle size={12} />
+              <IconBolt size={14} />
               {category === "skin" ? "Enhance" : "Upscale"}
               {estimatedCredits > 0 && (
                 <span className="flex items-center gap-1">

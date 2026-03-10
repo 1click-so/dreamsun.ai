@@ -14,7 +14,7 @@ import { GalleryGrid } from "@/components/generate/GalleryGrid";
 import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { MediaLightbox } from "@/components/generate/MediaLightbox";
-import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion, IconRelight } from "@/components/generate/Icons";
+import { IconBolt, IconChevron, IconUpscale, IconVideo, IconMotion, IconRelight } from "@/components/generate/Icons";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
 import { usePricing, tierKey } from "@/hooks/usePricing";
@@ -1508,7 +1508,7 @@ export default function VideoPage() {
                       }`}
                       title="Generate (Enter)"
                     >
-                      <IconSparkle size={12} />
+                      <IconBolt size={14} />
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1">
@@ -1628,7 +1628,7 @@ export default function VideoPage() {
                       }`}
                       title="Generate (Enter)"
                     >
-                      <IconSparkle size={12} />
+                      <IconBolt size={14} />
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1">
@@ -1920,7 +1920,7 @@ export default function VideoPage() {
                       }`}
                       title="Generate (Enter)"
                     >
-                      <IconSparkle size={12} />
+                      <IconBolt size={14} />
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1">
@@ -1979,7 +1979,7 @@ export default function VideoPage() {
                       }`}
                       title="Generate (Enter)"
                     >
-                      <IconSparkle size={12} />
+                      <IconBolt size={14} />
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1">

@@ -63,6 +63,14 @@ export function IconSparkle({ size = 14 }: { size?: number }) {
   );
 }
 
+export function IconBolt({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M13 2L4.5 13.5h6L9 22l9.5-12.5h-6.5L13 2z" />
+    </svg>
+  );
+}
+
 export function IconVideo({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
