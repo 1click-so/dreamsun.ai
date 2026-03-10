@@ -2228,7 +2228,7 @@ export function ShotListEditor({
           <div className={`mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr] ${viewMode === "storyboard" && !showSettings ? "hidden" : ""}`}>
             {/* Master Reference Cell */}
             <div
-              className="min-w-[240px] rounded-lg border border-border bg-surface p-3"
+              className="min-w-[240px] rounded-lg border border-border bg-background p-3"
               onDragOver={(e) => {
                 if (e.dataTransfer.types.includes("Files")) {
                   e.preventDefault();
@@ -2274,7 +2274,7 @@ export function ShotListEditor({
             </div>
 
             {/* Prompt Prefix Cell */}
-            <div className="rounded-lg border border-border bg-surface p-3">
+            <div className="rounded-lg border border-border bg-background p-3">
               <p className="mb-2 text-[11px] font-medium text-muted">Prompt Prefix</p>
               <p className="mb-2.5 text-[9px] text-muted">Prepended to every shot prompt</p>
               <input
