@@ -82,3 +82,13 @@ export function IconMotion({ size = 14 }: { size?: number }) {
     </svg>
   );
 }
+
+export function IconRelight({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="9" r="4" />
+      <path d="M9 1v2M9 15v2M1 9h2M15 9h2" />
+      <path d="M3.6 3.6l1.4 1.4M13 13l1.4 1.4M3.6 14.4l1.4-1.4M13 5l1.4-1.4" />
+    </svg>
+  );
+}

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { fal } from "@fal-ai/client";
-import { type VideoModelConfig, VIDEO_MODELS, getCreateModels, getMotionControlModels, videoModelsToSelectorItems } from "@/lib/video-models";
+import { type VideoModelConfig, VIDEO_MODELS, getCreateModels, getMotionControlModels, getRelightModels, videoModelsToSelectorItems } from "@/lib/video-models";
 import { loadStorage, saveStorage } from "@/lib/storage";
 import { trackVideoGenerated } from "@/lib/analytics";
 import { Navbar } from "@/components/Navbar";
@@ -14,7 +14,7 @@ import { GalleryGrid } from "@/components/generate/GalleryGrid";
 import { GalleryToolbar, type GalleryFilter } from "@/components/generate/GalleryToolbar";
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { MediaLightbox } from "@/components/generate/MediaLightbox";
-import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion } from "@/components/generate/Icons";
+import { IconSparkle, IconChevron, IconUpscale, IconVideo, IconMotion, IconRelight } from "@/components/generate/Icons";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 import { useGenerations, type Generation } from "@/hooks/useGenerations";
 import { usePricing, tierKey } from "@/hooks/usePricing";
@@ -42,6 +42,12 @@ const STORAGE_KEYS: Record<string, string> = {
   firstFrameUrl: "dreamsun_vid_first_frame",
   lastFrameUrl: "dreamsun_vid_last_frame",
   refVideoUrl: "dreamsun_vid_ref_video",
+  rlModel: "dreamsun_vid_rl_model",
+  rlCondType: "dreamsun_vid_rl_cond",
+  rlDirection: "dreamsun_vid_rl_dir",
+  rlCfg: "dreamsun_vid_rl_cfg",
+  rlVideoUrl: "dreamsun_vid_rl_video",
+  rlPrompt: "dreamsun_vid_rl_prompt",
 } as const;
 
 // --- Pending generation (survives refresh) ---
@@ -58,7 +64,7 @@ interface PendingVideoGeneration {
 
 // --- Video modes ---
 
-type VideoMode = "create" | "motion";
+type VideoMode = "create" | "motion" | "relight";
 
 const VIDEO_MODES: ModeConfig[] = [
   {
@@ -73,6 +79,13 @@ const VIDEO_MODES: ModeConfig[] = [
     label: "Motion Control",
     icon: <IconMotion size={12} />,
     description: "Transfer motion from reference video",
+    ready: true,
+  },
+  {
+    id: "relight",
+    label: "Relight",
+    icon: <IconRelight size={12} />,
+    description: "Change lighting on any video",
     ready: true,
   },
 ];
@@ -196,6 +209,37 @@ export default function VideoPage() {
     loadStorage(STORAGE_KEYS.charOrientation, "video")
   );
   const [keepOriginalSound, setKeepOriginalSound] = useState(true);
+
+  // Relight settings
+  const [rlModelId, setRlModelId] = useState(() =>
+    loadStorage(STORAGE_KEYS.rlModel, "lightx-relight")
+  );
+  const [rlCondType, setRlCondType] = useState<string>(() =>
+    loadStorage(STORAGE_KEYS.rlCondType, "ic")
+  );
+  const [rlDirection, setRlDirection] = useState<string>(() =>
+    loadStorage(STORAGE_KEYS.rlDirection, "Left")
+  );
+  const [rlCfg, setRlCfg] = useState<number>(() =>
+    loadStorage(STORAGE_KEYS.rlCfg, 2)
+  );
+  const [rlPromptText, setRlPromptText] = useState<string>(() =>
+    loadStorage(STORAGE_KEYS.rlPrompt, "Sunlight")
+  );
+  const [rlVideo, setRlVideoRaw] = useState<UploadedImage | null>(() => {
+    const url = loadStorage<string | null>(STORAGE_KEYS.rlVideoUrl, null);
+    return url ? { id: "restored_rl", preview: url, url, uploading: false } : null;
+  });
+  const [rlCondImage, setRlCondImage] = useState<UploadedImage | null>(null);
+  const [rlVideoDragOver, setRlVideoDragOver] = useState(false);
+  const [rlCondDragOver, setRlCondDragOver] = useState(false);
+  const rlVideoInputRef = useRef<HTMLInputElement>(null);
+  const rlCondInputRef = useRef<HTMLInputElement>(null);
+
+  const setRlVideo = useCallback((img: UploadedImage | null) => {
+    setRlVideoRaw(img);
+    saveStorage(STORAGE_KEYS.rlVideoUrl, img?.url ?? null);
+  }, []);
 
   // Wrapped setters that persist to localStorage
   const setActiveMode = useCallback((mode: VideoMode) => {
@@ -374,13 +418,14 @@ export default function VideoPage() {
   // Model lists — selector shows ALL models, grouped by type
   const createModels = useMemo(() => getCreateModels(), []);
   const mcModels = useMemo(() => getMotionControlModels(), []);
+  const rlModels = useMemo(() => getRelightModels(), []);
   const activeSelectorItems = useMemo(() => {
-    const models = activeMode === "create" ? createModels : mcModels;
+    const models = activeMode === "create" ? createModels : activeMode === "relight" ? rlModels : mcModels;
     return videoModelsToSelectorItems(models);
-  }, [activeMode, createModels, mcModels]);
+  }, [activeMode, createModels, mcModels, rlModels]);
 
-  const selectedModelId = activeMode === "create" ? createModelId : mcModelId;
-  const activeModels = activeMode === "create" ? createModels : mcModels;
+  const selectedModelId = activeMode === "create" ? createModelId : activeMode === "relight" ? rlModelId : mcModelId;
+  const activeModels = activeMode === "create" ? createModels : activeMode === "relight" ? rlModels : mcModels;
   const currentModel = activeModels.find((m) => m.id === selectedModelId) ?? activeModels[0];
 
   // Create mode: does current model support last frame?
@@ -394,7 +439,10 @@ export default function VideoPage() {
     if (activeMode === "motion" && !mcModels.find((m) => m.id === mcModelId)) {
       setMcModelId(mcModels[0].id);
     }
-  }, [activeMode, createModelId, mcModelId, createModels, mcModels]);
+    if (activeMode === "relight" && !rlModels.find((m) => m.id === rlModelId)) {
+      setRlModelId(rlModels[0].id);
+    }
+  }, [activeMode, createModelId, mcModelId, rlModelId, createModels, mcModels, rlModels]);
 
   // Ensure duration is valid for current model
   useEffect(() => {
@@ -438,9 +486,13 @@ export default function VideoPage() {
     const key = tierKey(currentModel.id, resolution, audioTier);
     const unitCost = pricing[key]?.base_price_credits ?? pricing[currentModel.id]?.base_price_credits ?? 0;
     if (unitCost === 0) return 0;
+    // Relight: duration unknown (matches input video), show per-second cost
+    if (activeMode === "relight") return unitCost;
     const effectiveDuration = multiShotEnabled ? multiShotTotalDuration : duration;
     return Math.round(unitCost * effectiveDuration);
-  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration]);
+  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration, activeMode]);
+
+  const isRelightPerSec = activeMode === "relight";
 
   // Filter gallery — memoized to avoid recalculating on every render
   const filteredHistory = useMemo(() => {
@@ -593,7 +645,12 @@ export default function VideoPage() {
 
   const handleGenerate = async (overridePrompt?: string) => {
     const usedPrompt = overridePrompt ?? prompt;
-    if (!firstFrame?.url) {
+    if (activeMode === "relight") {
+      if (!rlVideo?.url) {
+        setError("Upload a video to relight");
+        return;
+      }
+    } else if (!firstFrame?.url) {
       setError("Reference image is required");
       return;
     }
@@ -617,11 +674,20 @@ export default function VideoPage() {
       const body: Record<string, unknown> = {
         videoModelId: currentModel.id,
         prompt: usedPrompt.trim(),
-        imageUrl: firstFrame.url,
+        imageUrl: activeMode === "relight" ? null : firstFrame?.url,
         batchId,
       };
 
-      if (activeMode === "create") {
+      if (activeMode === "relight") {
+        body.relightVideoUrl = rlVideo!.url;
+        body.relightCondType = rlCondType;
+        body.relightPrompt = rlPromptText;
+        body.relightDirection = rlDirection;
+        body.relightCfg = rlCfg;
+        if (rlCondImage?.url && rlCondType !== "ic") {
+          body.relightCondImgUrl = rlCondImage.url;
+        }
+      } else if (activeMode === "create") {
         body.duration = duration;
         if (currentModel.aspectRatios.length > 0) body.aspectRatio = aspectRatio;
         if (currentModel.resolutions.length > 0) body.resolution = resolution;
@@ -677,16 +743,24 @@ export default function VideoPage() {
       const generationId = data.generationId;
 
       // Add pending generation to local cache (url=null, pending=true via generationToResult)
-      const refUrls = [firstFrame.url];
-      if (activeMode === "create" && lastFrame?.url) refUrls.push(lastFrame.url);
-      if (activeMode === "motion" && refVideo?.url) refUrls.push(refVideo.url);
+      const refUrls: string[] = [];
+      if (activeMode === "relight") {
+        if (rlVideo?.url) refUrls.push(rlVideo.url);
+        if (rlCondImage?.url) refUrls.push(rlCondImage.url);
+      } else {
+        if (firstFrame?.url) refUrls.push(firstFrame.url);
+        if (activeMode === "create" && lastFrame?.url) refUrls.push(lastFrame.url);
+        if (activeMode === "motion" && refVideo?.url) refUrls.push(refVideo.url);
+      }
 
       const settings: Record<string, unknown> = {
         modelId: currentModel.id,
         mode: activeMode,
         falRequestId: data.falRequestId,
       };
-      if (activeMode === "create") {
+      if (activeMode === "relight") {
+        Object.assign(settings, { relightCondType: rlCondType, relightPrompt: rlPromptText, relightDirection: rlDirection, relightCfg: rlCfg });
+      } else if (activeMode === "create") {
         Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
       } else {
         Object.assign(settings, { charOrientation, keepOriginalSound });
@@ -714,7 +788,7 @@ export default function VideoPage() {
         scene_id: null,
         shot_number: null,
         project_id: null,
-        source_image_url: firstFrame.url,
+        source_image_url: activeMode === "relight" ? rlVideo?.url ?? null : firstFrame?.url ?? null,
         thumbnail_url: null,
         reference_image_urls: refUrls,
       }]);
@@ -875,12 +949,59 @@ export default function VideoPage() {
       setCreateModelId(id);
       saveStorage(STORAGE_KEYS.videoModel, id);
       if (activeMode !== "create") setActiveMode("create");
+    } else if (model.type === "relight") {
+      setRlModelId(id);
+      saveStorage(STORAGE_KEYS.rlModel, id);
+      if (activeMode !== "relight") setActiveMode("relight");
     } else {
       setMcModelId(id);
       saveStorage(STORAGE_KEYS.mcModel, id);
       if (activeMode !== "motion") setActiveMode("motion");
     }
   };
+
+  // Relight upload handlers
+  const handleRlVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadImage(file, setRlVideo);
+    if (rlVideoInputRef.current) rlVideoInputRef.current.value = "";
+  }, [uploadImage, setRlVideo]);
+
+  const handleRlVideoDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const videoUrlVal = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (videoUrlVal && videoUrlVal.startsWith("http") && /\.(mp4|mov|webm|m4v)/i.test(videoUrlVal)) {
+      const id = `img_${++imageIdCounter}`;
+      setRlVideo({ id, preview: videoUrlVal, url: videoUrlVal, uploading: false });
+      return;
+    }
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("video/")) {
+      uploadImage(file, setRlVideo);
+    }
+  }, [uploadImage, setRlVideo]);
+
+  const handleRlCondUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadImage(file, setRlCondImage);
+    if (rlCondInputRef.current) rlCondInputRef.current.value = "";
+  }, [uploadImage]);
+
+  const handleRlCondDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const imgUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (imgUrl && imgUrl.startsWith("http") && /\.(png|jpe?g|webp)/i.test(imgUrl)) {
+      const id = `img_${++imageIdCounter}`;
+      setRlCondImage({ id, preview: imgUrl, url: imgUrl, uploading: false });
+      return;
+    }
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      uploadImage(file, setRlCondImage);
+    }
+  }, [uploadImage]);
 
   // Keyboard shortcut
   useEffect(() => {
@@ -898,7 +1019,9 @@ export default function VideoPage() {
   const hasAnyContent = history.length > 0 || isGenerating || generationsLoading;
   const canGenerate = activeMode === "create"
     ? firstFrame?.url && !firstFrame.uploading
-    : firstFrame?.url && !firstFrame.uploading && refVideo?.url && !refVideo.uploading;
+    : activeMode === "relight"
+      ? rlVideo?.url && !rlVideo.uploading
+      : firstFrame?.url && !firstFrame.uploading && refVideo?.url && !refVideo.uploading;
 
   const slotAspectRatio = (() => {
     const [w, h] = aspectRatio.split(":").map(Number);
@@ -916,7 +1039,7 @@ export default function VideoPage() {
         <aside className="hidden w-[28%] min-w-[280px] max-w-[400px] shrink-0 flex-col border-r border-border lg:flex">
           {/* Mode bar — fixed at top */}
           <div className="border-b border-border px-2 py-2">
-            <ModeBar modes={VIDEO_MODES} active={activeMode} onChange={(id) => setActiveMode(id as VideoMode)} columns={2} />
+            <ModeBar modes={VIDEO_MODES} active={activeMode} onChange={(id) => setActiveMode(id as VideoMode)} columns={3} />
           </div>
 
           {/* Scrollable settings area */}
@@ -1175,6 +1298,132 @@ export default function VideoPage() {
               )}
 
               {/* ========================
+                  RELIGHT SETTINGS
+                  ======================== */}
+              {activeMode === "relight" && (
+                <>
+                  {/* Source Video */}
+                  <UploadZone
+                    file={rlVideo}
+                    onRemove={() => { if (rlVideo) URL.revokeObjectURL(rlVideo.preview); setRlVideo(null); }}
+                    onUpload={handleRlVideoUpload}
+                    inputRef={rlVideoInputRef}
+                    label="Source Video"
+                    dragOver={rlVideoDragOver}
+                    setDragOver={setRlVideoDragOver}
+                    onDrop={handleRlVideoDrop}
+                    accept="video/mp4,video/quicktime,video/webm,video/x-m4v"
+                    isVideo
+                  />
+
+                  {/* Relight Mode */}
+                  <div>
+                    <SectionLabel>Relight Mode</SectionLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: "ic", label: "Text" },
+                        { id: "ref", label: "Reference" },
+                        { id: "hdr", label: "HDR" },
+                        { id: "bg", label: "Background" },
+                      ].map((ct) => (
+                        <PillButton
+                          key={ct.id}
+                          active={rlCondType === ct.id}
+                          onClick={() => {
+                            setRlCondType(ct.id);
+                            saveStorage(STORAGE_KEYS.rlCondType, ct.id);
+                          }}
+                        >
+                          {ct.label}
+                        </PillButton>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-muted">
+                      {rlCondType === "ic" && "Describe the lighting with text"}
+                      {rlCondType === "ref" && "Match lighting from a reference image"}
+                      {rlCondType === "hdr" && "Use an HDR environment map"}
+                      {rlCondType === "bg" && "Derive lighting from a background image"}
+                    </p>
+                  </div>
+
+                  {/* Text-based lighting controls (ic mode) */}
+                  {rlCondType === "ic" && (
+                    <>
+                      <div>
+                        <SectionLabel>Light Description</SectionLabel>
+                        <input
+                          type="text"
+                          value={rlPromptText}
+                          onChange={(e) => {
+                            setRlPromptText(e.target.value);
+                            saveStorage(STORAGE_KEYS.rlPrompt, e.target.value);
+                          }}
+                          placeholder="e.g. Warm sunset, Neon blue glow, Studio lighting..."
+                          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none transition placeholder:text-muted focus:border-accent"
+                        />
+                      </div>
+
+                      <div>
+                        <SectionLabel>Light Direction</SectionLabel>
+                        <div className="flex gap-1.5">
+                          {["Left", "Right", "Top", "Bottom"].map((dir) => (
+                            <PillButton
+                              key={dir}
+                              active={rlDirection === dir}
+                              onClick={() => {
+                                setRlDirection(dir);
+                                saveStorage(STORAGE_KEYS.rlDirection, dir);
+                              }}
+                              className="flex-1"
+                            >
+                              {dir}
+                            </PillButton>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <SectionLabel>Guidance (CFG)</SectionLabel>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="0.5"
+                            value={rlCfg}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              setRlCfg(v);
+                              saveStorage(STORAGE_KEYS.rlCfg, v);
+                            }}
+                            className="flex-1 accent-accent"
+                          />
+                          <span className="w-8 text-right text-xs text-muted">{rlCfg}</span>
+                        </div>
+                        <p className="mt-1 text-[10px] text-muted">
+                          Low = subtle, High = dramatic
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Reference/HDR/BG image (non-ic modes) */}
+                  {rlCondType !== "ic" && (
+                    <UploadZone
+                      file={rlCondImage}
+                      onRemove={() => { if (rlCondImage) URL.revokeObjectURL(rlCondImage.preview); setRlCondImage(null); }}
+                      onUpload={handleRlCondUpload}
+                      inputRef={rlCondInputRef}
+                      label={rlCondType === "ref" ? "Reference Image" : rlCondType === "hdr" ? "HDR Map" : "Background Image"}
+                      dragOver={rlCondDragOver}
+                      setDragOver={setRlCondDragOver}
+                      onDrop={handleRlCondDrop}
+                    />
+                  )}
+                </>
+              )}
+
+              {/* ========================
                   MOTION CONTROL SETTINGS
                   ======================== */}
               {activeMode === "motion" && (
@@ -1396,7 +1645,7 @@ export default function VideoPage() {
               onDrop={handlePromptBarDrop}
             >
               {/* Frame thumbnails in prompt bar */}
-              {(firstFrame || (activeMode === "motion" && refVideo)) && (
+              {(firstFrame || (activeMode === "motion" && refVideo) || (activeMode === "relight" && rlVideo)) && (
                 <div className="flex items-center gap-2 px-4 pt-3">
                   {firstFrame && (
                     <div className="group/ref relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60">
@@ -1459,6 +1708,25 @@ export default function VideoPage() {
                         </button>
                       </div>
                     </>
+                  )}
+                  {activeMode === "relight" && rlVideo && (
+                    <div className="group/ref relative h-10 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60">
+                      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                      <video src={rlVideo.preview} className="h-full w-full object-cover" muted />
+                      {rlVideo.uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                          <div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => { if (rlVideo) URL.revokeObjectURL(rlVideo.preview); setRlVideo(null); }}
+                        className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover/ref:opacity-100"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M1 1l6 6M7 1l-6 6" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                   <span className="text-[9px] text-muted/70">{currentModel.name}</span>
                 </div>
@@ -1552,7 +1820,7 @@ export default function VideoPage() {
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1 opacity-60">
-                          <CreditIcon size={10} /> {estimatedVidCredits}
+                          <CreditIcon size={10} /> {estimatedVidCredits}{isRelightPerSec ? "/s" : ""}
                         </span>
                       )}
                     </button>
@@ -1576,7 +1844,7 @@ export default function VideoPage() {
                         if (canGenerate) handleGenerate();
                       }
                     }}
-                    placeholder={promptBarDragOver ? "Drop image as first frame..." : "Describe the video motion..."}
+                    placeholder={promptBarDragOver ? "Drop image as first frame..." : activeMode === "relight" ? "Optional: describe the scene..." : "Describe the video motion..."}
                     className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-5 pt-4 pb-1.5 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted"
                     style={{ minHeight: "48px", maxHeight: "160px" }}
                   />
@@ -1611,7 +1879,7 @@ export default function VideoPage() {
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1 opacity-60">
-                          <CreditIcon size={10} /> {estimatedVidCredits}
+                          <CreditIcon size={10} /> {estimatedVidCredits}{isRelightPerSec ? "/s" : ""}
                         </span>
                       )}
                     </button>

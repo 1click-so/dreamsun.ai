@@ -45,11 +45,33 @@ export async function POST(req: NextRequest) {
       multiPrompt,
       elements: elementUrls,
       batchId,
+      // Relight-specific
+      relightVideoUrl,
+      relightCondType,
+      relightPrompt,
+      relightDirection,
+      relightCfg,
+      relightCondImgUrl,
     } = body;
 
-    if (!videoModelId || !imageUrl) {
+    if (!videoModelId) {
       return NextResponse.json(
-        { error: "videoModelId and imageUrl are required" },
+        { error: "videoModelId is required" },
+        { status: 400 }
+      );
+    }
+
+    // Relight requires video, all others require image
+    const isRelight = videoModelId === "lightx-relight";
+    if (!isRelight && !imageUrl) {
+      return NextResponse.json(
+        { error: "imageUrl is required" },
+        { status: 400 }
+      );
+    }
+    if (isRelight && !relightVideoUrl) {
+      return NextResponse.json(
+        { error: "relightVideoUrl is required for relight" },
         { status: 400 }
       );
     }
@@ -79,82 +101,106 @@ export async function POST(req: NextRequest) {
     }
 
     // Build input using model's param mapping
-    const input: Record<string, unknown> = {
-      [model.params.imageUrl]: imageUrl,
-      [model.params.prompt]: prompt || "",
-    };
+    const input: Record<string, unknown> = {};
 
-    // Duration — only for models that have it (not motion control)
-    if (model.params.duration) {
-      const durationVal = duration || model.defaultDuration;
-      input[model.params.duration] = typeof durationVal === "number" ? durationVal : Number(durationVal);
+    if (isRelight) {
+      // Relight — completely different input shape
+      input.video_url = relightVideoUrl;
+      if (prompt) input.prompt = prompt;
+      input.relit_cond_type = relightCondType || "ic";
+
+      if (relightCondType === "ic" || !relightCondType) {
+        // Intrinsic conditioning — text-based relighting
+        input.relight_parameters = {
+          relight_prompt: relightPrompt || "Sunlight",
+          bg_source: relightDirection || "Left",
+          cfg: relightCfg ?? 2,
+        };
+      } else if (relightCondImgUrl) {
+        // ref / hdr / bg — use a conditioning image
+        input.relit_cond_img_url = relightCondImgUrl;
+      }
+
+      if (body.seed != null) input.seed = body.seed;
+    } else {
+      input[model.params.imageUrl] = imageUrl;
+      input[model.params.prompt] = prompt || "";
     }
 
-    // Audio URL for audio-to-video models
-    if (audioUrl && model.params.audioUrl) {
-      input[model.params.audioUrl] = audioUrl;
-    }
+    // Standard (non-relight) input params
+    if (!isRelight) {
+      // Duration — only for models that have it (not motion control)
+      if (model.params.duration) {
+        const durationVal = duration || model.defaultDuration;
+        input[model.params.duration] = typeof durationVal === "number" ? durationVal : Number(durationVal);
+      }
 
-    // End image (last frame) for image-to-video
-    if (endImageUrl && model.params.endImageUrl) {
-      input[model.params.endImageUrl] = endImageUrl;
-    }
+      // Audio URL for audio-to-video models
+      if (audioUrl && model.params.audioUrl) {
+        input[model.params.audioUrl] = audioUrl;
+      }
 
-    // Reference video for motion control
-    if (videoUrl && model.params.videoUrl) {
-      input[model.params.videoUrl] = videoUrl;
-    }
+      // End image (last frame) for image-to-video
+      if (endImageUrl && model.params.endImageUrl) {
+        input[model.params.endImageUrl] = endImageUrl;
+      }
 
-    // Character orientation for motion control
-    if (characterOrientation && model.params.characterOrientation) {
-      input[model.params.characterOrientation] = characterOrientation;
-    }
+      // Reference video for motion control
+      if (videoUrl && model.params.videoUrl) {
+        input[model.params.videoUrl] = videoUrl;
+      }
 
-    // Keep original sound for motion control
-    if (keepOriginalSound !== undefined && model.supportsKeepOriginalSound) {
-      input.keep_original_sound = keepOriginalSound;
-    }
+      // Character orientation for motion control
+      if (characterOrientation && model.params.characterOrientation) {
+        input[model.params.characterOrientation] = characterOrientation;
+      }
 
-    if (aspectRatio && model.params.aspectRatio) {
-      input[model.params.aspectRatio] = aspectRatio;
-    }
+      // Keep original sound for motion control
+      if (keepOriginalSound !== undefined && model.supportsKeepOriginalSound) {
+        input.keep_original_sound = keepOriginalSound;
+      }
 
-    if (resolution && model.params.resolution) {
-      input[model.params.resolution] = resolution;
-    }
+      if (aspectRatio && model.params.aspectRatio) {
+        input[model.params.aspectRatio] = aspectRatio;
+      }
 
-    if (cameraFixed === true && model.supportsCameraFixed) {
-      input.camera_fixed = true;
-    }
+      if (resolution && model.params.resolution) {
+        input[model.params.resolution] = resolution;
+      }
 
-    if (generateAudio === false && model.supportsGenerateAudio) {
-      input.generate_audio = false;
-    }
+      if (cameraFixed === true && model.supportsCameraFixed) {
+        input.camera_fixed = true;
+      }
 
-    // Add any extra input params the model requires (negative_prompt, cfg_scale, etc.)
-    if (model.extraInput) {
-      Object.assign(input, model.extraInput);
-    }
+      if (generateAudio === false && model.supportsGenerateAudio) {
+        input.generate_audio = false;
+      }
 
-    // Override with user-provided values
-    if (body.negativePrompt && model.supportsNegativePrompt) {
-      input.negative_prompt = body.negativePrompt;
-    }
-    if (body.cfgScale != null && model.supportsCfgScale) {
-      input.cfg_scale = body.cfgScale;
-    }
+      // Add any extra input params the model requires (negative_prompt, cfg_scale, etc.)
+      if (model.extraInput) {
+        Object.assign(input, model.extraInput);
+      }
 
-    // Multi-shot storyboarding
-    if (multiShot && multiPrompt && Array.isArray(multiPrompt)) {
-      input.multi_prompt = multiPrompt;
-      input.shot_type = shotType || "customize";
-    }
+      // Override with user-provided values
+      if (body.negativePrompt && model.supportsNegativePrompt) {
+        input.negative_prompt = body.negativePrompt;
+      }
+      if (body.cfgScale != null && model.supportsCfgScale) {
+        input.cfg_scale = body.cfgScale;
+      }
 
-    // Elements (character consistency)
-    if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
-      input.elements = elementUrls.map((url: string) => ({
-        frontal_image_url: url,
-      }));
+      // Multi-shot storyboarding
+      if (multiShot && multiPrompt && Array.isArray(multiPrompt)) {
+        input.multi_prompt = multiPrompt;
+        input.shot_type = shotType || "customize";
+      }
+
+      // Elements (character consistency)
+      if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
+        input.elements = elementUrls.map((url: string) => ({
+          frontal_image_url: url,
+        }));
+      }
     }
 
     // Determine API provider (audioTier already declared above)
@@ -217,18 +263,25 @@ export async function POST(req: NextRequest) {
 
     // Build settings/reference data
     const refUrls: string[] = [];
-    if (imageUrl) refUrls.push(imageUrl);
-    if (endImageUrl) refUrls.push(endImageUrl);
-    if (videoUrl) refUrls.push(videoUrl);
+    if (isRelight) {
+      if (relightVideoUrl) refUrls.push(relightVideoUrl);
+      if (relightCondImgUrl) refUrls.push(relightCondImgUrl);
+    } else {
+      if (imageUrl) refUrls.push(imageUrl);
+      if (endImageUrl) refUrls.push(endImageUrl);
+      if (videoUrl) refUrls.push(videoUrl);
+    }
 
     const settings: Record<string, unknown> = {
       modelId: videoModelId,
-      mode: videoUrl ? "motion" : "create",
+      mode: isRelight ? "relight" : videoUrl ? "motion" : "create",
       apiProvider,
       falEndpoint: endpoint,
       falRequestId: requestId,
     };
-    if (!videoUrl) {
+    if (isRelight) {
+      Object.assign(settings, { relightCondType, relightPrompt, relightDirection, relightCfg });
+    } else if (!videoUrl) {
       Object.assign(settings, { aspectRatio, resolution, duration, cameraFixed, generateAudio });
     } else {
       Object.assign(settings, { charOrientation: characterOrientation, keepOriginalSound });
@@ -253,7 +306,7 @@ export async function POST(req: NextRequest) {
         aspect_ratio: aspectRatio || null,
         resolution: resolution || null,
         settings,
-        source_image_url: imageUrl || null,
+        source_image_url: isRelight ? relightVideoUrl : (imageUrl || null),
         reference_image_urls: refUrls.length > 0 ? refUrls : null,
         batch_id: batchId || null,
         favorited: false,

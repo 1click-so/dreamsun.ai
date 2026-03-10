@@ -1,4 +1,4 @@
-export type VideoModelType = "image-to-video" | "motion-control";
+export type VideoModelType = "image-to-video" | "motion-control" | "relight";
 
 export interface VideoModelConfig {
   id: string;
@@ -46,6 +46,10 @@ export interface VideoModelConfig {
   supportsMultiShot?: boolean;
   /** Whether model supports elements (character consistency via reference images) */
   supportsElements?: boolean;
+  /** Relight: supported condition types */
+  relightCondTypes?: string[];
+  /** Relight: supported light directions */
+  relightDirections?: string[];
   /** Extra params always sent with this model */
   extraInput?: Record<string, unknown>;
   /** Resolution → endpoint mapping (for models where Standard=720p, Pro=1080p) */
@@ -279,6 +283,31 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
       "1080p": "fal-ai/kling-video/v3/pro/motion-control",
     },
   },
+
+  // ===== Relight =====
+  {
+    id: "lightx-relight",
+    name: "LightX Relight",
+    description: "Relight any video — change lighting direction, mood, and intensity.",
+    endpoint: "fal-ai/lightx/relight",
+    type: "relight",
+    costPerSec: "$0.10",
+    defaultDuration: 5,
+    durations: [],
+    aspectRatios: [],
+    resolutions: [],
+    defaultResolution: "",
+    params: {
+      imageUrl: "video_url", // relight uses video_url as primary input
+      prompt: "prompt",
+    },
+    relightCondTypes: ["ic", "ref", "hdr", "bg"],
+    relightDirections: ["Left", "Right", "Top", "Bottom"],
+    supportsNegativePrompt: false,
+    supportsCfgScale: false,
+    supportsCameraFixed: false,
+    supportsGenerateAudio: false,
+  },
 ];
 
 export function getVideoModelById(id: string): VideoModelConfig | undefined {
@@ -303,10 +332,16 @@ export function getMotionControlModels(): VideoModelConfig[] {
   return VIDEO_MODELS.filter((m) => m.type === "motion-control");
 }
 
+/** Relight models */
+export function getRelightModels(): VideoModelConfig[] {
+  return VIDEO_MODELS.filter((m) => m.type === "relight");
+}
+
 const VIDEO_PROVIDER_MAP: Record<string, { letter: string; colors: string; provider: string }> = {
   kling: { letter: "K", colors: "bg-orange-500/20 text-orange-400", provider: "Kling" },
   seedance: { letter: "S", colors: "bg-purple-500/20 text-purple-400", provider: "ByteDance" },
   ltx: { letter: "L", colors: "bg-blue-500/20 text-blue-400", provider: "Lightricks" },
+  lightx: { letter: "X", colors: "bg-amber-500/20 text-amber-400", provider: "LightX" },
 };
 
 /** Convert video models to SelectorModel[] for the shared ModelSelector component */
@@ -325,6 +360,10 @@ export function videoModelsToSelectorItems(models: VideoModelConfig[]) {
       if (m.params.endImageUrl) tags.push("last frame");
       if (m.supportsMultiShot) tags.push("multi-shot");
       if (m.supportsElements) tags.push("elements");
+    } else if (m.type === "relight") {
+      tags.push("video relighting");
+      if (m.relightCondTypes) tags.push(`${m.relightCondTypes.length} modes`);
+      tags.push("$0.10/s");
     } else {
       tags.push("motion transfer");
       if (m.characterOrientations?.includes("video")) tags.push("up to 30s");
@@ -339,7 +378,7 @@ export function videoModelsToSelectorItems(models: VideoModelConfig[]) {
       iconLetter: meta.letter,
       iconColors: meta.colors,
       tags,
-      group: m.type === "image-to-video" ? "Create" : "Motion Control",
+      group: m.type === "image-to-video" ? "Create" : m.type === "relight" ? "Relight" : "Motion Control",
     };
   });
 }
