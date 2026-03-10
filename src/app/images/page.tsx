@@ -1721,7 +1721,7 @@ export default function GeneratePage() {
                   )}
                   Generate
                   {estimatedCredits > 0 && !isGenerating && (
-                    <span className="flex items-center gap-1 opacity-60">
+                    <span className="flex items-center gap-1">
                       <CreditIcon size={10} /> {estimatedCredits}
                     </span>
                   )}
@@ -1993,7 +1993,7 @@ export default function GeneratePage() {
                   <IconSparkle size={12} />
                   Generate
                   {estimatedCredits > 0 && (
-                    <span className="flex items-center gap-1 opacity-60">
+                    <span className="flex items-center gap-1">
                       <CreditIcon size={10} /> {estimatedCredits}
                     </span>
                   )}

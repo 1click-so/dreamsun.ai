@@ -414,7 +414,7 @@ export function UpscalePanel({
               <IconSparkle size={12} />
               {category === "skin" ? "Enhance" : "Upscale"}
               {estimatedCredits > 0 && (
-                <span className="flex items-center gap-1 opacity-60">
+                <span className="flex items-center gap-1">
                   <CreditIcon size={10} /> {estimatedCredits}
                 </span>
               )}

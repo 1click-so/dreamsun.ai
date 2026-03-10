@@ -1511,7 +1511,7 @@ export default function VideoPage() {
                       <IconSparkle size={12} />
                       Generate
                       {estimatedVidCredits > 0 && (
-                        <span className="flex items-center gap-1 opacity-60">
+                        <span className="flex items-center gap-1">
                           <CreditIcon size={10} /> {estimatedVidCredits}
                         </span>
                       )}
@@ -1631,7 +1631,7 @@ export default function VideoPage() {
                       <IconSparkle size={12} />
                       Generate
                       {estimatedVidCredits > 0 && (
-                        <span className="flex items-center gap-1 opacity-60">
+                        <span className="flex items-center gap-1">
                           <CreditIcon size={10} /> {estimatedVidCredits}
                         </span>
                       )}
@@ -1923,7 +1923,7 @@ export default function VideoPage() {
                       <IconSparkle size={12} />
                       Generate
                       {estimatedVidCredits > 0 && (
-                        <span className="flex items-center gap-1 opacity-60">
+                        <span className="flex items-center gap-1">
                           <CreditIcon size={10} /> {estimatedVidCredits}
                         </span>
                       )}
@@ -1982,7 +1982,7 @@ export default function VideoPage() {
                       <IconSparkle size={12} />
                       Generate
                       {estimatedVidCredits > 0 && (
-                        <span className="flex items-center gap-1 opacity-60">
+                        <span className="flex items-center gap-1">
                           <CreditIcon size={10} /> {estimatedVidCredits}
                         </span>
                       )}
