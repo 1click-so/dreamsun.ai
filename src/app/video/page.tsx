@@ -742,7 +742,7 @@ export default function VideoPage() {
         body.relightPrompt = rlPromptText;
         body.relightDirection = rlDirection;
         body.relightCfg = rlCfg;
-        body.duration = rlVideo!.duration ?? 5;
+        body.duration = rlVideo!.duration;
         if (rlCondImage?.url && rlCondType !== "ic") {
           body.relightCondImgUrl = rlCondImage.url;
         }
@@ -1100,7 +1100,7 @@ export default function VideoPage() {
         <aside className="hidden w-[28%] min-w-[280px] max-w-[400px] shrink-0 flex-col border-r border-border lg:flex">
           {/* Mode bar — fixed at top */}
           <div className="border-b border-border px-2 py-2">
-            <ModeBar modes={VIDEO_MODES} active={activeMode} onChange={(id) => setActiveMode(id as VideoMode)} columns={3} />
+            <ModeBar modes={VIDEO_MODES} active={activeMode} onChange={(id) => setActiveMode(id as VideoMode)} columns={2} />
           </div>
 
           {/* Scrollable settings area */}
