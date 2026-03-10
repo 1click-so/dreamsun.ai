@@ -514,10 +514,10 @@ export function ShotCard({
             {isImageBusy ? (
               <Button variant="destructive" size="sm" onClick={onCancelImage}>Cancel</Button>
             ) : (
-              <Button variant="primary" size="sm" onClick={onGenerateImage}>
+              <Button variant="primary" size="sm" className="rounded-full" onClick={onGenerateImage}>
                 {shot.imageStatus === "done" ? "Regenerate" : "Generate"}
                 {imgCredits > 0 && (
-                  <span className="ml-1 flex items-center gap-0.5 opacity-60">
+                  <span className="ml-1 flex items-center gap-0.5">
                     <CreditIcon size={8} />{imgCredits}
                   </span>
                 )}
@@ -729,10 +729,10 @@ export function ShotCard({
             {isVideoBusy ? (
               <Button variant="destructive" size="sm" onClick={onCancelVideo}>Cancel</Button>
             ) : (
-              <Button variant="secondary" size="sm" onClick={onAnimateShot} disabled={!canAnimate && !effVideoModel.requiresAudio}>
+              <Button variant="secondary" size="sm" className="rounded-full" onClick={onAnimateShot} disabled={!canAnimate && !effVideoModel.requiresAudio}>
                 {shot.videoStatus === "done" ? "Re-animate" : "Animate"}
                 {vidCredits > 0 && (
-                  <span className="ml-1 flex items-center gap-0.5 opacity-60">
+                  <span className="ml-1 flex items-center gap-0.5">
                     <CreditIcon size={8} />{vidCredits}
                   </span>
                 )}
