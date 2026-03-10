@@ -89,7 +89,7 @@ export function GalleryToolbar({
     <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
       {/* Left — count + select toggle */}
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-medium text-muted/50">
+        <span className="text-[10px] font-medium text-muted">
           {filteredCount}{filteredCount !== totalCount ? `/${totalCount}` : ""} {totalCount === 1 ? "item" : "items"}
         </span>
 
@@ -102,7 +102,7 @@ export function GalleryToolbar({
               className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium transition ${
                 selectMode
                   ? "bg-accent/12 text-accent-text"
-                  : "text-muted/60 hover:bg-surface-hover hover:text-foreground"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground"
               }`}
               title={selectMode ? "Exit select mode" : "Select items"}
             >
@@ -127,7 +127,7 @@ export function GalleryToolbar({
               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium transition first:rounded-l-lg last:rounded-r-lg ${
                 galleryFilter === f
                   ? "bg-accent/12 text-accent-text"
-                  : "text-muted/60 hover:bg-surface-hover hover:text-foreground"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground"
               }`}
               title={FILTER_LABELS[f]}
             >
@@ -142,7 +142,7 @@ export function GalleryToolbar({
 
         {/* Size slider */}
         <div className="flex items-center gap-1.5">
-          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/50">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted">
             <rect x="1" y="1" width="5" height="5" rx="1" />
             <rect x="8" y="1" width="5" height="5" rx="1" />
             <rect x="1" y="8" width="5" height="5" rx="1" />
@@ -161,7 +161,7 @@ export function GalleryToolbar({
             }}
             className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-border [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
           />
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted/50">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 text-muted">
             <rect x="1" y="1" width="5" height="5" rx="1" />
             <rect x="8" y="1" width="5" height="5" rx="1" />
             <rect x="1" y="8" width="5" height="5" rx="1" />
@@ -176,7 +176,7 @@ export function GalleryToolbar({
         <div className="flex items-center">
           {searchOpen ? (
             <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1">
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-muted/50">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-muted">
                 <circle cx="6" cy="6" r="4.5" /><path d="M9.5 9.5L13 13" />
               </svg>
               <input
@@ -196,7 +196,7 @@ export function GalleryToolbar({
               {searchQuery && (
                 <button
                   onClick={() => onSearchChange("")}
-                  className="text-muted/60 hover:text-foreground"
+                  className="text-muted hover:text-foreground"
                 >
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                     <path d="M1 1l6 6M7 1l-6 6" />
@@ -207,7 +207,7 @@ export function GalleryToolbar({
           ) : (
             <button
               onClick={() => setSearchOpen(true)}
-              className="rounded-md p-1.5 text-muted/50 transition hover:bg-surface hover:text-foreground"
+              className="rounded-md p-1.5 text-muted transition hover:bg-surface hover:text-foreground"
               title="Search"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">

@@ -369,12 +369,12 @@ export function UpscalePanel({
                   : "border-border/60 hover:border-accent/40"
               }`}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted/40">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted/70">
                 <rect x="3" y="3" width="18" height="18" rx="3" />
                 <path d="M3 16l5-5 4 4 3-3 6 6" />
                 <circle cx="15.5" cy="8.5" r="1.5" />
               </svg>
-              <span className="text-xs text-muted/60">
+              <span className="text-xs text-muted">
                 Drop image or click to upload
               </span>
             </div>
@@ -395,7 +395,7 @@ export function UpscalePanel({
           className={`flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold tracking-wide transition ${
             canUpscale
               ? "bg-accent text-black hover:bg-accent-hover"
-              : "cursor-not-allowed bg-surface-hover text-muted/50"
+              : "cursor-not-allowed bg-surface-hover text-muted"
           }`}
         >
           {generating ? (

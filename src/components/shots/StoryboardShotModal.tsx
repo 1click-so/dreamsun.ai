@@ -146,7 +146,7 @@ export function StoryboardShotModal({
               </div>
             ) : (
               <div className="flex h-48 w-full items-center justify-center rounded-lg border border-dashed border-border">
-                <span className="text-xs text-muted/40">No image yet</span>
+                <span className="text-xs text-muted/70">No image yet</span>
               </div>
             )}
           </div>
@@ -167,7 +167,7 @@ export function StoryboardShotModal({
                   value={shot.title}
                   onChange={(e) => onUpdate({ title: e.target.value })}
                   placeholder="Shot title..."
-                  className="w-full bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted/30"
+                  className="w-full bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted/60"
                 />
                 <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-surface to-transparent" />
               </div>
@@ -214,7 +214,7 @@ export function StoryboardShotModal({
                     onChange={(v) => onUpdate({ imagePrompt: v })}
                     rows={4}
                     placeholder="Image prompt... (@ to ref images)"
-                    className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+                    className="w-full resize-y rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-accent"
                     images={tagImages}
                   />
                 </div>
@@ -223,7 +223,7 @@ export function StoryboardShotModal({
                 {imageSupportsNeg && !shot.imageNegativePrompt && (
                   <button
                     onClick={() => onUpdate({ imageNegativePrompt: " " })}
-                    className="flex items-center gap-1.5 text-xs text-muted/60 transition hover:text-destructive"
+                    className="flex items-center gap-1.5 text-xs text-muted transition hover:text-destructive"
                   >
                     <span className="flex h-4 w-4 items-center justify-center rounded-md bg-muted/10 text-[10px] font-bold leading-none">−</span>
                     Add negative prompt
@@ -234,14 +234,14 @@ export function StoryboardShotModal({
                     <div className="mb-1.5 flex items-center justify-between">
                       <label className="text-[11px] font-medium uppercase text-muted">Negative Prompt</label>
                       <button onClick={() => onUpdate({ imageNegativePrompt: "" })}
-                        className="text-[10px] text-muted/40 hover:text-destructive">Remove</button>
+                        className="text-[10px] text-muted/70 hover:text-destructive">Remove</button>
                     </div>
                     <textarea
                       value={shot.imageNegativePrompt.trim()}
                       onChange={(e) => onUpdate({ imageNegativePrompt: e.target.value })}
                       rows={2}
                       placeholder="no blur, no artifacts..."
-                      className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                      className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-destructive/40"
                     />
                   </div>
                 )}
@@ -337,7 +337,7 @@ export function StoryboardShotModal({
                     onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
                     rows={4}
                     placeholder="Video/motion prompt..."
-                    className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+                    className="w-full resize-y rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-accent"
                   />
                 </div>
 
@@ -345,7 +345,7 @@ export function StoryboardShotModal({
                 {videoSupportsNeg && !shot.videoNegativePrompt && (
                   <button
                     onClick={() => onUpdate({ videoNegativePrompt: " " })}
-                    className="flex items-center gap-1.5 text-xs text-muted/60 transition hover:text-destructive"
+                    className="flex items-center gap-1.5 text-xs text-muted transition hover:text-destructive"
                   >
                     <span className="flex h-4 w-4 items-center justify-center rounded-md bg-muted/10 text-[10px] font-bold leading-none">−</span>
                     Add negative prompt
@@ -356,14 +356,14 @@ export function StoryboardShotModal({
                     <div className="mb-1.5 flex items-center justify-between">
                       <label className="text-[11px] font-medium uppercase text-muted">Negative Prompt</label>
                       <button onClick={() => onUpdate({ videoNegativePrompt: "" })}
-                        className="text-[10px] text-muted/40 hover:text-destructive">Remove</button>
+                        className="text-[10px] text-muted/70 hover:text-destructive">Remove</button>
                     </div>
                     <textarea
                       value={shot.videoNegativePrompt.trim()}
                       onChange={(e) => onUpdate({ videoNegativePrompt: e.target.value })}
                       rows={2}
                       placeholder="blur, distort, low quality..."
-                      className="w-full resize-y rounded-lg border border-destructive/20 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                      className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-destructive/40"
                     />
                   </div>
                 )}

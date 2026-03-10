@@ -361,41 +361,41 @@ export function ShotCard({
         <input type="text" value={shot.title}
           onChange={(e) => onUpdate({ title: e.target.value })}
           placeholder="Shot title"
-          className="min-w-0 flex-1 bg-transparent text-base font-semibold text-foreground outline-none placeholder:text-muted/30" />
+          className="min-w-0 flex-1 bg-transparent text-base font-semibold text-foreground outline-none placeholder:text-muted" />
         {isBusy && (
-          <span className="shimmer-text flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-accent">
+          <span className="shimmer-text flex shrink-0 items-center gap-1.5 text-xs font-medium text-accent">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
             {isImageBusy ? "Generating..." : "Animating..."}
           </span>
         )}
-        {shot.error && <span className="shrink-0 text-[11px] text-destructive">{shot.error}</span>}
+        {shot.error && <span className="shrink-0 text-xs text-destructive">{shot.error}</span>}
         <button onClick={() => setShowSettings(!showSettings)}
-          className={`shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-medium transition ${hasOverrides ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:border-accent/30"}`}
+          className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${hasOverrides ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:border-accent/30"}`}
         >{showSettings ? "Less" : "More"}</button>
-        <button onClick={onRemove} className="shrink-0 text-[11px] text-muted hover:text-destructive">delete</button>
+        <button onClick={onRemove} className="shrink-0 text-xs font-medium text-muted hover:text-destructive">delete</button>
       </div>
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 border-t border-border lg:grid-cols-[1fr_1fr_auto]">
 
         {/* BENTO: Image Controls */}
-        <div className="flex flex-col border-b border-border p-3 space-y-2 lg:border-b-0 lg:border-r">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Image</span>
+        <div className="flex flex-col border-b border-border p-3.5 space-y-2 lg:border-b-0 lg:border-r">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">Image</span>
           <div>
             <TaggableTextarea
               value={shot.imagePrompt}
               onChange={(v) => onUpdate({ imagePrompt: v })}
               rows={3}
               placeholder="Image prompt... (@ to reference images)"
-              className="w-full resize-y rounded-lg border border-border bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+              className="w-full resize-y rounded-lg border border-border bg-input px-2.5 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 focus:border-accent"
               images={tagImages}
             />
             {imageSupportsNeg && !shot.imageNegativePrompt && (
               <button
                 onClick={() => onUpdate({ imageNegativePrompt: " " })}
-                className="mt-1 flex items-center gap-1 text-[10px] text-muted/60 transition hover:text-destructive"
+                className="mt-1 flex items-center gap-1 text-[10px] text-muted transition hover:text-destructive"
               >
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-md bg-muted/10 text-[9px] font-bold leading-none">−</span>
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-md bg-muted/10 text-[10px] font-bold leading-none">−</span>
                 Negative
               </button>
             )}
@@ -406,11 +406,11 @@ export function ShotCard({
                   onChange={(e) => onUpdate({ imageNegativePrompt: e.target.value })}
                   rows={2}
                   placeholder="no blur, no artifacts, no distortion..."
-                  className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                  className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-2.5 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 focus:border-destructive/40"
                 />
                 <button
                   onClick={() => onUpdate({ imageNegativePrompt: "" })}
-                  className="absolute right-1.5 top-1.5 text-[9px] text-muted/40 hover:text-destructive"
+                  className="absolute right-1.5 top-1.5 text-[10px] text-muted/70 hover:text-destructive"
                 >✕</button>
               </div>
             )}
@@ -429,7 +429,7 @@ export function ShotCard({
                   if (url) onRefUrlDrop(url);
                 }
               }}>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">References</span>
+              <span className="mb-1 block text-[10px] font-medium uppercase text-muted">References</span>
               <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                 {refImages.map((ref, i) => (
                   <div key={ref.id} className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border" draggable onDragStart={(e) => ref.url && handleDragStart(e, ref.url)}>
@@ -445,13 +445,13 @@ export function ShotCard({
                   </div>
                 ))}
                 <button onClick={() => (document.getElementById(`shot-ref-${shot.id}`) as HTMLInputElement)?.click()}
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-[11px] text-muted hover:border-accent/50 hover:text-accent">+</button>
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted hover:border-accent/50 hover:text-accent">+</button>
                 <input id={`shot-ref-${shot.id}`} ref={refInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={onRefUpload} className="hidden" />
               </div>
             </div>
             {/* Generations column */}
             <div>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Generations{history.length > 0 ? ` (${history.length})` : ""}</span>
+              <span className="mb-1 block text-[10px] font-medium uppercase text-muted">Generations{history.length > 0 ? ` (${history.length})` : ""}</span>
               {history.length > 0 ? (
                 <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                   {history.map((url, i) => {
@@ -476,7 +476,7 @@ export function ShotCard({
                   })}
                 </div>
               ) : (
-                <span className="text-[9px] text-muted/40">No image generations yet</span>
+                <span className="text-[10px] text-muted/70">No image generations yet</span>
               )}
             </div>
           </div>
@@ -484,7 +484,7 @@ export function ShotCard({
           {showSettings && (
             <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
               <div>
-                <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Model</label>
+                <label className="mb-0.5 block text-[10px] font-medium uppercase text-muted">Model</label>
                 <Select
                   value={imgSettings.modelId ?? ""}
                   options={[
@@ -496,7 +496,7 @@ export function ShotCard({
                 />
               </div>
               <div>
-                <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Ratio</label>
+                <label className="mb-0.5 block text-[10px] font-medium uppercase text-muted">Ratio</label>
                 <Select
                   value={imgSettings.aspectRatio ?? ""}
                   options={[
@@ -512,9 +512,9 @@ export function ShotCard({
           {/* Generate button */}
           <div className="mt-auto pt-2">
             {isImageBusy ? (
-              <Button variant="destructive" size="xs" onClick={onCancelImage}>Cancel</Button>
+              <Button variant="destructive" size="sm" onClick={onCancelImage}>Cancel</Button>
             ) : (
-              <Button variant="primary" size="xs" onClick={onGenerateImage}>
+              <Button variant="primary" size="sm" onClick={onGenerateImage}>
                 {shot.imageStatus === "done" ? "Regenerate" : "Generate"}
                 {imgCredits > 0 && (
                   <span className="ml-1 flex items-center gap-0.5 opacity-60">
@@ -527,19 +527,19 @@ export function ShotCard({
         </div>
 
         {/* BENTO: Video Controls */}
-        <div className="flex flex-col border-b border-border p-3 space-y-2 lg:border-b-0 lg:border-r">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Video</span>
+        <div className="flex flex-col border-b border-border p-3.5 space-y-2 lg:border-b-0 lg:border-r">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">Video</span>
           <div>
             <textarea value={shot.videoPrompt}
               onChange={(e) => onUpdate({ videoPrompt: e.target.value })}
               rows={3} placeholder="Video/motion prompt..."
-              className="w-full resize-y rounded-lg border border-border bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-accent" />
+              className="w-full resize-y rounded-lg border border-border bg-input px-2.5 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 focus:border-accent" />
             {videoSupportsNeg && !shot.videoNegativePrompt && (
               <button
                 onClick={() => onUpdate({ videoNegativePrompt: " " })}
-                className="mt-1 flex items-center gap-1 text-[10px] text-muted/60 transition hover:text-destructive"
+                className="mt-1 flex items-center gap-1 text-[10px] text-muted transition hover:text-destructive"
               >
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-md bg-muted/10 text-[9px] font-bold leading-none">−</span>
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-md bg-muted/10 text-[10px] font-bold leading-none">−</span>
                 Negative
               </button>
             )}
@@ -550,11 +550,11 @@ export function ShotCard({
                   onChange={(e) => onUpdate({ videoNegativePrompt: e.target.value })}
                   rows={2}
                   placeholder="blur, distort, low quality..."
-                  className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 focus:border-destructive/40"
+                  className="w-full resize-y rounded-lg border border-destructive/20 bg-input px-2.5 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 focus:border-destructive/40"
                 />
                 <button
                   onClick={() => onUpdate({ videoNegativePrompt: "" })}
-                  className="absolute right-1.5 top-1.5 text-[9px] text-muted/40 hover:text-destructive"
+                  className="absolute right-1.5 top-1.5 text-[10px] text-muted/70 hover:text-destructive"
                 >✕</button>
               </div>
             )}
@@ -563,11 +563,11 @@ export function ShotCard({
           <div className="grid grid-cols-2 gap-2">
             {/* Settings column (mirrors References column) */}
             <div>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Settings</span>
+              <span className="mb-1 block text-[10px] font-medium uppercase text-muted">Settings</span>
               <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                 {(effVideoModel.durations ?? []).length > 1 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-medium uppercase text-muted">Dur</span>
+                    <span className="text-[10px] font-medium uppercase text-muted">Dur</span>
                     <Select
                       value={String(vidSettings.duration ?? "")}
                       options={[
@@ -581,7 +581,7 @@ export function ShotCard({
                 )}
                 {(effVideoModel.aspectRatios ?? []).length > 1 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-medium uppercase text-muted">Ratio</span>
+                    <span className="text-[10px] font-medium uppercase text-muted">Ratio</span>
                     <Select
                       value={vidSettings.aspectRatio ?? ""}
                       options={[
@@ -595,7 +595,7 @@ export function ShotCard({
                 )}
                 {(effVideoModel.resolutions ?? []).length > 1 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-medium uppercase text-muted">Res</span>
+                    <span className="text-[10px] font-medium uppercase text-muted">Res</span>
                     <Select
                       value={vidSettings.resolution ?? ""}
                       options={[
@@ -612,7 +612,7 @@ export function ShotCard({
                   return (
                     <button
                       onClick={() => onVideoSettingsChange({ generateAudio: effAudio ? false : true })}
-                      className={`rounded-lg border px-1.5 py-0.5 text-[9px] font-medium uppercase transition ${
+                      className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-medium uppercase transition ${
                         effAudio
                           ? "border-accent/30 bg-accent/10 text-accent"
                           : "border-border bg-input text-muted hover:border-muted"
@@ -624,7 +624,7 @@ export function ShotCard({
             </div>
             {/* Video Generations column (mirrors Image Generations column) */}
             <div>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Generations{videoHistory.length > 0 ? ` (${videoHistory.length})` : ""}</span>
+              <span className="mb-1 block text-[10px] font-medium uppercase text-muted">Generations{videoHistory.length > 0 ? ` (${videoHistory.length})` : ""}</span>
               {videoHistory.length > 0 ? (
                 <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pb-1 storyboard-scroll">
                   {videoHistory.map((url, i) => (
@@ -639,7 +639,7 @@ export function ShotCard({
                   ))}
                 </div>
               ) : (
-                <span className="text-[9px] text-muted/40">No video generations yet</span>
+                <span className="text-[10px] text-muted/70">No video generations yet</span>
               )}
             </div>
           </div>
@@ -647,7 +647,7 @@ export function ShotCard({
           {showSettings && (
             <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
               <div>
-                <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Model</label>
+                <label className="mb-0.5 block text-[10px] font-medium uppercase text-muted">Model</label>
                 <Select
                   value={vidSettings.modelId ?? ""}
                   options={[
@@ -664,7 +664,7 @@ export function ShotCard({
               </div>
               {effVideoModel.supportsCameraFixed && (
                 <div>
-                  <label className="mb-0.5 block text-[9px] font-medium uppercase text-muted">Camera</label>
+                  <label className="mb-0.5 block text-[10px] font-medium uppercase text-muted">Camera</label>
                   <Select
                     value={vidSettings.cameraFixed == null ? "" : vidSettings.cameraFixed ? "true" : "false"}
                     options={[
@@ -682,12 +682,12 @@ export function ShotCard({
           {/* Audio upload for audio-to-video models */}
           {effVideoModel.requiresAudio && (
             <div>
-              <span className="mb-1 block text-[9px] font-medium uppercase text-muted">Audio (2-20s)</span>
+              <span className="mb-1 block text-[10px] font-medium uppercase text-muted">Audio (2-20s)</span>
               {shot.audioUrl ? (
                 <div className="flex items-center gap-2">
                   <audio src={shot.audioUrl} controls className="h-7 flex-1" style={{ maxWidth: 180 }} />
                   <button onClick={() => onUpdate({ audioUrl: null, audioRef: null })}
-                    className="text-[9px] text-muted hover:text-destructive">✕</button>
+                    className="text-[10px] text-muted hover:text-destructive">✕</button>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5">
@@ -727,9 +727,9 @@ export function ShotCard({
           {/* Animate button */}
           <div className="mt-auto pt-2">
             {isVideoBusy ? (
-              <Button variant="destructive" size="xs" onClick={onCancelVideo}>Cancel</Button>
+              <Button variant="destructive" size="sm" onClick={onCancelVideo}>Cancel</Button>
             ) : (
-              <Button variant="secondary" size="xs" onClick={onAnimateShot} disabled={!canAnimate && !effVideoModel.requiresAudio}>
+              <Button variant="secondary" size="sm" onClick={onAnimateShot} disabled={!canAnimate && !effVideoModel.requiresAudio}>
                 {shot.videoStatus === "done" ? "Re-animate" : "Animate"}
                 {vidCredits > 0 && (
                   <span className="ml-1 flex items-center gap-0.5 opacity-60">
@@ -748,7 +748,7 @@ export function ShotCard({
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, "first")}
           >
-            <span className="mb-1 block text-[9px] font-medium uppercase tracking-wider text-muted">First</span>
+            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-muted">First</span>
             {shot.imageUrl ? (
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.imageUrl!)}>
                 <button onClick={() => onOpenLightbox(shot.imageUrl!, "image")} className="block">
@@ -762,7 +762,7 @@ export function ShotCard({
                   </div>
                 </button>
                 <button onClick={() => onUpdate({ imageUrl: null, imageStatus: "pending" as ShotStatus })}
-                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[9px] text-white/70 hover:text-white">x</button>
+                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white/70 hover:text-white">x</button>
               </div>
             ) : (
               <button
@@ -774,7 +774,7 @@ export function ShotCard({
                     <div className="absolute inset-0 skeleton-shimmer" />
                     <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
                   </div>
-                ) : <span className="text-[8px] text-muted/40">Drop or<br/>click</span>}
+                ) : <span className="text-[8px] text-muted/70">Drop or<br/>click</span>}
               </button>
             )}
             <input id={`first-frame-${shot.id}`} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
@@ -798,7 +798,7 @@ export function ShotCard({
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, "last")}
           >
-            <span className="mb-1 block text-[9px] font-medium uppercase tracking-wider text-muted">Last</span>
+            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-muted">Last</span>
             {endFrameSrc ? (
               <div className="relative" draggable onDragStart={(e) => handleDragStart(e, shot.endImageUrl ?? endFrameSrc)}>
                 <button onClick={() => onOpenLightbox(endFrameSrc, "image")} className="block">
@@ -825,7 +825,7 @@ export function ShotCard({
                   </div>
                 </button>
                 <button onClick={onEndFrameRemove}
-                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[9px] text-white/70 hover:text-white">x</button>
+                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white/70 hover:text-white">x</button>
                 {endFrameUploading && <div className="absolute inset-0 flex items-center justify-center rounded-md bg-background/60"><div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>}
               </div>
             ) : (
@@ -833,7 +833,7 @@ export function ShotCard({
                 onClick={() => (document.getElementById(`last-frame-${shot.id}`) as HTMLInputElement)?.click()}
                 className="flex cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border transition hover:border-accent/40 hover:text-accent"
                 style={{ width: outputW, height: outputH }}>
-                <span className="text-[8px] text-muted/40">Drop or<br/>click</span>
+                <span className="text-[8px] text-muted/70">Drop or<br/>click</span>
               </button>
             )}
             <input id={`last-frame-${shot.id}`} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
@@ -843,7 +843,7 @@ export function ShotCard({
 
           {/* Video */}
           <div className="text-center">
-            <span className="mb-1 block text-[9px] font-medium uppercase tracking-wider text-muted">Video</span>
+            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-muted">Video</span>
             {shot.videoUrl ? (
               <div
                 className="group relative cursor-pointer"
@@ -868,7 +868,7 @@ export function ShotCard({
                     <div className="absolute inset-0 skeleton-shimmer" />
                     <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
                   </>
-                ) : <span className="text-[8px] text-muted/40">No video</span>}
+                ) : <span className="text-[8px] text-muted/70">No video</span>}
               </div>
             )}
             {/* Chain to next shot — extract last frame */}
@@ -910,8 +910,8 @@ export function ShotCard({
             <div className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2">
               <div className="flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 shadow-md ring-1 ring-border">
                 <div className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                <span className="text-[9px] font-medium text-muted">Extracting frame...</span>
-                <button onClick={cancelExtract} className="text-[9px] text-muted/60 transition hover:text-accent">✕</button>
+                <span className="text-[10px] font-medium text-muted">Extracting frame...</span>
+                <button onClick={cancelExtract} className="text-[10px] text-muted transition hover:text-accent">✕</button>
               </div>
             </div>
           )}

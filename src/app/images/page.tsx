@@ -533,7 +533,7 @@ function GalleryCard({
 
 function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <label className={`mb-1.5 block text-[10px] font-medium uppercase tracking-wider text-foreground/60 ${className ?? ""}`}>
+    <label className={`mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-foreground/85 ${className ?? ""}`}>
       {children}
     </label>
   );
@@ -555,10 +555,10 @@ function PillButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md border px-2 py-1 text-[10px] font-medium transition ${
+      className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
         active
           ? "border-accent/30 bg-accent/10 text-accent-text"
-          : "border-border text-foreground/50 hover:border-accent/20 hover:text-foreground"
+          : "border-border bg-surface text-foreground/85 hover:border-accent/20 hover:bg-surface-hover hover:text-foreground"
       } ${className ?? ""}`}
     >
       {children}
@@ -1404,7 +1404,7 @@ export default function GeneratePage() {
                               className="h-full w-full object-cover"
                             />
                           </button>
-                          <span className="mt-0.5 block max-w-[56px] truncate text-center text-[8px] text-muted/60">
+                          <span className="mt-0.5 block max-w-[56px] truncate text-center text-[8px] text-muted">
                             {char.name}
                           </span>
                           <button
@@ -1419,7 +1419,7 @@ export default function GeneratePage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-muted/60">
+                    <p className="text-[10px] text-muted">
                       Upload reference images, then save as character
                     </p>
                   )}
@@ -1611,7 +1611,7 @@ export default function GeneratePage() {
                 <div>
                   <button
                     onClick={() => setNegativeOpen(!negativeOpen)}
-                    className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-wider text-foreground/60 transition hover:text-foreground"
+                    className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-wider text-foreground/85 transition hover:text-foreground"
                   >
                     Negative Prompt
                     <IconChevron open={negativeOpen} />
@@ -1709,7 +1709,7 @@ export default function GeneratePage() {
                   className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold transition ${
                     canGenerate
                       ? "bg-accent text-black hover:bg-accent-hover"
-                      : "cursor-not-allowed bg-surface-hover text-muted/50"
+                      : "cursor-not-allowed bg-surface-hover text-muted"
                   }`}
                 >
                   {isGenerating ? (
@@ -1732,7 +1732,7 @@ export default function GeneratePage() {
           <div className="flex-1 overflow-y-auto p-3">
             {!hasAnyContent ? (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-muted/60">Generate your first image</p>
+                <p className="text-sm text-muted">Generate your first image</p>
               </div>
             ) : (
               <GalleryGrid
@@ -1792,16 +1792,16 @@ export default function GeneratePage() {
               ) : (
                 <div className="text-center">
                   <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-surface">
-                    <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted/50">
+                    <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted">
                       <rect x="2" y="2" width="16" height="16" rx="3" />
                       <circle cx="7" cy="7" r="1.5" />
                       <path d="M2 14l4-4 3 3 4-4 5 5" />
                     </svg>
                   </div>
-                  <p className="text-sm font-medium text-muted/60">
+                  <p className="text-sm font-medium text-muted">
                     Your generations will appear here
                   </p>
-                  <p className="mt-1.5 text-[11px] text-muted/50">
+                  <p className="mt-1.5 text-[11px] text-muted">
                     Write a prompt and hit Generate
                   </p>
                 </div>
@@ -1928,7 +1928,7 @@ export default function GeneratePage() {
                   {referenceImages.length < maxImages && (
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 text-muted/50 transition hover:border-accent/40 hover:text-accent"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 text-muted transition hover:border-accent/40 hover:text-accent"
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M7 2v10M2 7h10" />
@@ -1955,18 +1955,18 @@ export default function GeneratePage() {
                   }
                 }}
                 placeholder={promptBarDragOver ? "Drop image to use as reference..." : "Describe your image..."}
-                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted"
-                style={{ minHeight: "44px", maxHeight: "140px" }}
+                className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-5 pt-4 pb-1.5 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted"
+                style={{ minHeight: "48px", maxHeight: "160px" }}
               />
 
               {/* Bottom bar — attach + hints left, generate right */}
-              <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
+              <div className="flex items-center justify-between px-4 pb-3 pt-1">
                 <div className="flex items-center gap-2">
                   {/* Add reference image — squared box with plus, consistent with rest of platform */}
                   {primaryModel.editVariant && (
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/60 transition hover:border-accent/40 hover:text-accent"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted transition hover:border-accent/40 hover:text-accent"
                       title="Add reference image"
                     >
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1974,17 +1974,17 @@ export default function GeneratePage() {
                       </svg>
                     </button>
                   )}
-                  <span className="select-none text-[10px] text-muted/40">
+                  <span className="select-none text-[10px] text-muted/70">
                     ↵ generate · ⇧↵ new line
                   </span>
                 </div>
                 <button
                   onClick={() => handleGenerate()}
                   disabled={!canGenerate}
-                  className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
+                  className={`flex items-center gap-2 rounded-full py-2.5 pl-4 pr-5 text-sm font-semibold tracking-wide transition ${
                     canGenerate
                       ? "bg-accent text-black hover:bg-accent-hover"
-                      : "cursor-not-allowed bg-surface-hover text-muted/50"
+                      : "cursor-not-allowed bg-surface-hover text-muted"
                   }`}
                   title="Generate (Enter)"
                 >
@@ -2778,7 +2778,7 @@ function GalleryGrid({
           {isGenerating ? (
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted/60">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                 Generating {generatingSlots.length} {generatingSlots.length === 1 ? "image" : "images"}
               </span>
             </div>
@@ -2863,7 +2863,7 @@ function GalleryGrid({
                         <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.07] to-transparent" />
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                           <div className="h-6 w-24 skeleton-shimmer rounded-md" />
-                          <span className="animate-pulse text-[10px] font-medium text-muted/50">
+                          <span className="animate-pulse text-[10px] font-medium text-muted">
                             {entry.modelName}
                           </span>
                         </div>

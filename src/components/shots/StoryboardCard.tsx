@@ -160,7 +160,7 @@ export function StoryboardCard({
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; };
 
   return (
-    <div className={`relative flex w-56 shrink-0 flex-col overflow-hidden rounded-xl border bg-surface transition-all ${
+    <div className={`relative flex w-64 shrink-0 flex-col overflow-hidden rounded-xl border bg-surface transition-all ${
       isBlurred ? "pointer-events-none scale-[0.98] opacity-40 blur-[2px]" : ""
     } ${
       isBusy ? "border-accent/50 glow-border"
@@ -298,7 +298,7 @@ export function StoryboardCard({
                 <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
               </div>
             ) : (
-              <span className="text-xs text-muted/40">Drop or click</span>
+              <span className="text-xs text-muted/70">Drop or click</span>
             )}
           </button>
         )}
@@ -364,16 +364,16 @@ export function StoryboardCard({
       </div>
 
       {/* Title */}
-      <div className="relative px-2 pt-2">
+      <div className="relative px-2.5 pt-2.5">
         <input type="text" value={shot.title}
           onChange={(e) => onUpdate({ title: e.target.value })}
           placeholder="Title"
-          className="w-full bg-transparent text-xs font-medium text-foreground outline-none placeholder:text-muted/30" />
+          className="w-full bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-muted/60" />
         <div className="pointer-events-none absolute right-2 top-2 h-full w-6 bg-gradient-to-l from-surface to-transparent" />
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-1.5 px-2 py-2">
+      <div className="flex gap-2 px-2.5 py-2.5">
         {isImageBusy ? (
           <Button variant="destructive" size="xs" className="flex-1" onClick={onCancelImage}>Cancel</Button>
         ) : (
@@ -419,7 +419,7 @@ export function StoryboardCard({
               }
             }}
             disabled={extracting}
-            className="flex w-full items-center justify-center gap-1 rounded-lg border border-border px-2 py-1 text-[9px] font-medium text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-medium text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
           >
             {extracting ? (
               <>
@@ -434,16 +434,16 @@ export function StoryboardCard({
       )}
 
       {/* Settings + Delete */}
-      <div className="flex items-center gap-1 border-t border-border/50 px-2 py-1.5">
+      <div className="flex items-center gap-1.5 border-t border-border/50 px-2.5 py-2">
         <button onClick={() => onOpenModal("image")}
-          className="flex-1 rounded-md py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted transition hover:bg-accent/10 hover:text-accent">
+          className="flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wider text-muted transition hover:bg-accent/10 hover:text-accent">
           Image
         </button>
         <button onClick={() => onOpenModal("video")}
-          className="flex-1 rounded-md py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted transition hover:bg-accent/10 hover:text-accent">
+          className="flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wider text-muted transition hover:bg-accent/10 hover:text-accent">
           Video
         </button>
-        <button onClick={onRemove} className="px-1 text-[9px] text-muted/40 hover:text-destructive">&times;</button>
+        <button onClick={onRemove} className="px-1.5 text-[10px] text-muted/70 hover:text-destructive">&times;</button>
       </div>
     </div>
   );

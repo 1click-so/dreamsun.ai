@@ -31,6 +31,12 @@ export interface CreditRange {
 let cache: Record<string, ModelPricing> | null = null;
 let rangesCache: Record<string, CreditRange> | null = null;
 
+/** Clear pricing cache — forces re-fetch on next render */
+export function invalidatePricing() {
+  cache = null;
+  rangesCache = null;
+}
+
 export function usePricing() {
   const [pricing, setPricing] = useState<Record<string, ModelPricing>>(cache ?? {});
   const [creditRanges, setCreditRanges] = useState<Record<string, CreditRange>>(rangesCache ?? {});

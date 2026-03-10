@@ -1153,7 +1153,7 @@ export default function VideoPage() {
                     <div>
                       <button
                         onClick={() => setNegativeOpen(!negativeOpen)}
-                        className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-wider text-foreground/60 transition hover:text-foreground"
+                        className="flex w-full items-center justify-between text-[11px] font-medium uppercase tracking-wider text-foreground/85 transition hover:text-foreground"
                       >
                         Negative Prompt
                         <IconChevron open={negativeOpen} />
@@ -1291,15 +1291,15 @@ export default function VideoPage() {
               ) : (
                 <div className="text-center">
                   <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-surface">
-                    <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted/50">
+                    <svg width="32" height="32" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-muted">
                       <rect x="2" y="3" width="16" height="14" rx="3" />
                       <path d="M8 7l5 3-5 3V7z" />
                     </svg>
                   </div>
-                  <p className="text-sm font-medium text-muted/60">
+                  <p className="text-sm font-medium text-muted">
                     Your videos will appear here
                   </p>
-                  <p className="mt-1.5 text-[11px] text-muted/50">
+                  <p className="mt-1.5 text-[11px] text-muted">
                     Upload a first frame image and hit Generate
                   </p>
                 </div>
@@ -1417,7 +1417,7 @@ export default function VideoPage() {
                   )}
                   {activeMode === "create" && supportsLastFrame && lastFrame && (
                     <>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted/40">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted/70">
                         <path d="M4 6h4M6.5 4l2 2-2 2" />
                       </svg>
                       <div className="group/ref relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60">
@@ -1436,7 +1436,7 @@ export default function VideoPage() {
                   )}
                   {activeMode === "motion" && refVideo && (
                     <>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted/40">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-muted/70">
                         <path d="M4 6h4M6.5 4l2 2-2 2" />
                       </svg>
                       <div className="group/ref relative h-10 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60">
@@ -1458,7 +1458,7 @@ export default function VideoPage() {
                       </div>
                     </>
                   )}
-                  <span className="text-[9px] text-muted/40">{currentModel.name}</span>
+                  <span className="text-[9px] text-muted/70">{currentModel.name}</span>
                 </div>
               )}
 
@@ -1480,7 +1480,7 @@ export default function VideoPage() {
                             onChange={(e) => updateShotPrompt(i, e.target.value)}
                             placeholder={`Shot ${i + 1} — describe scene...`}
                             rows={1}
-                            className="scrollbar-none min-w-0 flex-1 resize-none overflow-hidden bg-transparent text-xs leading-relaxed text-foreground outline-none placeholder:text-muted/40"
+                            className="scrollbar-none min-w-0 flex-1 resize-none overflow-hidden bg-transparent text-xs leading-relaxed text-foreground outline-none placeholder:text-muted/70"
                             onInput={(e) => {
                               const el = e.target as HTMLTextAreaElement;
                               el.style.height = "auto";
@@ -1504,7 +1504,7 @@ export default function VideoPage() {
                           {shots.length > 1 && (
                             <button
                               onClick={() => removeShot(i)}
-                              className="mt-0.5 shrink-0 rounded p-0.5 text-muted/30 transition hover:text-red-400 opacity-0 group-hover/shot:opacity-100"
+                              className="mt-0.5 shrink-0 rounded p-0.5 text-muted transition hover:text-red-400 opacity-0 group-hover/shot:opacity-100"
                               title="Remove shot"
                             >
                               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1519,7 +1519,7 @@ export default function VideoPage() {
                     {shots.length < 6 && (
                       <button
                         onClick={addShot}
-                        className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/40 py-1.5 text-[10px] font-medium text-muted/60 transition hover:border-accent/40 hover:text-accent"
+                        className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/40 py-1.5 text-[10px] font-medium text-muted transition hover:border-accent/40 hover:text-accent"
                       >
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                           <path d="M5 1v8M1 5h8" />
@@ -1532,17 +1532,17 @@ export default function VideoPage() {
                   {/* Bottom bar — multi-shot */}
                   <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
                     <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-medium ${multiShotTotalDuration > maxModelDuration ? "text-red-400" : "text-muted/60"}`}>
+                      <span className={`text-[10px] font-medium ${multiShotTotalDuration > maxModelDuration ? "text-red-400" : "text-muted"}`}>
                         {shots.length} shots · {multiShotTotalDuration}s{multiShotTotalDuration > maxModelDuration ? ` (max ${maxModelDuration}s)` : ""}
                       </span>
                     </div>
                     <button
                       onClick={() => handleGenerate()}
                       disabled={!canGenerate}
-                      className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
+                      className={`flex items-center gap-2 rounded-full py-2.5 pl-4 pr-5 text-sm font-semibold tracking-wide transition ${
                         canGenerate
                           ? "bg-accent text-black hover:bg-accent-hover"
-                          : "cursor-not-allowed bg-surface-hover text-muted/50"
+                          : "cursor-not-allowed bg-surface-hover text-muted"
                       }`}
                       title="Generate (Enter)"
                     >
@@ -1575,33 +1575,33 @@ export default function VideoPage() {
                       }
                     }}
                     placeholder={promptBarDragOver ? "Drop image as first frame..." : "Describe the video motion..."}
-                    className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted"
-                    style={{ minHeight: "44px", maxHeight: "140px" }}
+                    className="scrollbar-none block w-full resize-none overflow-y-auto bg-transparent px-5 pt-4 pb-1.5 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted"
+                    style={{ minHeight: "48px", maxHeight: "160px" }}
                   />
 
                   {/* Bottom bar — single prompt */}
-                  <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
+                  <div className="flex items-center justify-between px-4 pb-3 pt-1">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => firstInputRef.current?.click()}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted/60 transition hover:border-accent/40 hover:text-accent"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted transition hover:border-accent/40 hover:text-accent"
                         title="Add first frame"
                       >
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                           <path d="M6 1v10M1 6h10" />
                         </svg>
                       </button>
-                      <span className="select-none text-[10px] text-muted/40">
+                      <span className="select-none text-[10px] text-muted/70">
                         ↵ generate · ⇧↵ new line
                       </span>
                     </div>
                     <button
                       onClick={() => handleGenerate()}
                       disabled={!canGenerate}
-                      className={`flex items-center gap-2 rounded-full py-2 pl-3.5 pr-4 text-xs font-semibold tracking-wide transition ${
+                      className={`flex items-center gap-2 rounded-full py-2.5 pl-4 pr-5 text-sm font-semibold tracking-wide transition ${
                         canGenerate
                           ? "bg-accent text-black hover:bg-accent-hover"
-                          : "cursor-not-allowed bg-surface-hover text-muted/50"
+                          : "cursor-not-allowed bg-surface-hover text-muted"
                       }`}
                       title="Generate (Enter)"
                     >

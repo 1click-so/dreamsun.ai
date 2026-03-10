@@ -317,9 +317,9 @@ function SceneOverview({
         {scenes.length === 0 ? (
           <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-dashed border-border">
             <div className="text-center">
-              <Film size={40} className="mx-auto mb-3 text-muted/30" />
+              <Film size={40} className="mx-auto mb-3 text-muted/60" />
               <p className="mb-1 text-sm text-muted">No scenes yet</p>
-              <p className="mb-4 text-xs text-muted/50">Create your first scene to start producing</p>
+              <p className="mb-4 text-xs text-muted">Create your first scene to start producing</p>
               <button
                 onClick={onCreateScene}
                 className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:bg-accent-hover"
@@ -373,7 +373,7 @@ function SceneOverview({
                       </>
                     ) : (
                       <div className="flex h-full w-full items-center justify-center">
-                        <Film size={32} className="text-muted/20" />
+                        <Film size={32} className="text-muted" />
                       </div>
                     )}
                     {/* Overlay gradient */}
@@ -422,11 +422,11 @@ function SceneOverview({
                       </button>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-muted/50">{date}</span>
+                      <span className="text-[10px] text-muted">{date}</span>
                       <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
                         <button
                           onClick={() => { setEditingId(scene.id); setEditName(scene.name); }}
-                          className="rounded-md p-1 text-muted/50 transition hover:bg-surface-hover hover:text-foreground"
+                          className="rounded-md p-1 text-muted transition hover:bg-surface-hover hover:text-foreground"
                           title="Rename"
                         >
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -443,7 +443,7 @@ function SceneOverview({
                         ) : (
                           <button
                             onClick={() => setDeleteConfirm(scene.id)}
-                            className="rounded-md p-1 text-muted/50 transition hover:bg-surface-hover hover:text-destructive"
+                            className="rounded-md p-1 text-muted transition hover:bg-surface-hover hover:text-destructive"
                             title="Delete"
                           >
                             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -2209,7 +2209,7 @@ export function ShotListEditor({
                       value={outputFolder}
                       onChange={(e) => handleOutputFolderChange(e.target.value)}
                       placeholder="G:\My Drive\Shorts\PROJECT"
-                      className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
+                      className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 transition focus:border-accent"
                     />
                   </div>
                 )}
@@ -2236,7 +2236,7 @@ export function ShotListEditor({
               }}
             >
               <p className="mb-2 text-[11px] font-medium text-muted">Master Reference</p>
-              <p className="mb-2.5 text-[9px] text-muted/50">Applied to all shots — drag & drop or click +</p>
+              <p className="mb-2.5 text-[9px] text-muted">Applied to all shots — drag & drop or click +</p>
               <div className="flex items-center gap-2">
                 {charRefs.map((ref, i) => (
                   <div key={ref.id} className="relative h-14 w-14 overflow-hidden rounded-md border border-border">
@@ -2269,7 +2269,7 @@ export function ShotListEditor({
             {/* Prompt Prefix Cell */}
             <div className="rounded-lg border border-border bg-surface p-3">
               <p className="mb-2 text-[11px] font-medium text-muted">Prompt Prefix</p>
-              <p className="mb-2.5 text-[9px] text-muted/50">Prepended to every shot prompt</p>
+              <p className="mb-2.5 text-[9px] text-muted">Prepended to every shot prompt</p>
               <input
                 type="text"
                 value={promptPrefix}
@@ -2277,7 +2277,7 @@ export function ShotListEditor({
                   setPromptPrefix(e.target.value);
                 }}
                 placeholder="e.g. The same donkey with the same animated characteristics. Do not modify the animation style..."
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/40 transition focus:border-accent"
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 transition focus:border-accent"
               />
             </div>
           </div>
@@ -2291,7 +2291,7 @@ export function ShotListEditor({
         <h2 className="flex items-center gap-2.5 text-lg font-bold uppercase tracking-widest text-foreground">
           <Film size={18} className="text-accent" />
           Shots
-          <span className="text-xs font-normal normal-case tracking-normal text-muted/50">
+          <span className="text-xs font-normal normal-case tracking-normal text-muted">
             {shots.length > 0 ? `${shots.length} shot${shots.length !== 1 ? "s" : ""}` : ""}
           </span>
         </h2>
@@ -2490,7 +2490,7 @@ export function ShotListEditor({
                       confirmNewShotFromRef(newShotModal.imageUrl, val);
                     }
                   }}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-accent"
                   placeholder={`e.g. ${newShotModal.suggestedNumber} or 1B`}
                 />
                 <p className="mt-1 text-[10px] text-muted">Type a number like &quot;5&quot; or &quot;1B&quot; to insert between shots</p>
@@ -2540,17 +2540,17 @@ export function ShotListEditor({
                       type="text"
                       name="shotNumber"
                       defaultValue={addShotModal.suggestedNumber}
-                      className="w-full rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                      className="w-full rounded-lg border-0 bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:ring-1 focus:ring-accent/30"
                       placeholder="e.g. 5"
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="mb-1 block text-[11px] font-medium text-muted">Title <span className="text-muted/40">(optional)</span></label>
+                    <label className="mb-1 block text-[11px] font-medium text-muted">Title <span className="text-muted/70">(optional)</span></label>
                     <input
                       type="text"
                       name="shotTitle"
                       autoFocus
-                      className="w-full rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                      className="w-full rounded-lg border-0 bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:ring-1 focus:ring-accent/30"
                       placeholder="e.g. Wide establishing shot"
                     />
                   </div>
@@ -2558,11 +2558,11 @@ export function ShotListEditor({
 
                 {/* Image Prompt */}
                 <div>
-                  <label className="mb-1 block text-[11px] font-medium text-muted">Image Prompt <span className="text-muted/40">(optional)</span></label>
+                  <label className="mb-1 block text-[11px] font-medium text-muted">Image Prompt <span className="text-muted/70">(optional)</span></label>
                   <textarea
                     name="imagePrompt"
                     rows={3}
-                    className="w-full resize-none rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                    className="w-full resize-none rounded-lg border-0 bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:ring-1 focus:ring-accent/30"
                     placeholder="Describe the image you want to generate..."
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
                   />
@@ -2570,11 +2570,11 @@ export function ShotListEditor({
 
                 {/* Video Prompt */}
                 <div>
-                  <label className="mb-1 block text-[11px] font-medium text-muted">Video Prompt <span className="text-muted/40">(optional)</span></label>
+                  <label className="mb-1 block text-[11px] font-medium text-muted">Video Prompt <span className="text-muted/70">(optional)</span></label>
                   <textarea
                     name="videoPrompt"
                     rows={2}
-                    className="w-full resize-none rounded-lg border-0 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40 focus:ring-1 focus:ring-accent/30"
+                    className="w-full resize-none rounded-lg border-0 bg-input px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/70 focus:ring-1 focus:ring-accent/30"
                     placeholder="Describe the camera motion or action..."
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
                   />
@@ -2634,7 +2634,7 @@ export function ShotListEditor({
                         <button type="button" onClick={() => setModalFirstFrame(null)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
                       </div>
                     ) : (
-                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[8px] text-muted/40 hover:border-accent/50 hover:text-accent">
+                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[8px] text-muted/70 hover:border-accent/50 hover:text-accent">
                         <span className="text-center leading-tight">Drop or<br/>upload</span>
                         <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => {
                           const f = e.target.files?.[0];
@@ -2667,7 +2667,7 @@ export function ShotListEditor({
                         <button type="button" onClick={() => setModalEndFrame(null)} className="absolute -right-0.5 -top-0.5 rounded-full bg-black/70 px-0.5 text-[8px] text-white/70 hover:text-white">x</button>
                       </div>
                     ) : (
-                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[8px] text-muted/40 hover:border-accent/50 hover:text-accent">
+                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border text-[8px] text-muted/70 hover:border-accent/50 hover:text-accent">
                         <span className="text-center leading-tight">Drop or<br/>upload</span>
                         <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => {
                           if (e.target.files) addModalEndFrame(Array.from(e.target.files));
@@ -2680,7 +2680,7 @@ export function ShotListEditor({
               </div>
 
               <div className="mt-5 flex items-center justify-between">
-                <p className="text-[10px] text-muted/50">Enter to add</p>
+                <p className="text-[10px] text-muted">Enter to add</p>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" type="button" onClick={() => { setAddShotModal(null); setModalRefs([]); setModalFirstFrame(null); setModalEndFrame(null); }}>Cancel</Button>
                   <Button variant="primary" size="sm" type="submit">
@@ -2763,7 +2763,7 @@ export function ShotListEditor({
               onChange={(e) => setPasteText(e.target.value)}
               placeholder={`SHOT 1 — Title\nIMAGE: image prompt here\nVIDEO: video prompt here\n\nSHOT 2 — Title\nIMAGE: image prompt here\nVIDEO: video prompt here`}
               rows={16}
-              className="w-full resize-y rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none placeholder:text-muted/40 focus:border-accent"
+              className="w-full resize-y rounded-lg border border-border bg-input px-4 py-3 font-mono text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-accent"
               autoFocus
             />
             <div className="mt-4 flex items-center justify-end gap-3">

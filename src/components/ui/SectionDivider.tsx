@@ -21,7 +21,7 @@ export function SectionDivider({ icon, title, subtitle, className }: SectionDivi
         {icon}
         {title}
         {subtitle && (
-          <span className="text-xs font-normal normal-case tracking-normal text-muted/50">
+          <span className="text-xs font-normal normal-case tracking-normal text-muted">
             {subtitle}
           </span>
         )}

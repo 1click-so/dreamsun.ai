@@ -40,7 +40,7 @@ export function ModeBar({ modes, active, onChange, columns }: ModeBarProps) {
               ? "bg-accent/20 text-accent-text"
               : mode.ready
                 ? "bg-surface-hover text-muted group-hover:text-foreground"
-                : "text-muted/25"
+                : "text-muted/60"
           }`}>
             {mode.icon}
           </span>
@@ -48,13 +48,13 @@ export function ModeBar({ modes, active, onChange, columns }: ModeBarProps) {
             active === mode.id
               ? "text-accent-text"
               : mode.ready
-                ? "text-foreground/70 group-hover:text-foreground"
-                : "text-muted/30"
+                ? "text-foreground/90 group-hover:text-foreground"
+                : "text-muted/60"
           }`}>
             {mode.label}
           </span>
           {!mode.ready && (
-            <span className="absolute top-1.5 right-1.5 rounded-md bg-surface-hover px-1 py-px text-[7px] font-bold uppercase text-muted/40">
+            <span className="absolute top-1.5 right-1.5 rounded-md bg-surface-hover px-1 py-px text-[7px] font-bold uppercase text-muted/70">
               Soon
             </span>
           )}

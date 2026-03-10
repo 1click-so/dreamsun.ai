@@ -208,7 +208,7 @@ export function GalleryCard({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-surface">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <span className="text-[10px] font-medium text-muted">Generating...</span>
-          <span className="text-[8px] text-muted/60">{result.model}</span>
+          <span className="text-[8px] text-muted">{result.model}</span>
         </div>
       )}
       {/* Skeleton placeholder until media loads */}
@@ -520,7 +520,7 @@ export function GalleryGrid({
           {isGenerating ? (
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted/60">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                 Generating {generatingSlots.length} {generatingSlots.length === 1 ? "item" : "items"}
               </span>
             </div>
@@ -605,7 +605,7 @@ export function GalleryGrid({
                         <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.07] to-transparent" />
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                           <div className="h-6 w-24 skeleton-shimmer rounded-md" />
-                          <span className="animate-pulse text-[10px] font-medium text-muted/50">
+                          <span className="animate-pulse text-[10px] font-medium text-muted">
                             {entry.modelName}
                           </span>
                         </div>
