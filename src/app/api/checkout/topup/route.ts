@@ -61,37 +61,43 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id);
   }
 
-  const origin = req.headers.get("origin") || "https://dreamsun.ai";
+  const origin = req.headers.get("origin") || "https://dreamsunai.com";
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "payment",
-    ui_mode: "embedded",
-    allow_promotion_codes: true,
-    payment_intent_data: {
-      setup_future_usage: "off_session", // Save card for auto-topup
-    },
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          unit_amount: amount * 100, // cents
-          product_data: {
-            name: `${credits.toLocaleString()} DreamSun Credits`,
-            description: `Top-up: ${credits.toLocaleString()} credits`,
-          },
-        },
-        quantity: 1,
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      ui_mode: "embedded",
+      // allow_promotion_codes: true, // TODO: re-enable after creating Stripe coupons
+      payment_intent_data: {
+        setup_future_usage: "off_session", // Save card for auto-topup
       },
-    ],
-    metadata: {
-      supabase_user_id: user.id,
-      type: "topup",
-      credits: String(credits),
-      ...(packageId ? { package_id: packageId } : {}),
-    },
-    return_url: `${origin}/pricing/return?session_id={CHECKOUT_SESSION_ID}`,
-  });
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: amount * 100, // cents
+            product_data: {
+              name: `${credits.toLocaleString()} DreamSun Credits`,
+              description: `Top-up: ${credits.toLocaleString()} credits`,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        supabase_user_id: user.id,
+        type: "topup",
+        credits: String(credits),
+        ...(packageId ? { package_id: packageId } : {}),
+      },
+      return_url: `${origin}/pricing/return?session_id={CHECKOUT_SESSION_ID}`,
+    });
 
-  return NextResponse.json({ clientSecret: session.client_secret });
+    return NextResponse.json({ clientSecret: session.client_secret });
+  } catch (err) {
+    console.error("[checkout/topup] Stripe error:", err);
+    const message = err instanceof Error ? err.message : "Stripe session creation failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

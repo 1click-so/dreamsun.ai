@@ -36,40 +36,46 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id);
   }
 
-  const origin = req.headers.get("origin") || "https://dreamsun.ai";
+  const origin = req.headers.get("origin") || "https://dreamsunai.com";
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    ui_mode: "embedded",
-    allow_promotion_codes: true,
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          recurring: { interval: "month" },
-          unit_amount: plan.priceInCents,
-          product_data: {
-            name: `DreamSun ${plan.name}`,
-            description: `${plan.credits.toLocaleString()} credits/month`,
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      ui_mode: "embedded",
+      // allow_promotion_codes: true, // TODO: re-enable after creating Stripe coupons
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            recurring: { interval: "month" },
+            unit_amount: plan.priceInCents,
+            product_data: {
+              name: `DreamSun ${plan.name}`,
+              description: `${plan.credits.toLocaleString()} credits/month`,
+            },
           },
+          quantity: 1,
         },
-        quantity: 1,
-      },
-    ],
-    metadata: {
-      supabase_user_id: user.id,
-      plan_id: planId,
-      type: "subscription",
-    },
-    subscription_data: {
+      ],
       metadata: {
         supabase_user_id: user.id,
         plan_id: planId,
+        type: "subscription",
       },
-    },
-    return_url: `${origin}/pricing/return?session_id={CHECKOUT_SESSION_ID}`,
-  });
+      subscription_data: {
+        metadata: {
+          supabase_user_id: user.id,
+          plan_id: planId,
+        },
+      },
+      return_url: `${origin}/pricing/return?session_id={CHECKOUT_SESSION_ID}`,
+    });
 
-  return NextResponse.json({ clientSecret: session.client_secret });
+    return NextResponse.json({ clientSecret: session.client_secret });
+  } catch (err) {
+    console.error("[checkout/subscription] Stripe error:", err);
+    const message = err instanceof Error ? err.message : "Stripe session creation failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
