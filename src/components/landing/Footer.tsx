@@ -3,46 +3,80 @@ import { Logo } from "@/components/Logo";
 
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-black pt-20 pb-10 px-6 md:px-12">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-        <div className="md:col-span-2">
-          <Link href="/" className="flex items-center gap-2 mb-6">
-            <Logo size={16} />
-            <span className="font-display font-bold text-xl tracking-tight">DreamSun</span>
+    <footer className="border-t border-border pt-16 pb-8 px-6 md:px-12">
+      <div className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-10 mb-14">
+        {/* Brand */}
+        <div className="col-span-2 sm:col-span-1">
+          <Link href="/" className="flex items-center gap-2 mb-4">
+            <Logo size={14} />
+            <span className="font-display font-bold text-lg tracking-tight">DreamSun</span>
           </Link>
-          <p className="text-white/50 max-w-sm">
-            The creative engine for the next generation of artists. Build, generate, and animate with the power of AI.
+          <p className="text-muted text-xs leading-relaxed max-w-[220px]">
+            AI image &amp; video generation platform. Create with the world&apos;s best models.
           </p>
         </div>
 
+        {/* Product */}
         <div>
-          <h4 className="font-semibold mb-4">Product</h4>
-          <ul className="space-y-3 text-white/50 text-sm">
-            <li><Link href="/images" className="hover:text-accent transition-colors">Image Gen</Link></li>
-            <li><Link href="/video" className="hover:text-accent transition-colors">Video Gen</Link></li>
-            <li><Link href="#" className="hover:text-accent transition-colors">API</Link></li>
-            <li><Link href="#pricing" className="hover:text-accent transition-colors">Pricing</Link></li>
+          <h4 className="text-xs uppercase tracking-[0.15em] font-semibold text-foreground/50 mb-4">
+            Product
+          </h4>
+          <ul className="space-y-2.5 text-sm text-muted">
+            <li>
+              <Link href="/images" className="hover:text-accent transition-colors">
+                Image Generation
+              </Link>
+            </li>
+            <li>
+              <Link href="/video" className="hover:text-accent transition-colors">
+                Video Generation
+              </Link>
+            </li>
+            <li>
+              <Link href="/shots" className="hover:text-accent transition-colors">
+                Shots
+              </Link>
+            </li>
           </ul>
         </div>
 
+        {/* Legal */}
         <div>
-          <h4 className="font-semibold mb-4">Company</h4>
-          <ul className="space-y-3 text-white/50 text-sm">
-            <li><Link href="#" className="hover:text-accent transition-colors">About</Link></li>
-            <li><Link href="#" className="hover:text-accent transition-colors">Blog</Link></li>
-            <li><Link href="#" className="hover:text-accent transition-colors">Careers</Link></li>
-            <li><Link href="#" className="hover:text-accent transition-colors">Contact</Link></li>
+          <h4 className="text-xs uppercase tracking-[0.15em] font-semibold text-foreground/50 mb-4">
+            Legal
+          </h4>
+          <ul className="space-y-2.5 text-sm text-muted">
+            <li>
+              <Link href="/privacy" className="hover:text-accent transition-colors">
+                Privacy Policy
+              </Link>
+            </li>
+            <li>
+              <Link href="/terms" className="hover:text-accent transition-colors">
+                Terms of Service
+              </Link>
+            </li>
+          </ul>
+        </div>
+
+        {/* Contact */}
+        <div>
+          <h4 className="text-xs uppercase tracking-[0.15em] font-semibold text-foreground/50 mb-4">
+            Contact
+          </h4>
+          <ul className="space-y-2.5 text-sm text-muted">
+            <li>
+              <Link href="/contact" className="hover:text-accent transition-colors">
+                Get in Touch
+              </Link>
+            </li>
           </ul>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pt-8 border-t border-border text-white/40 text-sm">
-        <p>&copy; 2026 DreamSun AI. All rights reserved.</p>
-        <div className="flex gap-6 mt-4 md:mt-0">
-          <Link href="#" className="hover:text-white transition-colors">Twitter</Link>
-          <Link href="#" className="hover:text-white transition-colors">Discord</Link>
-          <Link href="#" className="hover:text-white transition-colors">Instagram</Link>
-        </div>
+      {/* Bottom bar */}
+      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-border text-muted/50 text-xs">
+        <p>&copy; {new Date().getFullYear()} DreamSun AI. All rights reserved.</p>
       </div>
     </footer>
   );
