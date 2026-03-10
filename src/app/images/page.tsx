@@ -1345,7 +1345,7 @@ export default function GeneratePage() {
           </div>
 
           {/* Scrollable settings area */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="scrollbar-none flex-1 overflow-y-auto p-4">
             {activeMode === "upscale" ? (
               <UpscalePanel key={`upscale-${upscaleKey}`} category="upscale" initialImageUrl={upscaleImageUrl} />
             ) : activeMode === "skin" ? (

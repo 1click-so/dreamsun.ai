@@ -1120,7 +1120,7 @@ export default function VideoPage() {
           </div>
 
           {/* Scrollable settings area */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="scrollbar-none flex-1 overflow-y-auto p-4">
             <div className="space-y-5">
               {/* Model — always shown */}
               <div>
