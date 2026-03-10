@@ -486,13 +486,13 @@ export default function VideoPage() {
     const key = tierKey(currentModel.id, resolution, audioTier);
     const unitCost = pricing[key]?.base_price_credits ?? pricing[currentModel.id]?.base_price_credits ?? 0;
     if (unitCost === 0) return 0;
-    // Relight: duration unknown (matches input video), show per-second cost
-    if (activeMode === "relight") return unitCost;
+    if (activeMode === "relight") {
+      const rlDur = rlVideo?.duration ?? 0;
+      return rlDur > 0 ? Math.round(unitCost * rlDur) : 0;
+    }
     const effectiveDuration = multiShotEnabled ? multiShotTotalDuration : duration;
     return Math.round(unitCost * effectiveDuration);
-  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration, activeMode]);
-
-  const isRelightPerSec = activeMode === "relight";
+  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration, activeMode, rlVideo?.duration]);
 
   // Filter gallery — memoized to avoid recalculating on every render
   const filteredHistory = useMemo(() => {
@@ -519,6 +519,55 @@ export default function VideoPage() {
   const latestBatch = currentBatchId
     ? filteredHistory.filter((r) => r.batchId === currentBatchId)
     : [];
+
+  // --- Helpers ---
+
+  /** Read duration from a video file via a hidden <video> element */
+  const getVideoDuration = useCallback((file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        const dur = Math.ceil(video.duration);
+        URL.revokeObjectURL(video.src);
+        resolve(dur);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(0);
+      };
+      video.src = URL.createObjectURL(file);
+    });
+  }, []);
+
+  /** Read duration from a video URL via a hidden <video> element */
+  const getVideoUrlDuration = useCallback((url: string): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.crossOrigin = "anonymous";
+      video.onloadedmetadata = () => {
+        resolve(Math.ceil(video.duration));
+      };
+      video.onerror = () => resolve(0);
+      video.src = url;
+    });
+  }, []);
+
+  /** Upload a video file and read its duration */
+  const uploadVideo = useCallback(async (file: File, setter: (img: UploadedImage | null) => void) => {
+    const id = `vid_${++imageIdCounter}`;
+    const preview = URL.createObjectURL(file);
+    const dur = await getVideoDuration(file);
+    setter({ id, preview, url: null, uploading: true, duration: dur });
+    try {
+      const url = await fal.storage.upload(file);
+      setter({ id, preview, url, uploading: false, duration: dur });
+    } catch (err) {
+      setter(null);
+      setError(`Upload failed: ${err instanceof Error ? err.message : "Network error"}`);
+    }
+  }, [getVideoDuration]);
 
   // --- Image upload handlers ---
 
@@ -684,6 +733,7 @@ export default function VideoPage() {
         body.relightPrompt = rlPromptText;
         body.relightDirection = rlDirection;
         body.relightCfg = rlCfg;
+        body.duration = rlVideo!.duration ?? 5;
         if (rlCondImage?.url && rlCondType !== "ic") {
           body.relightCondImgUrl = rlCondImage.url;
         }
@@ -963,24 +1013,26 @@ export default function VideoPage() {
   // Relight upload handlers
   const handleRlVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadImage(file, setRlVideo);
+    if (file) uploadVideo(file, setRlVideo);
     if (rlVideoInputRef.current) rlVideoInputRef.current.value = "";
-  }, [uploadImage, setRlVideo]);
+  }, [uploadVideo, setRlVideo]);
 
   const handleRlVideoDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const videoUrlVal = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
     if (videoUrlVal && videoUrlVal.startsWith("http") && /\.(mp4|mov|webm|m4v)/i.test(videoUrlVal)) {
-      const id = `img_${++imageIdCounter}`;
-      setRlVideo({ id, preview: videoUrlVal, url: videoUrlVal, uploading: false });
+      const id = `vid_${++imageIdCounter}`;
+      // Read duration from URL
+      const dur = await getVideoUrlDuration(videoUrlVal);
+      setRlVideo({ id, preview: videoUrlVal, url: videoUrlVal, uploading: false, duration: dur });
       return;
     }
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("video/")) {
-      uploadImage(file, setRlVideo);
+      uploadVideo(file, setRlVideo);
     }
-  }, [uploadImage, setRlVideo]);
+  }, [uploadVideo, setRlVideo, getVideoUrlDuration]);
 
   const handleRlCondUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1303,18 +1355,23 @@ export default function VideoPage() {
               {activeMode === "relight" && (
                 <>
                   {/* Source Video */}
-                  <UploadZone
-                    file={rlVideo}
-                    onRemove={() => { if (rlVideo) URL.revokeObjectURL(rlVideo.preview); setRlVideo(null); }}
-                    onUpload={handleRlVideoUpload}
-                    inputRef={rlVideoInputRef}
-                    label="Source Video"
-                    dragOver={rlVideoDragOver}
-                    setDragOver={setRlVideoDragOver}
-                    onDrop={handleRlVideoDrop}
-                    accept="video/mp4,video/quicktime,video/webm,video/x-m4v"
-                    isVideo
-                  />
+                  <div>
+                    <UploadZone
+                      file={rlVideo}
+                      onRemove={() => { if (rlVideo) URL.revokeObjectURL(rlVideo.preview); setRlVideo(null); }}
+                      onUpload={handleRlVideoUpload}
+                      inputRef={rlVideoInputRef}
+                      label="Source Video"
+                      dragOver={rlVideoDragOver}
+                      setDragOver={setRlVideoDragOver}
+                      onDrop={handleRlVideoDrop}
+                      accept="video/mp4,video/quicktime,video/webm,video/x-m4v"
+                      isVideo
+                    />
+                    {rlVideo?.duration && rlVideo.duration > 0 && (
+                      <p className="mt-1.5 text-[10px] text-muted">{rlVideo.duration}s video</p>
+                    )}
+                  </div>
 
                   {/* Relight Mode */}
                   <div>
@@ -1645,7 +1702,7 @@ export default function VideoPage() {
               onDrop={handlePromptBarDrop}
             >
               {/* Frame thumbnails in prompt bar */}
-              {(firstFrame || (activeMode === "motion" && refVideo) || (activeMode === "relight" && rlVideo)) && (
+              {(firstFrame || (activeMode === "motion" && refVideo)) && activeMode !== "relight" && (
                 <div className="flex items-center gap-2 px-4 pt-3">
                   {firstFrame && (
                     <div className="group/ref relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60">
@@ -1708,25 +1765,6 @@ export default function VideoPage() {
                         </button>
                       </div>
                     </>
-                  )}
-                  {activeMode === "relight" && rlVideo && (
-                    <div className="group/ref relative h-10 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60">
-                      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                      <video src={rlVideo.preview} className="h-full w-full object-cover" muted />
-                      {rlVideo.uploading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-                          <div className="h-2.5 w-2.5 animate-spin rounded-full border border-accent border-t-transparent" />
-                        </div>
-                      )}
-                      <button
-                        onClick={() => { if (rlVideo) URL.revokeObjectURL(rlVideo.preview); setRlVideo(null); }}
-                        className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition group-hover/ref:opacity-100"
-                      >
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                          <path d="M1 1l6 6M7 1l-6 6" />
-                        </svg>
-                      </button>
-                    </div>
                   )}
                   <span className="text-[9px] text-muted/70">{currentModel.name}</span>
                 </div>
@@ -1820,7 +1858,7 @@ export default function VideoPage() {
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1 opacity-60">
-                          <CreditIcon size={10} /> {estimatedVidCredits}{isRelightPerSec ? "/s" : ""}
+                          <CreditIcon size={10} /> {estimatedVidCredits}
                         </span>
                       )}
                     </button>
@@ -1879,7 +1917,7 @@ export default function VideoPage() {
                       Generate
                       {estimatedVidCredits > 0 && (
                         <span className="flex items-center gap-1 opacity-60">
-                          <CreditIcon size={10} /> {estimatedVidCredits}{isRelightPerSec ? "/s" : ""}
+                          <CreditIcon size={10} /> {estimatedVidCredits}
                         </span>
                       )}
                     </button>

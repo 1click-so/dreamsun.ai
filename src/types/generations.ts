@@ -38,6 +38,8 @@ export interface UploadedImage {
   preview: string;
   url: string | null;
   uploading: boolean;
+  /** Duration in seconds (for video files) */
+  duration?: number;
 }
 
 /** Convert a Supabase Generation row to the UI's GenerationResult format */
