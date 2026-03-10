@@ -1507,7 +1507,7 @@ export function ShotListEditor({
         }
         throw new Error(data.error || "Animation failed");
       }
-      trackShotAnimated(selectedVideoModelId, videoDuration);
+      trackShotAnimated(shotVideoModelId, shotDuration);
       invalidateCredits();
 
       const generationId = data.generationId as string;
