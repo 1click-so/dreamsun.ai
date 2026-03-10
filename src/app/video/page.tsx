@@ -370,7 +370,7 @@ export default function VideoPage() {
   // Poll a pending generation until it completes or fails
   const pollGeneration = useCallback(async (genId: string, slotId: string) => {
     const POLL_INTERVAL = 5000;
-    const MAX_POLLS = 120; // 10 minutes max
+    const MAX_POLLS = 360; // 30 minutes max
     let polls = 0;
 
     while (polls < MAX_POLLS) {
@@ -399,7 +399,18 @@ export default function VideoPage() {
       }
     }
 
-    setError("Generation timed out — it may still complete. Refresh to check.");
+    // Client gave up polling - force-fail on server (refund credits + mark as error)
+    try {
+      await fetch("/api/generation-poll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generationId: genId }),
+      });
+      updateDbGeneration(genId, { url: "error" });
+      invalidateCredits();
+    } catch {
+      // If force-fail request fails, at least show the error
+    }
     setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
   }, [updateDbGeneration]);
 
@@ -413,10 +424,10 @@ export default function VideoPage() {
     const pendingGens = dbGenerations.filter((g) => !g.url && g.type === "video");
     if (pendingGens.length === 0) return;
 
-    // Filter out stale ones (older than 15 minutes)
+    // Filter out stale ones (older than 35 minutes)
     const fresh = pendingGens.filter((g) => {
       const age = Date.now() - new Date(g.created_at).getTime();
-      return age < 15 * 60 * 1000;
+      return age < 35 * 60 * 1000;
     });
 
     if (fresh.length === 0) return;

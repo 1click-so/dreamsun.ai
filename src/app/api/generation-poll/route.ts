@@ -230,3 +230,59 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+/**
+ * Force-fail a generation that timed out on the client.
+ * Refunds credits and marks the row as error.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { generationId } = await req.json();
+    if (!generationId) {
+      return NextResponse.json({ error: "generationId is required" }, { status: 400 });
+    }
+
+    const { data: gen } = await supabase
+      .from("generations")
+      .select("id, url, user_id, model_id, cost_estimate, settings")
+      .eq("id", generationId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (!gen) {
+      return NextResponse.json({ error: "Generation not found" }, { status: 404 });
+    }
+
+    // Already completed or already failed
+    if (gen.url && gen.url !== "error") {
+      return NextResponse.json({ status: "completed", generationId: gen.id, url: gen.url });
+    }
+    if (gen.url === "error") {
+      return NextResponse.json({ status: "failed", generationId: gen.id, refunded: true });
+    }
+
+    // Refund and mark as error
+    if (gen.cost_estimate && gen.cost_estimate > 0) {
+      await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
+    }
+
+    const errorMsg = "Generation timed out";
+    await supabase.from("generations").update({
+      url: "error",
+      settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+    }).eq("id", gen.id);
+
+    console.log(`[generation-poll] Force-failed generation ${gen.id}: timeout, refunded ${gen.cost_estimate} credits`);
+
+    return NextResponse.json({ status: "failed", generationId: gen.id, refunded: true });
+  } catch (error) {
+    console.error("[generation-poll] Force-fail error:", error);
+    return NextResponse.json({ error: "Failed to process timeout" }, { status: 500 });
+  }
+}

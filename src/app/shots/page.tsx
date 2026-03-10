@@ -1515,7 +1515,7 @@ export function ShotListEditor({
 
       // Poll for completion
       const POLL_INTERVAL = 5000;
-      const MAX_POLLS = 120; // 10 minutes
+      const MAX_POLLS = 360; // 30 minutes
       let polls = 0;
 
       while (polls < MAX_POLLS) {
@@ -1587,8 +1587,15 @@ export function ShotListEditor({
         }
       }
 
-      // Timed out
-      updateShot(shot.id, { videoStatus: "error", error: "Generation timed out" });
+      // Timed out - force-fail on server to refund credits
+      try {
+        await fetch("/api/generation-poll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ generationId }),
+        });
+      } catch { /* best effort */ }
+      updateShot(shot.id, { videoStatus: "error", error: "Generation timed out - credits refunded" });
     } catch (err) {
       if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
