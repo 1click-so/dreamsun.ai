@@ -4,6 +4,7 @@ import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
 import { createClient } from "@/lib/supabase-server";
 import { calculateCost, deductCredits, refundCredits, tryAutoTopup, getApiProvider } from "@/lib/credits";
 import { getKieModelId, kieCreateTask } from "@/lib/kie-ai";
+import { getWebhookBaseUrl } from "@/lib/generation-completion";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -257,23 +258,28 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const taskId = await kieCreateTask(kieModel, kieInput);
+      const webhookBase = getWebhookBaseUrl();
+      const kieCallbackUrl = webhookBase ? `${webhookBase}/api/webhooks/kie-completion` : undefined;
+      const taskId = await kieCreateTask(kieModel, kieInput, kieCallbackUrl);
       requestId = taskId;
       endpoint = kieModel;
 
-      console.log(`[animate-shot] Queued on Kie.ai: taskId=${taskId}`);
+      console.log(`[animate-shot] Queued on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
     } else {
       // ── fal.ai path (default) ────────────────────────────────
       endpoint = resolveVideoEndpoint(model, resolution);
 
       console.log(`[animate-shot] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
 
+      const webhookBase = getWebhookBaseUrl();
+      const falWebhookUrl = webhookBase ? `${webhookBase}/api/webhooks/fal-completion` : undefined;
       const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
         input,
+        webhookUrl: falWebhookUrl,
       });
       requestId = falRequestId;
 
-      console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}`);
+      console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
     }
 
     // Build settings/reference data
