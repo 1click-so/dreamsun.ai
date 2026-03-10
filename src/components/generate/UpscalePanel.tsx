@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { fal } from "@fal-ai/client";
 import { ModelSelector, CreditIcon } from "@/components/ModelSelector";
+import { IconSparkle } from "@/components/generate/Icons";
 import { SectionLabel, PillButton } from "@/components/generate/SidebarWidgets";
 import { usePricing } from "@/hooks/usePricing";
 import { invalidateCredits } from "@/hooks/useCredits";
@@ -394,7 +395,7 @@ export function UpscalePanel({
         <button
           onClick={handleUpscale}
           disabled={!canUpscale}
-          className={`flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold tracking-wide transition ${
+          className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold tracking-wide transition ${
             canUpscale
               ? "bg-accent text-black hover:bg-accent-hover"
               : "cursor-not-allowed bg-surface-hover text-muted"
@@ -407,6 +408,7 @@ export function UpscalePanel({
             </>
           ) : (
             <>
+              <IconSparkle size={12} />
               {category === "skin" ? "Enhance" : "Upscale"}
               {estimatedCredits > 0 && (
                 <span className="flex items-center gap-1 opacity-60">

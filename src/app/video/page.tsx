@@ -80,6 +80,7 @@ const VIDEO_MODES: ModeConfig[] = [
     icon: <IconMotion size={12} />,
     description: "Transfer motion from reference video",
     ready: true,
+    hasPrompt: false,
   },
   {
     id: "relight",
@@ -87,6 +88,7 @@ const VIDEO_MODES: ModeConfig[] = [
     icon: <IconRelight size={12} />,
     description: "Change lighting on any video",
     ready: true,
+    hasPrompt: false,
   },
 ];
 
@@ -1578,6 +1580,30 @@ export default function VideoPage() {
               )}
             </div>
           </div>
+
+          {/* Sidebar generate button — for modes without floating prompt bar */}
+          {VIDEO_MODES.find((m) => m.id === activeMode)?.hasPrompt === false && (
+            <div className="shrink-0 border-t border-border p-4">
+              <button
+                onClick={() => handleGenerate()}
+                disabled={!canGenerate}
+                className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold tracking-wide transition ${
+                  canGenerate
+                    ? "bg-accent text-black hover:bg-accent-hover"
+                    : "cursor-not-allowed bg-surface-hover text-muted"
+                }`}
+                title="Generate (Enter)"
+              >
+                <IconSparkle size={12} />
+                Generate
+                {estimatedVidCredits > 0 && (
+                  <span className="flex items-center gap-1 opacity-60">
+                    <CreditIcon size={10} /> {estimatedVidCredits}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* ================================================================
@@ -1690,8 +1716,9 @@ export default function VideoPage() {
           )}
 
           {/* ============================================================
-              FLOATING PROMPT BAR
+              FLOATING PROMPT BAR — hidden for modes without prompt (motion, relight)
               ============================================================ */}
+          {(VIDEO_MODES.find((m) => m.id === activeMode)?.hasPrompt !== false) && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-6 pb-5">
             <div
               className={`pointer-events-auto w-full max-w-2xl rounded-2xl border bg-background backdrop-blur-xl transition-all duration-300 ${
@@ -1928,6 +1955,7 @@ export default function VideoPage() {
               )}
             </div>
           </div>
+          )}
         </main>
       </div>
 
