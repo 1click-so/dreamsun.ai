@@ -22,6 +22,7 @@ import { GalleryToolbar, type GalleryFilter } from "@/components/generate/Galler
 import { BulkActionBar } from "@/components/generate/BulkActionBar";
 import { ModeBar, ModeComingSoon, type ModeConfig } from "@/components/generate/ModeBar";
 import { UpscalePanel } from "@/components/generate/UpscalePanel";
+import { IconBolt } from "@/components/generate/Icons";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
@@ -1717,7 +1718,7 @@ export default function GeneratePage() {
                   {isGenerating ? (
                     <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
                   ) : (
-                    <IconSparkle size={12} />
+                    <IconBolt size={14} />
                   )}
                   Generate
                   {estimatedCredits > 0 && !isGenerating && (
@@ -1990,7 +1991,7 @@ export default function GeneratePage() {
                   }`}
                   title="Generate (Enter)"
                 >
-                  <IconSparkle size={12} />
+                  <IconBolt size={14} />
                   Generate
                   {estimatedCredits > 0 && (
                     <span className="flex items-center gap-1">
