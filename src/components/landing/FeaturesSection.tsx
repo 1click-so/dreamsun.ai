@@ -21,7 +21,7 @@ const features: Feature[] = [
     title: "Image Generation",
     subtitle: "Text to stunning visuals",
     description: "4 models from Google, xAI & Black Forest Labs. Negative prompts, 4K output, reference images.",
-    image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=900&q=80",
+    image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=480&q=75",
     href: "/images",
     badge: null,
     span: "col-span-12 md:col-span-7 row-span-2",
@@ -31,8 +31,8 @@ const features: Feature[] = [
     title: "Video Generation",
     subtitle: "Animate any image",
     description: "Kling 3.0, Seedance, LTX — up to 2160p. First & last frame control, audio generation.",
-    image: "https://images.unsplash.com/photo-1518676590747-1e3dcf5a0bbb?w=900&q=80",
-    video: "https://videos.pexels.com/video-files/3129671/3129671-uhd_2560_1440_30fps.mp4",
+    image: "https://images.unsplash.com/photo-1518676590747-1e3dcf5a0bbb?w=480&q=75",
+    video: "https://videos.pexels.com/video-files/3129671/3129671-hd_1280_720_30fps.mp4",
     href: "/video",
     badge: "Hot",
     span: "col-span-12 md:col-span-5",
@@ -42,7 +42,7 @@ const features: Feature[] = [
     title: "Shots & Storyboard",
     subtitle: "Plan. Generate. Animate.",
     description: "Multi-shot scenes with per-shot prompts. Build visual narratives frame by frame.",
-    image: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=900&q=80",
+    image: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=480&q=75",
     href: "/shots",
     badge: "New",
     span: "col-span-12 md:col-span-5",
@@ -52,7 +52,7 @@ const features: Feature[] = [
     title: "Upscale & Edit",
     subtitle: "Refine with precision",
     description: "Image-to-image editing with up to 14 reference images. Enhance resolution across all models.",
-    image: "https://images.unsplash.com/photo-1549490349-8643362247b5?w=900&q=80",
+    image: "https://images.unsplash.com/photo-1549490349-8643362247b5?w=480&q=75",
     href: "/images",
     badge: null,
     span: "col-span-6 md:col-span-4",
@@ -62,7 +62,7 @@ const features: Feature[] = [
     title: "Motion Control",
     subtitle: "Transfer any movement",
     description: "Copy motion from reference videos. Facial consistency with Kling Elements.",
-    image: "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?w=900&q=80",
+    image: "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?w=480&q=75",
     href: "/video",
     badge: null,
     span: "col-span-6 md:col-span-4",
@@ -72,7 +72,7 @@ const features: Feature[] = [
     title: "Audio Sync",
     subtitle: "Sound meets vision",
     description: "Generate audio for video or sync to an existing track. Built into every video model.",
-    image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=900&q=80",
+    image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=480&q=75",
     href: "/video",
     badge: null,
     span: "col-span-6 md:col-span-4",
@@ -82,7 +82,7 @@ const features: Feature[] = [
     title: "Relight",
     subtitle: "Change the light, change the mood",
     description: "Relight any video with text or a reference image. Control direction, intensity, and atmosphere.",
-    image: "https://images.unsplash.com/photo-1500829243541-74b677fecc30?w=900&q=80",
+    image: "https://images.unsplash.com/photo-1500829243541-74b677fecc30?w=480&q=75",
     href: "/video",
     badge: "New",
     span: "col-span-6 md:col-span-4",
@@ -125,24 +125,16 @@ export function FeaturesSection() {
                 <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-border">
                   {/* Background — video or image */}
                   {feature.video ? (
-                    <>
-                      <video
-                        src={feature.video}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={feature.image}
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover opacity-0"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-                    </>
+                    <video
+                      src={feature.video}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      preload="none"
+                      poster={feature.image}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
