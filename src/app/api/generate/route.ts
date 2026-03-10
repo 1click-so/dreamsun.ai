@@ -3,7 +3,8 @@ import { fal } from "@fal-ai/client";
 import { getModelById } from "@/lib/models";
 import { createClient } from "@/lib/supabase-server";
 import { calculateCost, deductCredits, refundCredits, tryAutoTopup, getApiProvider } from "@/lib/credits";
-import { getKieModelId, kieCreateTask, kiePollUntilDone, kieParseResultUrls } from "@/lib/kie-ai";
+import { getKieModelId, kieCreateTask } from "@/lib/kie-ai";
+import { getWebhookBaseUrl } from "@/lib/generation-completion";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
   let userId = "";
   let cost = 0;
   let creditModelId = "";
+  let generationId: string | null = null;
 
   try {
     const supabase = await createClient();
@@ -90,10 +92,8 @@ export async function POST(req: NextRequest) {
     ) {
       const { paramName, isArray } = model.referenceImage;
       if (isArray) {
-        // Model expects an array (e.g. Nano Banana Pro Edit: image_urls)
         input[paramName] = referenceImageUrls;
       } else {
-        // Model expects a single URL (e.g. FLUX Kontext: image_url)
         input[paramName] = referenceImageUrls[0];
       }
     }
@@ -116,8 +116,11 @@ export async function POST(req: NextRequest) {
     // Determine API provider
     const apiProvider = await getApiProvider(modelId, { resolution: imageResolution as string | undefined });
 
+    let requestId: string;
+    let endpoint: string;
+
     if (apiProvider === "kie") {
-      // ── Kie.ai path ──────────────────────────────────────────
+      // ── Kie.ai path - submit and return immediately ────────────
       const kieInput: Record<string, unknown> = { prompt };
 
       if (aspectRatio) kieInput.aspect_ratio = aspectRatio;
@@ -139,70 +142,98 @@ export async function POST(req: NextRequest) {
       }
 
       const kieModel = getKieModelId(modelId);
-      const taskId = await kieCreateTask(kieModel, kieInput);
-      const result = await kiePollUntilDone(taskId);
-      const urls = kieParseResultUrls(result.resultJson);
+      const webhookBase = getWebhookBaseUrl();
+      const kieCallbackUrl = webhookBase ? `${webhookBase}/api/webhooks/kie-completion` : undefined;
+      const taskId = await kieCreateTask(kieModel, kieInput, kieCallbackUrl);
+      requestId = taskId;
+      endpoint = kieModel;
 
-      if (urls.length === 0) {
-        return NextResponse.json({ error: "No images generated" }, { status: 500 });
+      console.log(`[generate] Queued image on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
+    } else {
+      // ── fal.ai path - queue submit instead of subscribe ────────
+      input.enable_safety_checker = safetyChecker === true;
+
+      if (model.supportsOutputFormat !== false) {
+        input.output_format = "png";
       }
+      input.num_images = effectiveNumImages;
 
-      return NextResponse.json({
-        imageUrl: urls[0],
-        allImageUrls: urls,
+      endpoint = model.endpoint;
+
+      const webhookBase = getWebhookBaseUrl();
+      const falWebhookUrl = webhookBase ? `${webhookBase}/api/webhooks/fal-completion` : undefined;
+
+      console.log(`[generate] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
+
+      const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
+        input,
+        webhookUrl: falWebhookUrl,
+      });
+      requestId = falRequestId;
+
+      console.log(`[generate] Queued image on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
+    }
+
+    // Build reference URLs
+    const refUrls = referenceImageUrls && Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0
+      ? referenceImageUrls
+      : null;
+
+    const settings: Record<string, unknown> = {
+      modelId,
+      apiProvider,
+      falEndpoint: endpoint,
+      falRequestId: requestId,
+      aspectRatio,
+      resolution: imageResolution,
+      numImages: effectiveNumImages,
+      safetyChecker,
+    };
+
+    // Save PENDING generation to Supabase immediately (url = null = still processing)
+    const { data: genRow, error: genError } = await supabase
+      .from("generations")
+      .insert({
+        user_id: user.id,
+        type: "image",
+        url: null,
+        prompt: prompt || null,
+        negative_prompt: negativePrompt || null,
+        model_id: modelId,
+        model_name: model.name,
+        seed: null,
+        request_id: requestId,
         width: null,
         height: null,
-        seed: null,
-        model: model.name,
-        requestId: taskId,
-        creditsUsed: cost,
-      });
+        aspect_ratio: aspectRatio || null,
+        resolution: imageResolution || null,
+        settings,
+        reference_image_urls: refUrls,
+        batch_id: body.batchId || null,
+        favorited: false,
+        cost_estimate: cost || null,
+      })
+      .select("id")
+      .single();
+
+    if (genError) {
+      console.error("[generate] DB insert error:", genError);
     }
+    generationId = genRow?.id ?? null;
 
-    // ── fal.ai path (default) ────────────────────────────────
-    // Safety checker — off by default, toggle in UI
-    input.enable_safety_checker = safetyChecker === true;
+    console.log(`[generate] Pending image generation saved: id=${generationId}`);
 
-    // Only send output_format for models that support it
-    if (model.supportsOutputFormat !== false) {
-      input.output_format = "png";
-    }
-    input.num_images = typeof numImages === "number" && numImages >= 1 && numImages <= 4 ? numImages : 1;
-
-    const result = await fal.subscribe(model.endpoint, {
-      input,
-      logs: true,
-    });
-
-    // fal.ai response structure: { data: { images: [{ url, width, height }], seed, timings } }
-    const data = result.data as Record<string, unknown>;
-    const images = data.images as Array<{
-      url: string;
-      width: number;
-      height: number;
-      content_type: string;
-    }>;
-
-    if (!images || images.length === 0) {
-      return NextResponse.json(
-        { error: "No images generated" },
-        { status: 500 }
-      );
-    }
-
+    // Return immediately - client will poll /api/generation-poll
     return NextResponse.json({
-      imageUrl: images[0].url,
-      allImageUrls: images.map((img) => img.url),
-      width: images[0].width,
-      height: images[0].height,
-      seed: data.seed,
+      generationId,
+      requestId,
       model: model.name,
-      requestId: result.requestId,
       creditsUsed: cost,
+      status: "processing",
     });
   } catch (error: unknown) {
-    // Refund credits on generation failure
-    if (cost > 0 && userId) {
+    // Refund credits on failure (only if we haven't submitted to queue)
+    if (cost > 0 && userId && !generationId) {
       await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
     }
     console.error("Generation error:", error);
@@ -215,11 +246,9 @@ export async function POST(req: NextRequest) {
       if (err.status && typeof err.status === "number") status = err.status;
       if (err.body && typeof err.body === "object") {
         const body = err.body as Record<string, unknown>;
-        // detail can be a string OR an array of validation errors
         if (typeof body.detail === "string") {
           message = body.detail;
         } else if (Array.isArray(body.detail)) {
-          // Pydantic validation errors: [{loc, msg, type}, ...]
           message = body.detail
             .map((e: Record<string, unknown>) => e.msg || JSON.stringify(e))
             .join("; ");

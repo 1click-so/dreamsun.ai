@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     // Load generation from DB
     const { data: gen, error: genError } = await supabase
       .from("generations")
-      .select("id, url, request_id, settings, user_id, model_id, cost_estimate")
+      .select("id, type, url, request_id, settings, user_id, model_id, cost_estimate")
       .eq("id", generationId)
       .eq("user_id", user.id)
       .single();
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
           if (gen.cost_estimate && gen.cost_estimate > 0) {
             await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
           }
-          const errorMsg = "No video generated";
+          const errorMsg = "No content generated";
           await supabase.from("generations").update({
             url: "error",
             settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
@@ -95,7 +95,8 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({ status: "failed", generationId: gen.id, error: errorMsg, refunded: true });
         }
 
-        // Upload to Supabase storage
+        // Upload to Supabase storage (detect type from generation row)
+        const isImage = gen.type === "image";
         let permanentUrl = resultUrl;
         let fileSize: number | null = null;
         try {
@@ -103,11 +104,13 @@ export async function GET(req: NextRequest) {
           if (fileRes.ok) {
             const buffer = Buffer.from(await fileRes.arrayBuffer());
             fileSize = buffer.length;
-            const ext = resultUrl.includes(".mp4") ? "mp4" : "mp4";
-            const storagePath = `videos/${requestId}.${ext}`;
+            const contentType = fileRes.headers.get("content-type") || (isImage ? "image/png" : "video/mp4");
+            const ext = isImage ? (contentType.includes("jpeg") ? "jpg" : "png") : "mp4";
+            const folder = isImage ? "images" : "videos";
+            const storagePath = `${folder}/${requestId}.${ext}`;
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from("generations")
-              .upload(storagePath, buffer, { contentType: "video/mp4", upsert: true });
+              .upload(storagePath, buffer, { contentType, upsert: true });
             if (!uploadError && uploadData) {
               const { data: urlData } = supabase.storage.from("generations").getPublicUrl(storagePath);
               permanentUrl = urlData.publicUrl;
@@ -162,19 +165,29 @@ export async function GET(req: NextRequest) {
 
       const data = result.data as Record<string, unknown>;
 
-      let videoUrl: string | null = null;
+      // Extract result URL - check for video first, then images
+      let resultUrl: string | null = null;
+      let resultWidth: number | null = null;
+      let resultHeight: number | null = null;
+
       if (data.video && typeof data.video === "object") {
         const video = data.video as Record<string, unknown>;
-        videoUrl = video.url as string;
+        resultUrl = video.url as string;
       } else if (typeof data.video_url === "string") {
-        videoUrl = data.video_url;
+        resultUrl = data.video_url;
+      } else if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+        // Image result
+        const img = data.images[0] as Record<string, unknown>;
+        resultUrl = img.url as string;
+        resultWidth = (img.width as number) || null;
+        resultHeight = (img.height as number) || null;
       }
 
-      if (!videoUrl) {
+      if (!resultUrl) {
         if (gen.cost_estimate && gen.cost_estimate > 0) {
           await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
         }
-        const errorMsg = "No video generated";
+        const errorMsg = "No content generated";
         await supabase.from("generations").update({
           url: "error",
           settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
@@ -182,17 +195,21 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ status: "failed", generationId: gen.id, error: errorMsg, refunded: true });
       }
 
-      let permanentUrl = videoUrl;
+      const isImage = gen.type === "image";
+      let permanentUrl = resultUrl;
       let fileSize: number | null = null;
       try {
-        const fileRes = await fetch(videoUrl);
+        const fileRes = await fetch(resultUrl);
         if (fileRes.ok) {
           const buffer = Buffer.from(await fileRes.arrayBuffer());
           fileSize = buffer.length;
-          const storagePath = `videos/${requestId}.mp4`;
+          const contentType = fileRes.headers.get("content-type") || (isImage ? "image/png" : "video/mp4");
+          const ext = isImage ? (contentType.includes("jpeg") ? "jpg" : "png") : "mp4";
+          const folder = isImage ? "images" : "videos";
+          const storagePath = `${folder}/${requestId}.${ext}`;
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from("generations")
-            .upload(storagePath, buffer, { contentType: "video/mp4", upsert: true });
+            .upload(storagePath, buffer, { contentType, upsert: true });
           if (!uploadError && uploadData) {
             const { data: urlData } = supabase.storage.from("generations").getPublicUrl(storagePath);
             permanentUrl = urlData.publicUrl;
@@ -202,7 +219,10 @@ export async function GET(req: NextRequest) {
         console.error("[generation-poll] Storage copy failed:", copyErr);
       }
 
-      await supabase.from("generations").update({ url: permanentUrl, file_size: fileSize, request_id: requestId }).eq("id", gen.id);
+      const updateFields: Record<string, unknown> = { url: permanentUrl, file_size: fileSize, request_id: requestId };
+      if (resultWidth) updateFields.width = resultWidth;
+      if (resultHeight) updateFields.height = resultHeight;
+      await supabase.from("generations").update(updateFields).eq("id", gen.id);
       console.log(`[generation-poll] Completed generation ${gen.id}: ${permanentUrl}`);
 
       return NextResponse.json({ status: "completed", generationId: gen.id, url: permanentUrl, requestId });

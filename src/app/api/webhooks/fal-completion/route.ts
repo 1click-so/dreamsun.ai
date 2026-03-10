@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (status === "OK" && body.payload) {
-      // Extract video/image URL from the fal payload
+      // Extract result URL from the fal payload (video or image)
       const payload = body.payload;
       let resultUrl: string | null = null;
 
@@ -57,6 +57,10 @@ export async function POST(req: NextRequest) {
       // Some models: payload.video_url
       if (!resultUrl && typeof payload.video_url === "string") {
         resultUrl = payload.video_url;
+      }
+      // Image models: payload.images[0].url
+      if (!resultUrl && payload.images && Array.isArray(payload.images) && payload.images.length > 0) {
+        resultUrl = payload.images[0].url;
       }
       // Relight/other: payload.output.url
       if (!resultUrl && payload.output && typeof payload.output === "object") {
