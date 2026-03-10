@@ -370,11 +370,13 @@ export default function VideoPage() {
   // Poll a pending generation until it completes or fails
   const pollGeneration = useCallback(async (genId: string, slotId: string) => {
     const POLL_INTERVAL = 5000;
-    const MAX_POLLS = 360; // 30 minutes max
-    let polls = 0;
 
-    while (polls < MAX_POLLS) {
-      polls++;
+    // Poll indefinitely — only stop on explicit success or explicit failure from the API.
+    // Never give up on a timeout: the API may still be generating, and giving up
+    // means we pay the API cost AND refund the user (double loss).
+    // If the user closes the tab, polling resumes on next page load.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL));
       try {
         const res = await fetch(`/api/generation-poll?id=${genId}`);
@@ -388,7 +390,7 @@ export default function VideoPage() {
         }
 
         if (data.status === "failed") {
-          // Update the generation in local state to show error card (DB already updated by poll endpoint)
+          // Explicit failure from fal/kie — they don't charge us, poll endpoint already refunded
           updateDbGeneration(genId, { url: "error" });
           invalidateCredits();
           setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
@@ -398,20 +400,6 @@ export default function VideoPage() {
         // Network error — keep trying
       }
     }
-
-    // Client gave up polling - force-fail on server (refund credits + mark as error)
-    try {
-      await fetch("/api/generation-poll", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ generationId: genId }),
-      });
-      updateDbGeneration(genId, { url: "error" });
-      invalidateCredits();
-    } catch {
-      // If force-fail request fails, at least show the error
-    }
-    setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
   }, [updateDbGeneration]);
 
   // Resume polling for pending generations on page load
@@ -424,10 +412,10 @@ export default function VideoPage() {
     const pendingGens = dbGenerations.filter((g) => !g.url && g.type === "video");
     if (pendingGens.length === 0) return;
 
-    // Filter out stale ones (older than 35 minutes)
+    // Filter out stale ones (older than 2 hours — generous window, API will give definitive answer)
     const fresh = pendingGens.filter((g) => {
       const age = Date.now() - new Date(g.created_at).getTime();
-      return age < 35 * 60 * 1000;
+      return age < 2 * 60 * 60 * 1000;
     });
 
     if (fresh.length === 0) return;

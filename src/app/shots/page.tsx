@@ -1513,17 +1513,16 @@ export function ShotListEditor({
 
       const generationId = data.generationId as string;
 
-      // Poll for completion
+      // Poll indefinitely until explicit success or failure from the API.
+      // Never give up on a timeout — the API may still be generating.
       const POLL_INTERVAL = 5000;
-      const MAX_POLLS = 360; // 30 minutes
-      let polls = 0;
 
-      while (polls < MAX_POLLS) {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
         if (controller.signal.aborted) {
           updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
           return;
         }
-        polls++;
         await new Promise((r) => setTimeout(r, POLL_INTERVAL));
 
         try {
@@ -1573,7 +1572,7 @@ export function ShotListEditor({
           }
 
           if (pollData.status === "failed") {
-            updateShot(shot.id, { videoStatus: "error", error: pollData.error || "Generation failed" });
+            updateShot(shot.id, { videoStatus: "error", error: pollData.error || "Generation failed - credits refunded" });
             return;
           }
 
@@ -1586,16 +1585,6 @@ export function ShotListEditor({
           // Network error — keep trying
         }
       }
-
-      // Timed out - force-fail on server to refund credits
-      try {
-        await fetch("/api/generation-poll", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ generationId }),
-        });
-      } catch { /* best effort */ }
-      updateShot(shot.id, { videoStatus: "error", error: "Generation timed out - credits refunded" });
     } catch (err) {
       if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
