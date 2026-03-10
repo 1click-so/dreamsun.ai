@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No billing account found" }, { status: 400 });
   }
 
-  const origin = req.headers.get("origin") || "https://dreamsun.ai";
+  const origin = req.headers.get("origin") || "https://dreamsunai.com";
 
   const session = await stripe.billingPortal.sessions.create({
     customer: profile.stripe_customer_id,
