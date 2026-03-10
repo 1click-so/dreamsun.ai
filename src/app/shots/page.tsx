@@ -1740,8 +1740,9 @@ export function ShotListEditor({
   useEffect(() => {
     const UP_THRESHOLD = 600;
     const onScroll = () => {
+      // Storyboard is horizontal — never hide header
       // Fewer than 5 shots — always keep header visible
-      if (shots.length < 5) {
+      if (viewMode === "storyboard" || shots.length < 5) {
         setHeaderVisible(true);
         return;
       }
@@ -1767,7 +1768,7 @@ export function ShotListEditor({
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [shots.length]);
+  }, [shots.length, viewMode]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
