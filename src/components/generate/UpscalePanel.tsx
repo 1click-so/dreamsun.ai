@@ -391,7 +391,10 @@ export function UpscalePanel({
           </p>
         )}
 
-        {/* Upscale button */}
+      </div>
+
+      {/* Generate button — sticky at bottom of scroll area */}
+      <div className="sticky bottom-0 -mx-4 -mb-4 border-t border-border bg-background px-4 py-4">
         <button
           onClick={handleUpscale}
           disabled={!canUpscale}

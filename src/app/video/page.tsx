@@ -1481,6 +1481,28 @@ export default function VideoPage() {
                       onDrop={handleRlCondDrop}
                     />
                   )}
+
+                  {/* Generate button — sticky at bottom */}
+                  <div className="sticky bottom-0 -mx-4 -mb-4 border-t border-border bg-background px-4 py-4">
+                    <button
+                      onClick={() => handleGenerate()}
+                      disabled={!canGenerate}
+                      className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold tracking-wide transition ${
+                        canGenerate
+                          ? "bg-accent text-black hover:bg-accent-hover"
+                          : "cursor-not-allowed bg-surface-hover text-muted"
+                      }`}
+                      title="Generate (Enter)"
+                    >
+                      <IconSparkle size={12} />
+                      Generate
+                      {estimatedVidCredits > 0 && (
+                        <span className="flex items-center gap-1 opacity-60">
+                          <CreditIcon size={10} /> {estimatedVidCredits}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -1576,34 +1598,32 @@ export default function VideoPage() {
                       className="w-full"
                     />
                   )}
+
+                  {/* Generate button — sticky at bottom */}
+                  <div className="sticky bottom-0 -mx-4 -mb-4 border-t border-border bg-background px-4 py-4">
+                    <button
+                      onClick={() => handleGenerate()}
+                      disabled={!canGenerate}
+                      className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold tracking-wide transition ${
+                        canGenerate
+                          ? "bg-accent text-black hover:bg-accent-hover"
+                          : "cursor-not-allowed bg-surface-hover text-muted"
+                      }`}
+                      title="Generate (Enter)"
+                    >
+                      <IconSparkle size={12} />
+                      Generate
+                      {estimatedVidCredits > 0 && (
+                        <span className="flex items-center gap-1 opacity-60">
+                          <CreditIcon size={10} /> {estimatedVidCredits}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </>
               )}
             </div>
           </div>
-
-          {/* Sidebar generate button — for modes without floating prompt bar */}
-          {VIDEO_MODES.find((m) => m.id === activeMode)?.hasPrompt === false && (
-            <div className="shrink-0 border-t border-border p-4">
-              <button
-                onClick={() => handleGenerate()}
-                disabled={!canGenerate}
-                className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold tracking-wide transition ${
-                  canGenerate
-                    ? "bg-accent text-black hover:bg-accent-hover"
-                    : "cursor-not-allowed bg-surface-hover text-muted"
-                }`}
-                title="Generate (Enter)"
-              >
-                <IconSparkle size={12} />
-                Generate
-                {estimatedVidCredits > 0 && (
-                  <span className="flex items-center gap-1 opacity-60">
-                    <CreditIcon size={10} /> {estimatedVidCredits}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
         </aside>
 
         {/* ================================================================
