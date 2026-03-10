@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { invalidateCredits, useCredits } from "@/hooks/useCredits";
+import { trackPaymentCompleted } from "@/lib/analytics";
 
 function ReturnContent() {
   const searchParams = useSearchParams();
@@ -18,10 +19,28 @@ function ReturnContent() {
       return;
     }
 
-    // Give webhook a moment to process, then refresh credits
-    const timer = setTimeout(() => {
+    // Give webhook a moment to process, then refresh credits + track payment
+    const timer = setTimeout(async () => {
       invalidateCredits();
       setStatus("success");
+
+      // Fetch session details for analytics
+      try {
+        const res = await fetch(`/api/checkout/session?id=${sessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "paid") {
+            trackPaymentCompleted(
+              data.type === "subscription" ? "subscription" : "topup",
+              data.plan,
+              data.credits,
+              data.amount
+            );
+          }
+        }
+      } catch {
+        // Analytics failure is non-critical
+      }
     }, 2000);
 
     return () => clearTimeout(timer);

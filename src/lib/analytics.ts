@@ -38,16 +38,12 @@ export function trackEvent(
 
 // ── Auth ─────────────────────────────────────────────────────────────
 
-export function trackSignupCompleted(): void {
-  trackEvent("signup_completed");
+export function trackSignupCompleted(method: "email" | "google"): void {
+  trackEvent("signup_completed", { method });
 }
 
-export function trackLoginCompleted(): void {
-  trackEvent("login_completed");
-}
-
-export function trackGoogleAuth(): void {
-  trackEvent("google_auth");
+export function trackLoginCompleted(method: "email" | "google"): void {
+  trackEvent("login_completed", { method });
 }
 
 export function trackPasswordReset(): void {
@@ -82,6 +78,17 @@ export function trackCheckoutStarted(type: "subscription" | "topup" | "custom", 
   trackEvent("checkout_started", {
     type,
     ...(plan && { plan }),
+    ...(amount !== undefined && { amount_dollars: amount }),
+  });
+}
+
+// ── Payment Completed ────────────────────────────────────────────────
+
+export function trackPaymentCompleted(type: "subscription" | "topup", plan?: string, credits?: number, amount?: number): void {
+  trackEvent("payment_completed", {
+    type,
+    ...(plan && { plan }),
+    ...(credits !== undefined && { credits }),
     ...(amount !== undefined && { amount_dollars: amount }),
   });
 }
