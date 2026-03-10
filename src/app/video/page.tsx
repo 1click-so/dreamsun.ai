@@ -1385,12 +1385,10 @@ export default function VideoPage() {
                   {/* Relight Mode */}
                   <div>
                     <SectionLabel>Relight Mode</SectionLabel>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex gap-1.5">
                       {[
                         { id: "ic", label: "Text" },
                         { id: "ref", label: "Reference" },
-                        { id: "hdr", label: "HDR" },
-                        { id: "bg", label: "Background" },
                       ].map((ct) => (
                         <PillButton
                           key={ct.id}
@@ -1399,17 +1397,12 @@ export default function VideoPage() {
                             setRlCondType(ct.id);
                             saveStorage(STORAGE_KEYS.rlCondType, ct.id);
                           }}
+                          className="flex-1"
                         >
                           {ct.label}
                         </PillButton>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-[10px] text-muted">
-                      {rlCondType === "ic" && "Describe the lighting with text"}
-                      {rlCondType === "ref" && "Match lighting from a reference image"}
-                      {rlCondType === "hdr" && "Use an HDR environment map"}
-                      {rlCondType === "bg" && "Derive lighting from a background image"}
-                    </p>
                   </div>
 
                   {/* Text-based lighting controls (ic mode) */}
@@ -1473,14 +1466,14 @@ export default function VideoPage() {
                     </>
                   )}
 
-                  {/* Reference/HDR/BG image (non-ic modes) */}
-                  {rlCondType !== "ic" && (
+                  {/* Reference image (ref mode) */}
+                  {rlCondType === "ref" && (
                     <UploadZone
                       file={rlCondImage}
                       onRemove={() => { if (rlCondImage) URL.revokeObjectURL(rlCondImage.preview); setRlCondImage(null); }}
                       onUpload={handleRlCondUpload}
                       inputRef={rlCondInputRef}
-                      label={rlCondType === "ref" ? "Reference Image" : rlCondType === "hdr" ? "HDR Map" : "Background Image"}
+                      label="Reference Image"
                       dragOver={rlCondDragOver}
                       setDragOver={setRlCondDragOver}
                       onDrop={handleRlCondDrop}
