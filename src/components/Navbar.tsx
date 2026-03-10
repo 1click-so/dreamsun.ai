@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "./Logo";
 import { ProfileDropdown } from "./ProfileDropdown";
 import { usePricingOverlay } from "@/contexts/PricingOverlay";
+import { AuthEventTracker } from "./AuthEventTracker";
 
 const NAV_ITEMS = [
   { href: "/explore", label: "Explore" },
@@ -50,10 +51,14 @@ export function Navbar() {
   const isAudioActive = pathname?.startsWith("/audio");
   const isAvatarsActive = pathname?.startsWith("/avatars");
   const { openPricing } = usePricingOverlay();
+
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <>
+      {/* Track auth events (signup/login) from OAuth callback */}
+      <Suspense><AuthEventTracker /></Suspense>
+
       <nav className="relative flex items-center gap-3 border-b border-border px-4 py-3 md:gap-5 md:px-5">
         <NavBlobs />
 

@@ -175,7 +175,7 @@ function LoginContent() {
 
   async function handleGoogleSignIn() {
     setError(null);
-    trackLoginCompleted("google");
+    // Don't track here — auth callback detects new vs returning and fires the right event
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
