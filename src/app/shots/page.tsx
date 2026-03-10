@@ -1995,7 +1995,7 @@ export function ShotListEditor({
                               setAspectRatio(ratio);
                               resetAllShotImageSettings("aspectRatio");
                             }}
-                            className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                            className={`flex-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
                               aspectRatio === ratio
                                 ? "border-accent/30 bg-accent/10 text-accent"
                                 : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2019,7 +2019,7 @@ export function ShotListEditor({
                             onClick={() => {
                               setImageResolution(res);
                             }}
-                            className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium uppercase transition ${
+                            className={`flex-1 rounded-md border px-2.5 py-1 text-[11px] font-medium uppercase transition ${
                               imageResolution === res
                                 ? "border-accent/30 bg-accent/10 text-accent"
                                 : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2043,7 +2043,7 @@ export function ShotListEditor({
                             onClick={() => {
                               setNumImages(n);
                             }}
-                            className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                            className={`flex-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
                               numImages === n
                                 ? "border-accent/30 bg-accent/10 text-accent"
                                 : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2066,7 +2066,7 @@ export function ShotListEditor({
                           setSafetyChecker(next);
                           resetAllShotImageSettings("safetyChecker");
                         }}
-                        className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
+                        className={`rounded-md border px-3 py-1 text-[11px] font-medium transition ${
                           safetyChecker
                             ? "border-accent/30 bg-accent/10 text-accent"
                             : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2126,7 +2126,7 @@ export function ShotListEditor({
                               setDuration(d);
                               resetAllShotVideoSettings("duration");
                             }}
-                            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                            className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
                               duration === d
                                 ? "border-accent/30 bg-accent/10 text-accent"
                                 : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2150,7 +2150,7 @@ export function ShotListEditor({
                                 setResolution(res);
                                 resetAllShotVideoSettings("resolution");
                               }}
-                              className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                              className={`flex-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
                                 resolution === res
                                   ? "border-accent/30 bg-accent/10 text-accent"
                                   : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2173,7 +2173,7 @@ export function ShotListEditor({
                             setGenerateAudio(next);
                             resetAllShotVideoSettings("generateAudio");
                           }}
-                          className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
+                          className={`rounded-md border px-3 py-1 text-[11px] font-medium transition ${
                             generateAudio
                               ? "border-accent/30 bg-accent/10 text-accent"
                               : "border-border bg-surface text-muted hover:border-accent/30"
@@ -2194,7 +2194,7 @@ export function ShotListEditor({
                             setCameraFixed(next);
                             resetAllShotVideoSettings("cameraFixed");
                           }}
-                          className={`rounded-lg border px-4 py-2 text-xs font-medium transition ${
+                          className={`rounded-md border px-3 py-1 text-[11px] font-medium transition ${
                             cameraFixed
                               ? "border-accent/30 bg-accent/10 text-accent"
                               : "border-border bg-surface text-muted hover:border-accent/30"
