@@ -75,7 +75,17 @@ const features: Feature[] = [
     image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=900&q=80",
     href: "/video",
     badge: null,
-    span: "col-span-12 md:col-span-4",
+    span: "col-span-6 md:col-span-4",
+    tall: false,
+  },
+  {
+    title: "Relight",
+    subtitle: "Change the light, change the mood",
+    description: "Relight any video with text or a reference image. Control direction, intensity, and atmosphere.",
+    image: "https://images.unsplash.com/photo-1500829243541-74b677fecc30?w=900&q=80",
+    href: "/video",
+    badge: "New",
+    span: "col-span-6 md:col-span-4",
     tall: false,
   },
 ];
