@@ -271,6 +271,7 @@ export default function VideoPage() {
   const setRefVideo = useCallback((img: UploadedImage | null) => {
     setRefVideoRaw(img);
     saveStorage(STORAGE_KEYS.refVideoUrl, img?.url ?? null);
+    if (img?.duration) saveStorage("dreamsun_vid_mc_dur", img.duration);
   }, []);
 
   // Generation state
@@ -295,7 +296,9 @@ export default function VideoPage() {
   });
   const [refVideo, setRefVideoRaw] = useState<UploadedImage | null>(() => {
     const url = loadStorage<string | null>(STORAGE_KEYS.refVideoUrl, null);
-    return url ? { id: "restored_ref", preview: url, url, uploading: false } : null;
+    if (!url) return null;
+    const savedDur = loadStorage<number>("dreamsun_vid_mc_dur", 0);
+    return { id: "restored_ref", preview: url, url, uploading: false, duration: savedDur || undefined };
   });
   const [generatingSlots, setGeneratingSlots] = useState<{ modelName: string; modelId: string; slotId: string }[]>([]);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
@@ -501,9 +504,13 @@ export default function VideoPage() {
       const rlDur = rlVideo?.duration ?? 0;
       return rlDur > 0 ? Math.round(unitCost * rlDur) : 0;
     }
+    if (activeMode === "motion") {
+      const mcDur = refVideo?.duration ?? 0;
+      return mcDur > 0 ? Math.round(unitCost * mcDur) : 0;
+    }
     const effectiveDuration = multiShotEnabled ? multiShotTotalDuration : duration;
     return Math.round(unitCost * effectiveDuration);
-  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration, activeMode, rlVideo?.duration]);
+  }, [pricing, currentModel.id, currentModel.supportsGenerateAudio, duration, resolution, generateAudio, multiShotEnabled, multiShotTotalDuration, activeMode, rlVideo?.duration, refVideo?.duration]);
 
   // Filter gallery — memoized to avoid recalculating on every render
   const filteredHistory = useMemo(() => {
@@ -777,6 +784,7 @@ export default function VideoPage() {
         }
       } else {
         body.videoUrl = refVideo!.url;
+        body.duration = refVideo!.duration;
         body.characterOrientation = charOrientation;
         if (currentModel.resolutions.length > 0) body.resolution = resolution;
         if (currentModel.supportsKeepOriginalSound) body.keepOriginalSound = keepOriginalSound;
@@ -979,9 +987,9 @@ export default function VideoPage() {
   // Video upload handler (motion control)
   const handleRefVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadImage(file, setRefVideo);
+    if (file) uploadVideo(file, setRefVideo);
     if (refVideoInputRef.current) refVideoInputRef.current.value = "";
-  }, [uploadImage]);
+  }, [uploadVideo]);
 
   const handleVideoDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -989,16 +997,17 @@ export default function VideoPage() {
 
     const videoUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
     if (videoUrl && videoUrl.startsWith("http") && /\.(mp4|mov|webm|m4v)/i.test(videoUrl)) {
-      const id = `img_${++imageIdCounter}`;
-      setRefVideo({ id, preview: videoUrl, url: videoUrl, uploading: false });
+      const id = `vid_${++imageIdCounter}`;
+      const dur = await getVideoUrlDuration(videoUrl);
+      setRefVideo({ id, preview: videoUrl, url: videoUrl, uploading: false, duration: dur });
       return;
     }
 
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("video/")) {
-      uploadImage(file, setRefVideo);
+      uploadVideo(file, setRefVideo);
     }
-  }, [uploadImage]);
+  }, [uploadVideo, getVideoUrlDuration]);
 
   // Model change — auto-switch mode if model is from the other group
   const handleModelChange = (ids: string[]) => {
@@ -1538,6 +1547,9 @@ export default function VideoPage() {
                       compact
                     />
                   </div>
+                  {refVideo?.duration && refVideo.duration > 0 && (
+                    <p className="mt-1.5 text-[10px] text-muted">{refVideo.duration}s video</p>
+                  )}
 
                   {/* Scene Source */}
                   {currentModel.characterOrientations && currentModel.characterOrientations.length > 0 && (
