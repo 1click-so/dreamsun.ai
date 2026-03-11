@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import type { Shot, ImageSettings, VideoSettings, UploadedRef } from "@/types/shots";
@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
 import { CreditIcon } from "@/components/ModelSelector";
+import { MediaPickerModal } from "@/components/ui/MediaPickerModal";
 
 interface StoryboardShotModalProps {
   shot: Shot;
@@ -76,6 +77,8 @@ export function StoryboardShotModal({
   imgCredits = 0,
   vidCredits = 0,
 }: StoryboardShotModalProps) {
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose();
   }, [onClose]);
@@ -284,7 +287,7 @@ export function StoryboardShotModal({
                       </div>
                     ))}
                     <button
-                      onClick={() => (document.getElementById(`modal-ref-${shot.id}`) as HTMLInputElement)?.click()}
+                      onClick={() => setShowMediaPicker(true)}
                       className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted hover:border-accent/50 hover:text-accent"
                     >+</button>
                     <input
@@ -295,6 +298,15 @@ export function StoryboardShotModal({
                       multiple
                       onChange={onRefUpload}
                       className="hidden"
+                    />
+                    <MediaPickerModal
+                      open={showMediaPicker}
+                      onClose={() => setShowMediaPicker(false)}
+                      multiple
+                      title="Add Reference Images"
+                      onSelect={(url) => onRefUrlDrop(url)}
+                      onSelectMultiple={(urls) => urls.forEach((url) => onRefUrlDrop(url))}
+                      onUploadFiles={(files) => onRefFileDrop(files)}
                     />
                   </div>
                 </div>
