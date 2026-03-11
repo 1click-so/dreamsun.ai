@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { fal } from "@fal-ai/client";
 import {
@@ -599,6 +599,7 @@ const VALID_MODES: ImageMode[] = ["create", "upscale", "edit", "skin"];
 
 export default function GeneratePage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Mode — URL param > localStorage > default
   const [activeMode, setActiveMode] = useState<ImageMode>(() => {
@@ -1864,7 +1865,7 @@ export default function GeneratePage() {
             setReferenceImages((prev) => [editImage, ...prev]);
           }}
           onDelete={() => deleteImage(selectedResult.requestId)}
-          onAddToShots={() => { setSelectedResult(null); }}
+          onAddToShots={() => { setSelectedResult(null); router.push("/shots"); }}
           onUpscale={() => {
             setUpscaleImageUrl(selectedResult.imageUrl);
             setUpscaleKey((k) => k + 1);
@@ -2169,14 +2170,14 @@ function ImageLightbox({
                       updatedAt: Date.now(),
                     };
                     setScenes((prev) => [newScene, ...prev]);
-                    onAddToShots(result.imageUrl);
                     setShowShotPicker(false);
-                    // Fire-and-forget save to Supabase
-                    fetch("/api/scenes", {
+                    // Save to Supabase, then navigate
+                    await fetch("/api/scenes", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ ...newScene, sort_order: 0 }),
                     }).catch(() => {});
+                    onAddToShots(result.imageUrl);
                   }}
                   className="mb-1 flex w-full items-center gap-2 rounded-lg border border-dashed border-white/10 px-2 py-1.5 text-left transition hover:border-accent/30 hover:bg-white/5"
                 >
@@ -2230,15 +2231,15 @@ function ImageLightbox({
                             setScenes((prev) => prev.map((s) =>
                               s.id === scene.id ? { ...s, shots: updatedShots } : s
                             ));
-                            // Fire-and-forget save to Supabase
-                            fetch("/api/scenes", {
+                            // Save to Supabase, then navigate
+                            await fetch("/api/scenes", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ ...target, shots: updatedShots }),
                             }).catch(() => {});
                           }
-                          onAddToShots(result.imageUrl);
                           setShowShotPicker(false);
+                          onAddToShots(result.imageUrl);
                         }}
                         className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left transition hover:bg-white/5"
                       >
