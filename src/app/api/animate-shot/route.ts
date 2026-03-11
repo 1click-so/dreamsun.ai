@@ -367,6 +367,13 @@ export async function POST(req: NextRequest) {
       status: "processing",
     });
   } catch (error: unknown) {
+    // Clean up orphaned generation row (created before queue submission)
+    if (generationId && userId) {
+      try {
+        const supabase = await createClient();
+        await supabase.from("generations").delete().eq("id", generationId);
+      } catch { /* cleanup best-effort */ }
+    }
     // Refund credits on failure
     if (cost > 0 && userId) {
       await refundCredits(userId, cost, { generationId: generationId ?? undefined, modelId: creditModelId }).catch(() => {});
