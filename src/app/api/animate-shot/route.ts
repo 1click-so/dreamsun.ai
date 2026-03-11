@@ -316,8 +316,13 @@ export async function POST(req: NextRequest) {
         kieInput.multi_prompt = multiPrompt;
       }
 
-      // Elements (character consistency) - NOT supported by Kie.ai, skip silently
-      // kling_elements causes instant 500 "internal error" on Kie.ai
+      // Elements (character consistency)
+      if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
+        kieInput.kling_elements = elementUrls.map((url: string, i: number) => ({
+          name: `element_${i}`,
+          element_input_urls: [url],
+        }));
+      }
 
       try {
         const webhookBase = getWebhookBaseUrl();
