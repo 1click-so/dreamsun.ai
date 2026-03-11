@@ -114,9 +114,16 @@ export async function GET(req: NextRequest) {
 
         // Motion control - reference video
         if (s.mode === "motion" && refs && model.params.videoUrl) {
-          // For motion control, videoUrl is in reference_image_urls
           const videoRef = refs.find((u: string) => u !== gen.source_image_url);
           if (videoRef) falInput[model.params.videoUrl] = videoRef;
+        }
+
+        // Elements (character consistency) - fal.ai format
+        const storedElements = s.elementUrls as string[] | undefined;
+        if (storedElements && Array.isArray(storedElements) && storedElements.length > 0) {
+          falInput.elements = storedElements.map((url: string) => ({
+            frontal_image_url: url,
+          }));
         }
 
         const webhookBase = getWebhookBaseUrl();

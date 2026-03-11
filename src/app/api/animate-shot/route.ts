@@ -373,6 +373,10 @@ export async function POST(req: NextRequest) {
     } else {
       Object.assign(settings, { charOrientation: characterOrientation, keepOriginalSound });
     }
+    // Store element URLs so delayed fallbacks (poll/webhook) can reconstruct fal.ai input
+    if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
+      settings.elementUrls = elementUrls;
+    }
 
     if (generationId) {
       await supabase
