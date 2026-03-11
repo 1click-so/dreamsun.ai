@@ -85,14 +85,65 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Credit deduction — duration-based for video, with resolution + audio tier
+    // Calculate cost
     const effectiveDuration = duration || model.defaultDuration;
     creditModelId = videoModelId;
     const audioTier = generateAudio === false ? "off" : "on";
     cost = await calculateCost(videoModelId, { duration: effectiveDuration, resolution: resolution || undefined, audioTier });
+
+    // Build reference URLs early (needed for generation row)
+    const refUrls: string[] = [];
+    if (isRelight) {
+      if (relightVideoUrl) refUrls.push(relightVideoUrl);
+      if (relightCondImgUrl) refUrls.push(relightCondImgUrl);
+    } else {
+      if (imageUrl) refUrls.push(imageUrl);
+      if (endImageUrl) refUrls.push(endImageUrl);
+      if (videoUrl) refUrls.push(videoUrl);
+    }
+
+    // Insert PENDING generation row first (to get generationId for credit linking)
+    const { data: genRow, error: genError } = await supabase
+      .from("generations")
+      .insert({
+        user_id: user.id,
+        type: "video",
+        url: null,
+        prompt: prompt || null,
+        negative_prompt: body.negativePrompt || null,
+        model_id: videoModelId,
+        model_name: model.name,
+        seed: null,
+        request_id: null,
+        width: null,
+        height: null,
+        duration: duration || null,
+        aspect_ratio: aspectRatio || null,
+        resolution: resolution || null,
+        settings: { modelId: videoModelId, mode: isRelight ? "relight" : videoUrl ? "motion" : "create" },
+        source_image_url: isRelight ? relightVideoUrl : (imageUrl || null),
+        reference_image_urls: refUrls.length > 0 ? refUrls : null,
+        batch_id: batchId || null,
+        favorited: false,
+        cost_estimate: cost || null,
+      })
+      .select("id")
+      .single();
+
+    if (genError) {
+      console.error("[animate-shot] DB insert error:", genError);
+    }
+    generationId = genRow?.id ?? null;
+
+    // Deduct credits (linked to generation row)
     if (cost > 0) {
-      const deduction = await deductCredits(user.id, cost, { modelId: videoModelId, description: `Video: ${model.name} (${effectiveDuration}s)` });
+      const deduction = await deductCredits(user.id, cost, { generationId: generationId ?? undefined, modelId: videoModelId, description: `Video: ${model.name} (${effectiveDuration}s)` });
       if (!deduction.success) {
+        // Clean up the generation row
+        if (generationId) {
+          await supabase.from("generations").delete().eq("id", generationId);
+          generationId = null;
+        }
         return NextResponse.json(
           { error: "Insufficient credits", required: deduction.required ?? cost, available: deduction.available ?? 0 },
           { status: 402 }
@@ -282,17 +333,7 @@ export async function POST(req: NextRequest) {
       console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
     }
 
-    // Build settings/reference data
-    const refUrls: string[] = [];
-    if (isRelight) {
-      if (relightVideoUrl) refUrls.push(relightVideoUrl);
-      if (relightCondImgUrl) refUrls.push(relightCondImgUrl);
-    } else {
-      if (imageUrl) refUrls.push(imageUrl);
-      if (endImageUrl) refUrls.push(endImageUrl);
-      if (videoUrl) refUrls.push(videoUrl);
-    }
-
+    // Update generation row with request_id and final settings
     const settings: Record<string, unknown> = {
       modelId: videoModelId,
       mode: isRelight ? "relight" : videoUrl ? "motion" : "create",
@@ -308,38 +349,12 @@ export async function POST(req: NextRequest) {
       Object.assign(settings, { charOrientation: characterOrientation, keepOriginalSound });
     }
 
-    // Save PENDING generation to Supabase immediately (url = null = still processing)
-    const { data: genRow, error: genError } = await supabase
-      .from("generations")
-      .insert({
-        user_id: user.id,
-        type: "video",
-        url: null,
-        prompt: prompt || null,
-        negative_prompt: body.negativePrompt || null,
-        model_id: videoModelId,
-        model_name: model.name,
-        seed: null,
-        request_id: requestId,
-        width: null,
-        height: null,
-        duration: duration || null,
-        aspect_ratio: aspectRatio || null,
-        resolution: resolution || null,
-        settings,
-        source_image_url: isRelight ? relightVideoUrl : (imageUrl || null),
-        reference_image_urls: refUrls.length > 0 ? refUrls : null,
-        batch_id: batchId || null,
-        favorited: false,
-        cost_estimate: cost || null,
-      })
-      .select("id")
-      .single();
-
-    if (genError) {
-      console.error("[animate-shot] DB insert error:", genError);
+    if (generationId) {
+      await supabase
+        .from("generations")
+        .update({ request_id: requestId, settings })
+        .eq("id", generationId);
     }
-    generationId = genRow?.id ?? null;
 
     console.log(`[animate-shot] Pending generation saved: id=${generationId}`);
 
@@ -352,9 +367,9 @@ export async function POST(req: NextRequest) {
       status: "processing",
     });
   } catch (error: unknown) {
-    // Refund credits on failure (only if we haven't submitted to fal queue)
-    if (cost > 0 && userId && !generationId) {
-      await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
+    // Refund credits on failure
+    if (cost > 0 && userId) {
+      await refundCredits(userId, cost, { generationId: generationId ?? undefined, modelId: creditModelId }).catch(() => {});
     }
     console.error("Animation error:", error);
 

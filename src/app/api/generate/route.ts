@@ -41,13 +41,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown model" }, { status: 400 });
     }
 
-    // Credit deduction
+    // Calculate cost and determine provider before creating generation row
     const effectiveNumImages = typeof numImages === "number" && numImages >= 1 && numImages <= 4 ? numImages : 1;
     creditModelId = modelId;
     cost = await calculateCost(modelId, { numImages: effectiveNumImages, resolution: imageResolution as string | undefined });
+    const apiProvider = await getApiProvider(modelId, { resolution: imageResolution as string | undefined });
+
+    // Build reference URLs
+    const refUrls = referenceImageUrls && Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0
+      ? referenceImageUrls
+      : null;
+
+    // Insert PENDING generation row first (to get generationId for credit linking)
+    const { data: genRow, error: genError } = await supabase
+      .from("generations")
+      .insert({
+        user_id: user.id,
+        type: "image",
+        url: null,
+        prompt: prompt || null,
+        negative_prompt: negativePrompt || null,
+        model_id: modelId,
+        model_name: model.name,
+        seed: null,
+        request_id: null,
+        width: null,
+        height: null,
+        aspect_ratio: aspectRatio || null,
+        resolution: imageResolution || null,
+        settings: { modelId, apiProvider, aspectRatio, resolution: imageResolution, numImages: effectiveNumImages, safetyChecker },
+        reference_image_urls: refUrls,
+        batch_id: body.batchId || null,
+        favorited: false,
+        cost_estimate: cost || null,
+      })
+      .select("id")
+      .single();
+
+    if (genError) {
+      console.error("[generate] DB insert error:", genError);
+    }
+    generationId = genRow?.id ?? null;
+
+    // Deduct credits (linked to generation row)
     if (cost > 0) {
-      const deduction = await deductCredits(user.id, cost, { modelId, description: `Image: ${model.name}` });
+      const deduction = await deductCredits(user.id, cost, { generationId: generationId ?? undefined, modelId, description: `Image: ${model.name}` });
       if (!deduction.success) {
+        // Clean up the generation row
+        if (generationId) {
+          await supabase.from("generations").delete().eq("id", generationId);
+          generationId = null;
+        }
         return NextResponse.json(
           { error: "Insufficient credits", required: deduction.required ?? cost, available: deduction.available ?? 0 },
           { status: 402 }
@@ -113,9 +157,6 @@ export async function POST(req: NextRequest) {
       Object.assign(input, model.extraInput);
     }
 
-    // Determine API provider
-    const apiProvider = await getApiProvider(modelId, { resolution: imageResolution as string | undefined });
-
     let requestId: string;
     let endpoint: string;
 
@@ -174,11 +215,7 @@ export async function POST(req: NextRequest) {
       console.log(`[generate] Queued image on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
     }
 
-    // Build reference URLs
-    const refUrls = referenceImageUrls && Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0
-      ? referenceImageUrls
-      : null;
-
+    // Update generation row with request_id and final settings
     const settings: Record<string, unknown> = {
       modelId,
       apiProvider,
@@ -190,36 +227,12 @@ export async function POST(req: NextRequest) {
       safetyChecker,
     };
 
-    // Save PENDING generation to Supabase immediately (url = null = still processing)
-    const { data: genRow, error: genError } = await supabase
-      .from("generations")
-      .insert({
-        user_id: user.id,
-        type: "image",
-        url: null,
-        prompt: prompt || null,
-        negative_prompt: negativePrompt || null,
-        model_id: modelId,
-        model_name: model.name,
-        seed: null,
-        request_id: requestId,
-        width: null,
-        height: null,
-        aspect_ratio: aspectRatio || null,
-        resolution: imageResolution || null,
-        settings,
-        reference_image_urls: refUrls,
-        batch_id: body.batchId || null,
-        favorited: false,
-        cost_estimate: cost || null,
-      })
-      .select("id")
-      .single();
-
-    if (genError) {
-      console.error("[generate] DB insert error:", genError);
+    if (generationId) {
+      await supabase
+        .from("generations")
+        .update({ request_id: requestId, settings })
+        .eq("id", generationId);
     }
-    generationId = genRow?.id ?? null;
 
     console.log(`[generate] Pending image generation saved: id=${generationId}`);
 
@@ -232,9 +245,9 @@ export async function POST(req: NextRequest) {
       status: "processing",
     });
   } catch (error: unknown) {
-    // Refund credits on failure (only if we haven't submitted to queue)
-    if (cost > 0 && userId && !generationId) {
-      await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
+    // Refund credits on failure
+    if (cost > 0 && userId) {
+      await refundCredits(userId, cost, { generationId: generationId ?? undefined, modelId: creditModelId }).catch(() => {});
     }
     console.error("Generation error:", error);
 
