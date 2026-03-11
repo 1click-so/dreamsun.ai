@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe, PLANS } from "@/lib/stripe";
 import { createClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import {
+  trackSubscriptionCreated,
+  trackSubscriptionRenewed,
+  trackSubscriptionUpgraded,
+  trackSubscriptionDowngraded,
+  trackSubscriptionCancelled,
+  trackPaymentFailed,
+  trackCreditsPurchased,
+} from "@/lib/analytics-server";
 
 // Use service role for webhook — no user session available
 function getAdminClient() {
@@ -61,6 +70,8 @@ export async function POST(req: NextRequest) {
             description: `${plan.name} plan activated — ${plan.credits} credits`,
             stripe_payment_intent_id: session.payment_intent as string,
           });
+
+          trackSubscriptionCreated(planId, plan.credits, plan.priceInCents).catch(() => {});
         }
 
         if (session.metadata?.type === "topup") {
@@ -95,6 +106,9 @@ export async function POST(req: NextRequest) {
             description: `Top-up: ${credits} credits purchased`,
             stripe_payment_intent_id: session.payment_intent as string,
           });
+
+          const amountTotal = session.amount_total ?? 0;
+          trackCreditsPurchased(credits, amountTotal).catch(() => {});
         }
         break;
       }
@@ -138,6 +152,8 @@ export async function POST(req: NextRequest) {
           balance_after: plan.credits,
           description: `Monthly reset — ${plan.credits} credits`,
         });
+
+        trackSubscriptionRenewed(profile.subscription_tier, plan.credits).catch(() => {});
         break;
       }
 
@@ -146,15 +162,34 @@ export async function POST(req: NextRequest) {
         const userId = sub.metadata?.supabase_user_id;
         if (!userId) break;
 
-        const planId = sub.metadata?.plan_id;
-        if (planId && PLANS[planId]) {
+        const newPlanId = sub.metadata?.plan_id;
+        if (newPlanId && PLANS[newPlanId]) {
+          // Check current tier to detect upgrade/downgrade
+          const { data: currentProfile } = await supabase
+            .from("profiles")
+            .select("subscription_tier")
+            .eq("id", userId)
+            .single();
+
+          const oldTier = currentProfile?.subscription_tier;
+
           await supabase
             .from("profiles")
             .update({
-              subscription_tier: planId,
+              subscription_tier: newPlanId,
               subscription_status: sub.status === "active" ? "active" : sub.status,
             })
             .eq("id", userId);
+
+          if (oldTier && oldTier !== newPlanId && oldTier !== "free") {
+            const oldCredits = PLANS[oldTier]?.credits ?? 0;
+            const newCredits = PLANS[newPlanId]?.credits ?? 0;
+            if (newCredits > oldCredits) {
+              trackSubscriptionUpgraded(oldTier, newPlanId).catch(() => {});
+            } else {
+              trackSubscriptionDowngraded(oldTier, newPlanId).catch(() => {});
+            }
+          }
         }
         break;
       }
@@ -169,6 +204,13 @@ export async function POST(req: NextRequest) {
           ? new Date(periodEnd * 1000).toISOString()
           : new Date().toISOString();
 
+        // Get current tier before updating
+        const { data: cancelProfile } = await supabase
+          .from("profiles")
+          .select("subscription_tier")
+          .eq("id", userId)
+          .single();
+
         await supabase
           .from("profiles")
           .update({
@@ -176,6 +218,8 @@ export async function POST(req: NextRequest) {
             subscription_ends_at: endsAt,
           })
           .eq("id", userId);
+
+        trackSubscriptionCancelled(cancelProfile?.subscription_tier ?? "unknown").catch(() => {});
         break;
       }
 
@@ -186,10 +230,18 @@ export async function POST(req: NextRequest) {
         const failedSubId = (typeof failedRawSub === "string" ? failedRawSub : (failedRawSub as Record<string, unknown> | null)?.id) as string | undefined;
         if (!failedSubId) break;
 
+        const { data: failedProfile } = await supabase
+          .from("profiles")
+          .select("subscription_tier")
+          .eq("stripe_subscription_id", failedSubId)
+          .single();
+
         await supabase
           .from("profiles")
           .update({ subscription_status: "past_due" })
           .eq("stripe_subscription_id", failedSubId);
+
+        trackPaymentFailed(failedProfile?.subscription_tier ?? "unknown").catch(() => {});
         break;
       }
     }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { getStripe, getCreditsForDollars } from "@/lib/stripe";
+import { trackAutoTopupTriggered } from "@/lib/analytics-server";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -275,6 +276,7 @@ export async function tryAutoTopup(userId: string): Promise<void> {
       });
 
       console.log(`[auto-topup] User ${userId}: charged $${dollars}, added ${credits} credits`);
+      trackAutoTopupTriggered(credits, dollars).catch(() => {});
     }
   } catch (err) {
     // Never break the generation flow — just log
