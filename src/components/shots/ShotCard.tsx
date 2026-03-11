@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { CreditIcon } from "@/components/ModelSelector";
 import { TaggableTextarea } from "@/components/ui/TaggableTextarea";
+import { MediaPickerModal } from "@/components/ui/MediaPickerModal";
 import { extractLastFrameAndUpload } from "@/lib/extract-frame";
 import { tierKey, type ModelPricing } from "@/hooks/usePricing";
 
@@ -171,6 +172,7 @@ export function ShotCard({
   pricing,
 }: ShotCardProps) {
   const [showSettings, setShowSettings] = useState(false);
+  const [mediaPicker, setMediaPicker] = useState<"refs" | "first" | "last" | null>(null);
   const [extracting, setExtracting] = useState(false);
   const extractAbortRef = useRef<AbortController | null>(null);
   const cancelExtract = useCallback(() => {
@@ -444,7 +446,7 @@ export function ShotCard({
                     <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 font-mono text-[7px] font-bold leading-tight text-accent">@{masterRefOffset + i + 1}</span>
                   </div>
                 ))}
-                <button onClick={() => (document.getElementById(`shot-ref-${shot.id}`) as HTMLInputElement)?.click()}
+                <button onClick={() => setMediaPicker("refs")}
                   className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted hover:border-accent/50 hover:text-accent">+</button>
                 <input id={`shot-ref-${shot.id}`} ref={refInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={onRefUpload} className="hidden" />
               </div>
@@ -766,7 +768,7 @@ export function ShotCard({
               </div>
             ) : (
               <button
-                onClick={() => (document.getElementById(`first-frame-${shot.id}`) as HTMLInputElement)?.click()}
+                onClick={() => setMediaPicker("first")}
                 className="flex cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border transition hover:border-accent/40 hover:text-accent"
                 style={{ width: outputW, height: outputH }}>
                 {isImageBusy ? (
@@ -830,7 +832,7 @@ export function ShotCard({
               </div>
             ) : (
               <button
-                onClick={() => (document.getElementById(`last-frame-${shot.id}`) as HTMLInputElement)?.click()}
+                onClick={() => setMediaPicker("last")}
                 className="flex cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border transition hover:border-accent/40 hover:text-accent"
                 style={{ width: outputW, height: outputH }}>
                 <span className="text-[8px] text-muted/70">Drop or<br/>click</span>
@@ -918,6 +920,42 @@ export function ShotCard({
         </div>
       </div>
 
+      {/* Unified Media Picker for refs, first frame, last frame */}
+      <MediaPickerModal
+        open={mediaPicker !== null}
+        onClose={() => setMediaPicker(null)}
+        multiple={mediaPicker === "refs"}
+        title={
+          mediaPicker === "refs" ? "Add Reference Images"
+          : mediaPicker === "first" ? "Set First Frame"
+          : "Set Last Frame"
+        }
+        onSelect={(url) => {
+          if (mediaPicker === "refs") onRefUrlDrop(url);
+          else if (mediaPicker === "first") onDropOnFirst(url);
+          else if (mediaPicker === "last") onDropOnLast(url);
+        }}
+        onSelectMultiple={mediaPicker === "refs" ? (urls) => urls.forEach((url) => onRefUrlDrop(url)) : undefined}
+        onUploadFiles={mediaPicker === "refs"
+          ? (files) => onRefFileDrop(files)
+          : async (files) => {
+              const file = files[0];
+              if (!file) return;
+              try {
+                const formData = new FormData();
+                formData.append("file", file);
+                const res = await fetch("/api/upload", { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.url) {
+                  if (mediaPicker === "first") onDropOnFirst(data.url);
+                  else if (mediaPicker === "last") onDropOnLast(data.url);
+                }
+              } catch (err) {
+                console.error("[ShotCard] Frame upload failed:", err);
+              }
+            }
+        }
+      />
     </div>
   );
 }

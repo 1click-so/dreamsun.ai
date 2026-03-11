@@ -77,7 +77,7 @@ export function StoryboardShotModal({
   imgCredits = 0,
   vidCredits = 0,
 }: StoryboardShotModalProps) {
-  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaPicker, setMediaPicker] = useState<"refs" | "endFrame" | null>(null);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose();
@@ -287,7 +287,7 @@ export function StoryboardShotModal({
                       </div>
                     ))}
                     <button
-                      onClick={() => setShowMediaPicker(true)}
+                      onClick={() => setMediaPicker("refs")}
                       className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted hover:border-accent/50 hover:text-accent"
                     >+</button>
                     <input
@@ -300,8 +300,8 @@ export function StoryboardShotModal({
                       className="hidden"
                     />
                     <MediaPickerModal
-                      open={showMediaPicker}
-                      onClose={() => setShowMediaPicker(false)}
+                      open={mediaPicker === "refs"}
+                      onClose={() => setMediaPicker(null)}
                       multiple
                       title="Add Reference Images"
                       onSelect={(url) => onRefUrlDrop(url)}
@@ -398,7 +398,7 @@ export function StoryboardShotModal({
                     </div>
                   ) : (
                     <button
-                      onClick={() => (document.getElementById(`modal-end-${shot.id}`) as HTMLInputElement)?.click()}
+                      onClick={() => setMediaPicker("endFrame")}
                       className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted hover:border-accent/40 hover:text-accent"
                     >+ Upload end frame</button>
                   )}
@@ -408,6 +408,20 @@ export function StoryboardShotModal({
                     accept="image/png,image/jpeg,image/webp"
                     onChange={onEndFrameUpload}
                     className="hidden"
+                  />
+                  <MediaPickerModal
+                    open={mediaPicker === "endFrame"}
+                    onClose={() => setMediaPicker(null)}
+                    title="Set Last Frame"
+                    onSelect={(url) => {
+                      onUpdate({ endImageUrl: url });
+                    }}
+                    onUploadFiles={(files) => {
+                      const dt = new DataTransfer();
+                      files.forEach((f) => dt.items.add(f));
+                      const syntheticEvent = { target: { files: dt.files, value: "" } } as unknown as React.ChangeEvent<HTMLInputElement>;
+                      onEndFrameUpload(syntheticEvent);
+                    }}
                   />
                 </div>
 
