@@ -144,6 +144,7 @@ export const VIDEO_MODELS: VideoModelConfig[] = [
     supportsCfgScale: false,
     supportsCameraFixed: true,
     supportsGenerateAudio: true,
+    extraInput: { enable_safety_checker: false },
   },
   {
     id: "ltx-2-3",
