@@ -316,12 +316,22 @@ export async function POST(req: NextRequest) {
         kieInput.multi_prompt = multiPrompt;
       }
 
-      // Elements (character consistency)
+      // Elements (character consistency) - Kie.ai requires 2-50 images per element
+      // If user provides 1 image, duplicate it to meet the minimum
       if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
-        kieInput.kling_elements = elementUrls.map((url: string, i: number) => ({
-          name: `element_${i}`,
-          element_input_urls: [url],
-        }));
+        kieInput.kling_elements = elementUrls.map((url: string, i: number) => {
+          const name = `element_${i}`;
+          return {
+            name,
+            element_input_urls: [url, url], // Kie.ai minimum 2 images per element
+          };
+        });
+        // Kie.ai requires @element_name references in prompt
+        const promptStr = (kieInput.prompt as string) || "";
+        const elementRefs = elementUrls.map((_: string, i: number) => `@element_${i}`).join(" ");
+        if (!promptStr.includes("@element_")) {
+          kieInput.prompt = `${promptStr} ${elementRefs}`.trim();
+        }
       }
 
       try {
