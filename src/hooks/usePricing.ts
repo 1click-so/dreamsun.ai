@@ -49,15 +49,18 @@ export function usePricing() {
       .from("model_pricing")
       .select("model_id, resolution, audio_tier, base_price_credits, effective_credits, discount_pct, is_promo, promo_label, pricing_unit")
       .eq("is_active", true)
-      .then(({ data }) => {
-        if (!data) return;
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setLoading(false);
+          return;
+        }
         const map: Record<string, ModelPricing> = {};
         const ranges: Record<string, CreditRange> = {};
         for (const row of data) {
           const p = row as ModelPricing;
           // Store under composite key for tier lookups
           map[tierKey(p.model_id, p.resolution, p.audio_tier)] = p;
-          // Also store under plain model_id as fallback (first row wins — base/default tier)
+          // Also store under plain model_id as fallback (first row wins - base/default tier)
           if (!map[p.model_id]) map[p.model_id] = p;
           // Build min/max credit ranges per model_id
           const c = p.effective_credits;

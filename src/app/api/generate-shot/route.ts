@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getModelById } from "@/lib/models";
-import { writeFile, mkdir, readdir } from "fs/promises";
-import { dirname, join } from "path";
 import { createClient } from "@/lib/supabase-server";
 import { calculateCost, deductCredits, refundCredits, tryAutoTopup } from "@/lib/credits";
 
@@ -33,7 +31,6 @@ export async function POST(req: NextRequest) {
       aspectRatio,
       referenceImageUrls,
       shotNumber,
-      outputFolder,
       safetyChecker,
       numImages,
       imageResolution,
@@ -145,46 +142,6 @@ export async function POST(req: NextRequest) {
 
     const imageUrl = images[0].url;
     const allImageUrls = images.map((img) => img.url);
-    let localPath: string | null = null;
-
-    // Save to local file if outputFolder is specified
-    console.log("[generate-shot] Save check:", { outputFolder, shotNumber, hasOutputFolder: !!outputFolder, shotNumberNotNull: shotNumber != null });
-    if (outputFolder && shotNumber != null) {
-      try {
-        const paddedNum = String(shotNumber).padStart(3, "0");
-        const prefix = `shot-${paddedNum}`;
-
-        // Find next available generation number by scanning existing files
-        await mkdir(outputFolder, { recursive: true });
-        let nextGen = 1;
-        try {
-          const existing = await readdir(outputFolder);
-          const pattern = new RegExp(`^${prefix}_(\\d+)(?:-\\d+)?\\.png$`);
-          for (const f of existing) {
-            const m = f.match(pattern);
-            if (m) nextGen = Math.max(nextGen, Number(m[1]) + 1);
-          }
-        } catch { /* folder doesn't exist yet, nextGen stays 1 */ }
-
-        // Save as shot-006_1.png, shot-006_1-2.png (multi-image), next gen: shot-006_2.png, etc.
-        for (let i = 0; i < allImageUrls.length; i++) {
-          const suffix = i === 0 ? "" : `-${i + 1}`;
-          const fileName = `${prefix}_${nextGen}${suffix}.png`;
-          const filePath = join(outputFolder, fileName);
-
-          console.log("[generate-shot] Saving to:", filePath);
-
-          const imgRes = await fetch(allImageUrls[i]);
-          const buffer = Buffer.from(await imgRes.arrayBuffer());
-          await writeFile(filePath, buffer);
-
-          console.log("[generate-shot] Saved successfully:", filePath, `(${buffer.length} bytes)`);
-          if (i === 0) localPath = filePath;
-        }
-      } catch (saveErr) {
-        console.error("[generate-shot] Failed to save image locally:", saveErr);
-      }
-    }
 
     return NextResponse.json({
       imageUrl,
@@ -194,7 +151,6 @@ export async function POST(req: NextRequest) {
       seed: data.seed,
       model: model.name,
       requestId: result.requestId,
-      localPath,
       creditsUsed: cost,
     });
   } catch (error: unknown) {

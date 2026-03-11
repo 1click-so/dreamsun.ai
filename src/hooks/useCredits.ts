@@ -22,7 +22,10 @@ export function useCredits(): CreditBalance {
   const fetchBalance = useCallback(async () => {
     try {
       const res = await fetch("/api/credits/balance");
-      if (!res.ok) return;
+      if (!res.ok) {
+        setLoading(false);
+        return;
+      }
       const data = await res.json();
       const result = {
         subscription: data.subscription ?? 0,
@@ -32,6 +35,8 @@ export function useCredits(): CreditBalance {
       };
       cache = result;
       setBalance(result);
+    } catch {
+      // Fetch failed - keep default values, stop loading
     } finally {
       setLoading(false);
     }

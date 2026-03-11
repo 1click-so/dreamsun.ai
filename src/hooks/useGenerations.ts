@@ -86,20 +86,20 @@ export function useGenerations() {
 
   // Toggle favorite — optimistic + persist
   const toggleFavorite = useCallback((id: string) => {
+    const gen = cache?.find((g) => g.id === id);
+    if (!gen) return;
+    const newValue = !gen.favorited;
     updateCache((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, favorited: !g.favorited } : g))
+      prev.map((g) => (g.id === id ? { ...g, favorited: newValue } : g))
     );
     const supabase = createClient();
-    const gen = cache?.find((g) => g.id === id);
-    if (gen) {
-      supabase
-        .from("generations")
-        .update({ favorited: gen.favorited })
-        .eq("id", id)
-        .then(({ error }) => {
-          if (error) console.error("[useGenerations] favorite error:", error);
-        });
-    }
+    supabase
+      .from("generations")
+      .update({ favorited: newValue })
+      .eq("id", id)
+      .then(({ error }) => {
+        if (error) console.error("[useGenerations] favorite error:", error);
+      });
   }, [updateCache]);
 
   // Delete — optimistic + persist
