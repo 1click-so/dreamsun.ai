@@ -2240,7 +2240,7 @@ export function ShotListEditor({
           )}
 
           {/* Master Reference + Prompt Prefix — hidden behind Settings toggle in storyboard view */}
-          <div className={`mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr] ${viewMode === "storyboard" && !showSettings ? "hidden" : ""}`}>
+          <div className={`mt-3 grid grid-cols-1 gap-2 md:grid-cols-[auto_1fr_1fr] ${viewMode === "storyboard" && !showSettings ? "hidden" : ""}`}>
             {/* Master Reference Cell */}
             <div
               className="min-w-[240px] rounded-lg border border-border bg-background p-3"
