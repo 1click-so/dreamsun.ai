@@ -140,6 +140,7 @@ export interface SceneSettings {
   generateAudio: boolean;
   cameraFixed: boolean;
   promptPrefix: string;
+  videoPromptPrefix: string;
   outputFolder: string;
 }
 
@@ -232,6 +233,7 @@ function getDefaultSettings(): SceneSettings {
     generateAudio: false,
     cameraFixed: false,
     promptPrefix: "",
+    videoPromptPrefix: "",
     outputFolder: "",
   };
 }
@@ -240,6 +242,7 @@ function getDefaultSettings(): SceneSettings {
 const STORAGE_KEYS = {
   folder: "dreamsun_shots_folder",
   promptPrefix: "dreamsun_shots_prompt_prefix",
+  videoPromptPrefix: "dreamsun_shots_video_prompt_prefix",
   imageModel: "dreamsun_shots_image_model",
   videoModel: "dreamsun_shots_video_model",
   aspectRatio: "dreamsun_shots_ratio",
@@ -537,6 +540,7 @@ export default function ShotsPage() {
                   generateAudio: loadFromStorage(STORAGE_KEYS.generateAudio, false),
                   cameraFixed: loadFromStorage(STORAGE_KEYS.cameraFixed, false),
                   promptPrefix: localStorage.getItem(STORAGE_KEYS.promptPrefix) || "",
+                  videoPromptPrefix: localStorage.getItem(STORAGE_KEYS.videoPromptPrefix) || "",
                   outputFolder: localStorage.getItem(STORAGE_KEYS.folder) || "",
                 },
                 createdAt: Date.now(),
@@ -686,6 +690,7 @@ export function ShotListEditor({
   // --- Settings (initialized from scene) ---
   const [outputFolder, setOutputFolder] = useState(scene.settings.outputFolder);
   const [promptPrefix, setPromptPrefix] = useState(scene.settings.promptPrefix);
+  const [videoPromptPrefix, setVideoPromptPrefix] = useState(scene.settings.videoPromptPrefix ?? "");
   const [selectedImageModel, setSelectedImageModel] = useState<ModelConfig>(
     () => {
       const found = MODELS.find((m) => m.id === scene.settings.imageModelId);
@@ -759,8 +764,9 @@ export function ShotListEditor({
     generateAudio,
     cameraFixed,
     promptPrefix,
+    videoPromptPrefix,
     outputFolder,
-  }), [selectedImageModel.id, selectedVideoModel.id, aspectRatio, imageResolution, numImages, safetyChecker, duration, resolution, generateAudio, cameraFixed, promptPrefix, outputFolder]);
+  }), [selectedImageModel.id, selectedVideoModel.id, aspectRatio, imageResolution, numImages, safetyChecker, duration, resolution, generateAudio, cameraFixed, promptPrefix, videoPromptPrefix, outputFolder]);
 
   // Debounced auto-save: triggers 1s after last change
   useEffect(() => {
@@ -1474,9 +1480,11 @@ export function ShotListEditor({
 
     try {
       // Build request body for /api/animate-shot
+      const rawVideoPrompt = shot.videoPrompt || "";
+      const fullVideoPrompt = videoPromptPrefix ? `${videoPromptPrefix.trim()} ${rawVideoPrompt}` : rawVideoPrompt;
       const body: Record<string, unknown> = {
         videoModelId: model.id,
-        prompt: shot.videoPrompt || "",
+        prompt: fullVideoPrompt,
         imageUrl: shot.imageUrl,
         duration: shotDuration,
         aspectRatio: shotAspectRatio,
@@ -2280,17 +2288,32 @@ export function ShotListEditor({
               </div>
             </div>
 
-            {/* Prompt Prefix Cell */}
+            {/* Prompt Prefix (Image) Cell */}
             <div className="rounded-lg border border-border bg-background p-3">
-              <p className="mb-2 text-[11px] font-medium text-muted">Prompt Prefix</p>
-              <p className="mb-2.5 text-[9px] text-muted">Prepended to every shot prompt</p>
+              <p className="mb-2 text-[11px] font-medium text-muted">Prompt Prefix (Image)</p>
+              <p className="mb-2.5 text-[9px] text-muted">Prepended to every image prompt</p>
               <input
                 type="text"
                 value={promptPrefix}
                 onChange={(e) => {
                   setPromptPrefix(e.target.value);
                 }}
-                placeholder="e.g. The same donkey with the same animated characteristics. Do not modify the animation style..."
+                placeholder="e.g. The same donkey with the same animated characteristics..."
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 transition focus:border-accent"
+              />
+            </div>
+
+            {/* Prompt Prefix (Video) Cell */}
+            <div className="rounded-lg border border-border bg-background p-3">
+              <p className="mb-2 text-[11px] font-medium text-muted">Prompt Prefix (Video)</p>
+              <p className="mb-2.5 text-[9px] text-muted">Prepended to every video prompt</p>
+              <input
+                type="text"
+                value={videoPromptPrefix}
+                onChange={(e) => {
+                  setVideoPromptPrefix(e.target.value);
+                }}
+                placeholder="e.g. Smooth cinematic motion, keep character consistent..."
                 className="w-full rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted/70 transition focus:border-accent"
               />
             </div>
