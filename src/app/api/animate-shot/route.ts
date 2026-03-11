@@ -256,13 +256,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine API provider (audioTier already declared above)
-    const apiProvider = await getApiProvider(videoModelId, { resolution: resolution || undefined, audioTier });
+    let activeProvider = await getApiProvider(videoModelId, { resolution: resolution || undefined, audioTier });
 
     let requestId: string;
     let endpoint: string;
+    let usedProvider = activeProvider;
 
-    if (apiProvider === "kie") {
-      // ── Kie.ai path ──────────────────────────────────────────
+    // Helper: submit to fal.ai
+    const submitToFal = async () => {
+      const falEndpoint = resolveVideoEndpoint(model, resolution);
+      const webhookBase = getWebhookBaseUrl();
+      const falWebhookUrl = webhookBase ? `${webhookBase.trim()}/api/webhooks/fal-completion` : undefined;
+      console.log(`[animate-shot] endpoint=${falEndpoint} input=`, JSON.stringify(input, null, 2));
+      const { request_id: falRequestId } = await fal.queue.submit(falEndpoint, {
+        input,
+        webhookUrl: falWebhookUrl,
+      });
+      console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
+      return { requestId: falRequestId, endpoint: falEndpoint };
+    };
+
+    if (activeProvider === "kie") {
+      // ── Kie.ai path (with fal.ai fallback) ────────────────────
       const kieModel = getKieModelId(videoModelId);
       const kieInput: Record<string, unknown> = {
         prompt: prompt || "",
@@ -281,7 +296,7 @@ export async function POST(req: NextRequest) {
 
       if (aspectRatio) kieInput.aspect_ratio = aspectRatio;
 
-      // Motion control — reference video
+      // Motion control - reference video
       if (videoUrl) {
         kieInput.video_url = videoUrl;
       }
@@ -301,43 +316,38 @@ export async function POST(req: NextRequest) {
         kieInput.multi_prompt = multiPrompt;
       }
 
-      // Elements (character consistency)
-      if (elementUrls && Array.isArray(elementUrls) && elementUrls.length > 0) {
-        kieInput.kling_elements = elementUrls.map((url: string, i: number) => ({
-          name: `element_${i}`,
-          element_input_urls: [url],
-        }));
+      // Elements (character consistency) - NOT supported by Kie.ai, skip silently
+      // kling_elements causes instant 500 "internal error" on Kie.ai
+
+      try {
+        const webhookBase = getWebhookBaseUrl();
+        const kieCallbackUrl = webhookBase ? `${webhookBase.trim()}/api/webhooks/kie-completion` : undefined;
+        const taskId = await kieCreateTask(kieModel, kieInput, kieCallbackUrl);
+        requestId = taskId;
+        endpoint = kieModel;
+        usedProvider = "kie";
+        console.log(`[animate-shot] Queued on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
+      } catch (kieError) {
+        // Kie.ai failed - fall back to fal.ai transparently
+        console.warn(`[animate-shot] Kie.ai submit failed, falling back to fal.ai:`, kieError);
+        const falResult = await submitToFal();
+        requestId = falResult.requestId;
+        endpoint = falResult.endpoint;
+        usedProvider = "fal";
       }
-
-      const webhookBase = getWebhookBaseUrl();
-      const kieCallbackUrl = webhookBase ? `${webhookBase}/api/webhooks/kie-completion` : undefined;
-      const taskId = await kieCreateTask(kieModel, kieInput, kieCallbackUrl);
-      requestId = taskId;
-      endpoint = kieModel;
-
-      console.log(`[animate-shot] Queued on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
     } else {
       // ── fal.ai path (default) ────────────────────────────────
-      endpoint = resolveVideoEndpoint(model, resolution);
-
-      console.log(`[animate-shot] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
-
-      const webhookBase = getWebhookBaseUrl();
-      const falWebhookUrl = webhookBase ? `${webhookBase}/api/webhooks/fal-completion` : undefined;
-      const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
-        input,
-        webhookUrl: falWebhookUrl,
-      });
-      requestId = falRequestId;
-
-      console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
+      const falResult = await submitToFal();
+      requestId = falResult.requestId;
+      endpoint = falResult.endpoint;
+      usedProvider = "fal";
     }
 
     // Update generation row with request_id and final settings
     const settings: Record<string, unknown> = {
       modelId: videoModelId,
       mode: isRelight ? "relight" : videoUrl ? "motion" : "create",
-      apiProvider,
+      apiProvider: usedProvider,
       falEndpoint: endpoint,
       falRequestId: requestId,
     };

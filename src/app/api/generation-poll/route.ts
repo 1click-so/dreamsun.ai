@@ -3,6 +3,8 @@ import { fal } from "@fal-ai/client";
 import { createClient } from "@/lib/supabase-server";
 import { refundCredits } from "@/lib/credits";
 import { kieGetTaskStatus, kieParseResultUrls } from "@/lib/kie-ai";
+import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
+import { getWebhookBaseUrl } from "@/lib/generation-completion";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -26,10 +28,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
 
-    // Load generation from DB
+    // Load generation from DB (includes fields needed for fal.ai fallback)
     const { data: gen, error: genError } = await supabase
       .from("generations")
-      .select("id, type, url, request_id, settings, user_id, model_id, cost_estimate")
+      .select("id, type, url, request_id, settings, user_id, model_id, cost_estimate, prompt, negative_prompt, source_image_url, reference_image_urls, created_at")
       .eq("id", generationId)
       .eq("user_id", user.id)
       .single();
@@ -67,11 +69,112 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing tracking data" }, { status: 400 });
     }
 
+    // ── Helper: fall back to fal.ai when Kie.ai fails ─────────
+    const fallbackToFal = async (): Promise<boolean> => {
+      try {
+        const model = getVideoModelById(gen.model_id);
+        if (!model) return false;
+
+        const s = (gen.settings as Record<string, unknown>) || {};
+        const res = s.resolution as string | undefined;
+        const falEndpoint = resolveVideoEndpoint(model, res);
+
+        // Rebuild fal.ai input from stored generation data
+        const falInput: Record<string, unknown> = {};
+        falInput[model.params.imageUrl] = gen.source_image_url;
+        falInput[model.params.prompt] = gen.prompt || "";
+
+        if (model.params.duration && s.duration) {
+          falInput[model.params.duration] = Number(s.duration);
+        }
+        if (s.aspectRatio && model.params.aspectRatio) {
+          falInput[model.params.aspectRatio] = s.aspectRatio;
+        }
+        if (res && model.params.resolution) {
+          falInput[model.params.resolution] = res;
+        }
+        if (s.generateAudio === false && model.supportsGenerateAudio) {
+          falInput.generate_audio = false;
+        }
+        if (s.cameraFixed === true && model.supportsCameraFixed) {
+          falInput.camera_fixed = true;
+        }
+        if (gen.negative_prompt && model.supportsNegativePrompt) {
+          falInput.negative_prompt = gen.negative_prompt;
+        }
+        if (model.extraInput) {
+          Object.assign(falInput, model.extraInput);
+        }
+
+        // End image (second reference URL)
+        const refs = gen.reference_image_urls as string[] | null;
+        if (refs && refs.length > 1 && model.params.endImageUrl) {
+          falInput[model.params.endImageUrl] = refs[1];
+        }
+
+        // Motion control - reference video
+        if (s.mode === "motion" && refs && model.params.videoUrl) {
+          // For motion control, videoUrl is in reference_image_urls
+          const videoRef = refs.find((u: string) => u !== gen.source_image_url);
+          if (videoRef) falInput[model.params.videoUrl] = videoRef;
+        }
+
+        const webhookBase = getWebhookBaseUrl();
+        const falWebhookUrl = webhookBase ? `${webhookBase.trim()}/api/webhooks/fal-completion` : undefined;
+
+        console.log(`[generation-poll] Kie.ai failed for ${gen.id}, falling back to fal.ai: endpoint=${falEndpoint}`);
+
+        const { request_id: newRequestId } = await fal.queue.submit(falEndpoint, {
+          input: falInput,
+          webhookUrl: falWebhookUrl,
+        });
+
+        // Update DB row to point to fal.ai
+        await supabase.from("generations").update({
+          request_id: newRequestId,
+          settings: {
+            ...s,
+            apiProvider: "fal",
+            falEndpoint,
+            falRequestId: newRequestId,
+            kieFallback: true,
+            kieOriginalRequestId: gen.request_id,
+          },
+        }).eq("id", gen.id);
+
+        console.log(`[generation-poll] Fallback submitted: ${gen.id} -> fal request_id=${newRequestId}`);
+        return true;
+      } catch (err) {
+        console.error("[generation-poll] fal.ai fallback failed:", err);
+        return false;
+      }
+    };
+
     // ── Kie.ai polling ─────────────────────────────────────────
     if (apiProvider === "kie") {
-      const kieResult = await kieGetTaskStatus(requestId);
+      let kieResult;
+      try {
+        kieResult = await kieGetTaskStatus(requestId);
+      } catch (kieErr) {
+        // Kie.ai API error (network, auth, etc.) - try fallback
+        console.warn("[generation-poll] Kie.ai status check failed:", kieErr);
+        if (await fallbackToFal()) {
+          return NextResponse.json({ status: "processing", generationId: gen.id, queueStatus: "IN_QUEUE" });
+        }
+        // Fallback also failed
+        return NextResponse.json({ error: "Provider unavailable" }, { status: 502 });
+      }
 
       if (kieResult.state === "waiting" || kieResult.state === "queuing" || kieResult.state === "generating") {
+        // Check for stuck tasks (waiting > 10 minutes = likely stuck)
+        const ageMs = Date.now() - new Date(gen.created_at).getTime();
+        if (kieResult.state === "waiting" && ageMs > 10 * 60 * 1000) {
+          console.warn(`[generation-poll] Kie.ai task ${requestId} stuck in "waiting" for ${Math.round(ageMs / 60000)}min, falling back to fal.ai`);
+          if (await fallbackToFal()) {
+            return NextResponse.json({ status: "processing", generationId: gen.id, queueStatus: "IN_QUEUE" });
+          }
+        }
+
         return NextResponse.json({
           status: "processing",
           generationId: gen.id,
@@ -126,7 +229,12 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ status: "completed", generationId: gen.id, url: permanentUrl, requestId });
       }
 
-      // Failed
+      // Kie.ai task failed - try fal.ai fallback before giving up
+      if (await fallbackToFal()) {
+        return NextResponse.json({ status: "processing", generationId: gen.id, queueStatus: "IN_QUEUE" });
+      }
+
+      // Both providers failed - refund and mark as error
       if (gen.cost_estimate && gen.cost_estimate > 0) {
         await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
       }
