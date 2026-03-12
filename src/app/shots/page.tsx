@@ -2319,7 +2319,7 @@ export function ShotListEditor({
       </div>{/* end sticky header wrapper */}
 
       {/* Shots Banner */}
-      <div className="relative mx-3 mt-8 mb-6 md:mx-6">
+      <div className="relative mx-3 mt-6 mb-6 md:mx-6">
         <div className="relative overflow-hidden rounded-xl border border-white/[0.06]" style={{ background: "linear-gradient(180deg, #0f1210 0%, #0a0a0a 100%)" }}>
 
           {/* Film sprocket strip - top */}
