@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Outfit, Gochi_Hand } from "next/font/google";
 import { Providers } from "@/components/Providers";
@@ -55,17 +56,17 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('dreamsun_theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){document.documentElement.classList.add('dark')}})()`,
           }}
         />
-        <script
-          src="https://analytics.fam.social/api/script.js"
-          data-site-id="87fa7ec42978"
-          defer
-        />
       </head>
       <body className="antialiased">
         <Providers>
           <NavigationProgress />
           {children}
         </Providers>
+        <Script
+          src="https://analytics.fam.social/api/script.js"
+          data-site-id="87fa7ec42978"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

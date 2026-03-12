@@ -19,6 +19,7 @@ declare global {
   interface Window {
     rybbit?: {
       event: (eventName: string, eventParams?: Record<string, string | number | boolean>) => void;
+      pageview: () => void;
     };
   }
 }

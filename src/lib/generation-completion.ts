@@ -5,6 +5,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { refundCredits } from "@/lib/credits";
+import { trackGenerationCompleted, trackGenerationFailed } from "@/lib/analytics-server";
 
 function getAdminClient() {
   return createClient(
@@ -28,7 +29,7 @@ export async function completeGeneration(
   // Check if already handled (idempotent)
   const { data: existing } = await supabase
     .from("generations")
-    .select("url")
+    .select("url, type, model_id, model_name")
     .eq("id", generationId)
     .single();
 
@@ -62,6 +63,10 @@ export async function completeGeneration(
     .update({ url: permanentUrl, file_size: fileSize, request_id: requestId })
     .eq("id", generationId);
 
+  // Server-side analytics
+  const genType = (existing?.type === "video" ? "video" : "image") as "image" | "video";
+  trackGenerationCompleted(genType, existing?.model_id ?? "unknown").catch(() => {});
+
   console.log(`[generation-completion] Completed ${generationId}: ${permanentUrl}`);
   return { success: true, permanentUrl };
 }
@@ -78,7 +83,7 @@ export async function failGeneration(
 
   const { data: gen } = await supabase
     .from("generations")
-    .select("user_id, cost_estimate, model_id, settings, url")
+    .select("user_id, cost_estimate, model_id, type, settings, url")
     .eq("id", generationId)
     .single();
 
@@ -107,6 +112,10 @@ export async function failGeneration(
       },
     })
     .eq("id", generationId);
+
+  // Server-side analytics
+  const genType = (gen.type === "video" ? "video" : "image") as "image" | "video";
+  trackGenerationFailed(genType, gen.model_id ?? "unknown", errorMessage).catch(() => {});
 
   console.log(`[generation-completion] Failed ${generationId}: ${errorMessage}`);
 }

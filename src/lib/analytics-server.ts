@@ -5,6 +5,11 @@
  * (webhooks, API routes) where window.rybbit is not available.
  *
  * Events tracked server-side:
+ *   -- Generation (from webhooks) --
+ *   generation_completed    -> image/video generation succeeded
+ *   generation_failed       -> generation failed (credits refunded)
+ *
+ *   -- Payments (from Stripe webhooks) --
  *   subscription_created    -> new subscription activated via Stripe
  *   subscription_renewed    -> recurring payment succeeded, credits reset
  *   subscription_upgraded   -> plan changed to higher tier
@@ -21,6 +26,7 @@ const RYBBIT_SITE_ID = process.env.RYBBIT_SITE_ID || "87fa7ec42978";
 async function trackServerEvent(
   eventName: string,
   properties?: Record<string, string | number | boolean>,
+  pathname = "/api/server-event",
 ): Promise<void> {
   try {
     await fetch(`${RYBBIT_URL}/api/track`, {
@@ -31,13 +37,39 @@ async function trackServerEvent(
         type: "custom_event",
         event_name: eventName,
         hostname: "dreamsunai.com",
-        pathname: "/api/webhooks/stripe",
+        pathname,
         properties: properties ? JSON.stringify(properties) : undefined,
       }),
     });
   } catch {
     // Analytics should never break the main flow
   }
+}
+
+// -- Generation Events (from webhooks) ------------------------------------
+
+export function trackGenerationCompleted(
+  type: "image" | "video",
+  modelId: string,
+  provider?: string,
+): Promise<void> {
+  return trackServerEvent("generation_completed", {
+    type,
+    model: modelId,
+    ...(provider && { provider }),
+  }, "/api/webhooks/generation");
+}
+
+export function trackGenerationFailed(
+  type: "image" | "video",
+  modelId: string,
+  reason?: string,
+): Promise<void> {
+  return trackServerEvent("generation_failed", {
+    type,
+    model: modelId,
+    ...(reason && { reason: reason.slice(0, 200) }),
+  }, "/api/webhooks/generation");
 }
 
 // -- Subscription Events --------------------------------------------------
