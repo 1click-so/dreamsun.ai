@@ -9,7 +9,8 @@ interface Stats {
   total_credits_in: number;
   total_credits_spent: number;
   total_refunded: number;
-  net_revenue_usd: string;
+  stripe_revenue_usd: string;
+  total_api_cost_usd: string;
   total_generations: number;
   total_users: number;
 }
@@ -121,9 +122,10 @@ export function OverviewTab() {
   return (
     <div className="space-y-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Credits Sold" value={stats.total_credits_in.toLocaleString()} sub={`$${stats.net_revenue_usd} revenue`} />
-        <StatCard label="Credits Spent" value={stats.total_credits_spent.toLocaleString()} sub={`${stats.total_refunded.toLocaleString()} refunded`} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard label="Stripe Revenue" value={`$${stats.stripe_revenue_usd}`} sub="from payments" />
+        <StatCard label="API Costs" value={`$${stats.total_api_cost_usd}`} sub={`${period === "all" ? "all time" : `last ${period}`}`} />
+        <StatCard label="Credits Spent" value={stats.total_credits_spent.toLocaleString()} sub={`${stats.total_refunded.toLocaleString()} refunded (excl. admin)`} />
         <StatCard label="Generations" value={stats.total_generations.toLocaleString()} sub={`${period === "all" ? "all time" : `last ${period}`}`} />
         <StatCard label="Users" value={stats.total_users.toLocaleString()} sub="registered accounts" />
       </div>

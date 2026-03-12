@@ -82,8 +82,9 @@ function capabilityLabel(cap: string): string {
   return labels[cap] || cap;
 }
 
-function PricingRowEditor({
+function PricingVariantRow({
   row,
+  variantLabel,
   onSave,
   onMakePrimary,
   saving,
@@ -91,6 +92,7 @@ function PricingRowEditor({
   hasSiblings,
 }: {
   row: PricingRow;
+  variantLabel?: string;
   onSave: (id: string, updates: EditState) => void;
   onMakePrimary: (modelId: string, provider: string) => void;
   saving: boolean;
@@ -141,6 +143,11 @@ function PricingRowEditor({
         ) : (
           <span className="text-[10px] text-muted">-</span>
         )}
+      </td>
+
+      {/* Variant */}
+      <td className="px-3 py-2 text-xs text-muted">
+        {variantLabel || "-"}
       </td>
 
       {/* Resolution / Audio */}
@@ -321,14 +328,20 @@ export function PricingTab() {
     );
   }
 
-  // Group by product category, then by model
+  // Derive base model key: strip -edit, -mc suffixes to group related models together
+  function baseModelKey(modelId: string): string {
+    return modelId.replace(/-edit$/, "").replace(/-mc$/, "");
+  }
+
+  // Group by product category, then by base model (flat array of rows per group)
   const byCategory = new Map<string, Map<string, PricingRow[]>>();
   rows.forEach((r) => {
     const category = CATEGORY_MAP[r.capability] || "Other";
     if (!byCategory.has(category)) byCategory.set(category, new Map());
-    const models = byCategory.get(category)!;
-    if (!models.has(r.model_id)) models.set(r.model_id, []);
-    models.get(r.model_id)!.push(r);
+    const baseModels = byCategory.get(category)!;
+    const base = baseModelKey(r.model_id);
+    if (!baseModels.has(base)) baseModels.set(base, []);
+    baseModels.get(base)!.push(r);
   });
 
   // Sort categories in defined order
@@ -351,10 +364,11 @@ export function PricingTab() {
         </Button>
       </div>
 
-      {sortedCategories.map(([category, models]) => {
+      {sortedCategories.map(([category, baseModels]) => {
         const isExpanded = expandedCaps.has(category);
-        const totalModels = models.size;
-        const activeRows = Array.from(models.values()).flat().filter((r) => r.is_active).length;
+        const totalGroups = baseModels.size;
+        const allRows = Array.from(baseModels.values()).flat();
+        const activeCount = allRows.filter((r) => r.is_active).length;
 
         return (
           <Card key={category} className="overflow-hidden p-0">
@@ -375,30 +389,51 @@ export function PricingTab() {
                   {category}
                 </span>
                 <span className="text-[11px] text-muted">
-                  {totalModels} model{totalModels !== 1 ? "s" : ""} - {activeRows} active
+                  {totalGroups} model{totalGroups !== 1 ? "s" : ""} - {activeCount} active
                 </span>
               </div>
             </button>
 
             {isExpanded && (
               <div className="border-t border-border">
-                {Array.from(models.entries()).map(([modelId, modelRows]) => {
-                  // Sort: primary rows first, then fallbacks
-                  const sorted = [...modelRows].sort((a, b) => (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0));
-                  // Check if this model has multiple providers
-                  const providers = new Set(modelRows.map((r) => r.api_provider));
-                  const hasSiblings = providers.size > 1;
+                {Array.from(baseModels.entries()).map(([baseKey, groupRows]) => {
+                  // Split into variant sub-groups by model_id (e.g. create vs edit)
+                  const variantMap = new Map<string, PricingRow[]>();
+                  groupRows.forEach((r) => {
+                    if (!variantMap.has(r.model_id)) variantMap.set(r.model_id, []);
+                    variantMap.get(r.model_id)!.push(r);
+                  });
+
+                  // Sort variants: base model first, then -edit, then -mc
+                  const sortedVariants = Array.from(variantMap.entries()).sort((a, b) => {
+                    const aIsEdit = a[0].endsWith("-edit");
+                    const bIsEdit = b[0].endsWith("-edit");
+                    const aIsMc = a[0].endsWith("-mc");
+                    const bIsMc = b[0].endsWith("-mc");
+                    if (aIsEdit !== bIsEdit) return aIsEdit ? 1 : -1;
+                    if (aIsMc !== bIsMc) return aIsMc ? 1 : -1;
+                    return 0;
+                  });
+
+                  // Use the base (non-edit) variant's name for the group header
+                  const baseName = sortedVariants[0][1][0].model_name.replace(/\s*\(Edit\)\s*$/i, "");
+                  const hasMultipleVariants = sortedVariants.length > 1;
+                  const allProviders = new Set(groupRows.map((r) => r.api_provider));
+                  const hasMultiProviders = allProviders.size > 1;
 
                   return (
-                    <div key={modelId} className="border-b border-border last:border-0">
+                    <div key={baseKey} className="border-b border-border last:border-0">
+                      {/* Group header */}
                       <div className="flex items-center gap-2 bg-surface/50 px-4 py-2">
                         <span className="text-xs font-semibold text-foreground">
-                          {modelRows[0].model_name}
+                          {baseName}
                         </span>
-                        <span className="rounded-sm bg-surface px-1.5 py-0.5 text-[10px] text-muted">
-                          {capabilityLabel(modelRows[0].capability)}
-                        </span>
-                        {hasSiblings && (
+                        {hasMultipleVariants && (
+                          <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent-text">
+                            {sortedVariants.length} variants
+                          </span>
+                        )}
+                        {hasMultiProviders && (
                           <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent-text">
                             fallback ready
                           </span>
@@ -411,6 +446,7 @@ export function PricingTab() {
                             <tr className="bg-surface/30">
                               <th className="px-3 py-1.5 text-left font-medium text-muted">Provider</th>
                               <th className="px-3 py-1.5 text-left font-medium text-muted">Role</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Variant</th>
                               <th className="px-3 py-1.5 text-left font-medium text-muted">Resolution</th>
                               <th className="px-3 py-1.5 text-right font-medium text-muted">API Cost</th>
                               <th className="px-3 py-1.5 text-left font-medium text-muted">Credits</th>
@@ -421,17 +457,25 @@ export function PricingTab() {
                             </tr>
                           </thead>
                           <tbody>
-                            {sorted.map((row) => (
-                              <PricingRowEditor
-                                key={row.id}
-                                row={row}
-                                onSave={handleSave}
-                                onMakePrimary={handleMakePrimary}
-                                saving={saving === row.id}
-                                switchingProvider={switchingModel === row.model_id}
-                                hasSiblings={hasSiblings}
-                              />
-                            ))}
+                            {sortedVariants.map(([variantId, variantRows]) => {
+                              // Sort within variant: primary first, then fallbacks
+                              const sorted = [...variantRows].sort((a, b) => (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0));
+                              const variantProviders = new Set(variantRows.map((r) => r.api_provider));
+                              const hasSiblings = variantProviders.size > 1;
+
+                              return sorted.map((row) => (
+                                <PricingVariantRow
+                                  key={row.id}
+                                  row={row}
+                                  variantLabel={hasMultipleVariants ? capabilityLabel(row.capability) : undefined}
+                                  onSave={handleSave}
+                                  onMakePrimary={handleMakePrimary}
+                                  saving={saving === row.id}
+                                  switchingProvider={switchingModel === row.model_id}
+                                  hasSiblings={hasSiblings}
+                                />
+                              ));
+                            })}
                           </tbody>
                         </table>
                       </div>
