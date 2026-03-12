@@ -177,9 +177,10 @@ export async function GET(req: NextRequest) {
     // fal.ai Usage API - get spending for the selected period
     const usageStart = dateFilter || new Date(Date.now() - 30 * 86400000).toISOString();
     const usageEnd = new Date().toISOString();
+    const falAdminKey = process.env.FAL_ADMIN_KEY || process.env.FAL_KEY;
     const usageUrl = `https://api.fal.ai/v1/models/usage?start=${encodeURIComponent(usageStart)}&end=${encodeURIComponent(usageEnd)}&expand=summary&timeframe=day`;
     const res = await fetch(usageUrl, {
-      headers: { Authorization: `Key ${process.env.FAL_KEY}` },
+      headers: { Authorization: `Key ${falAdminKey}` },
     });
     if (res.ok) {
       const data = await res.json();
