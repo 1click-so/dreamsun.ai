@@ -4,13 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { Button, Card, Spinner } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
-interface ProviderStat {
-  name: string;
-  active_models: number;
-  total_models: number;
-  total_rows: number;
-}
-
 interface ModelEntry {
   model_id: string;
   model_name: string;
@@ -21,27 +14,87 @@ interface ModelEntry {
   rows: Array<{ id: string; api_provider: string; is_active: boolean }>;
 }
 
+interface ProviderStat {
+  name: string;
+  active_models: number;
+  total_rows: number;
+}
+
 interface ProvidersData {
   providers: ProviderStat[];
   models: ModelEntry[];
 }
 
-function ProviderBadge({ provider, active }: { provider: string; active?: boolean }) {
+const CATEGORY_MAP: Record<string, string> = {
+  "text-to-image": "Images",
+  "image-to-image": "Images",
+  "image-to-video": "Videos",
+  "motion-control": "Videos",
+  "audio-to-video": "Videos",
+  relight: "Add-ons",
+  upscale: "Add-ons",
+  skin_enhance: "Add-ons",
+};
+
+const CATEGORY_ORDER = ["Images", "Videos", "Audio", "Add-ons"];
+
+/**
+ * Provider toggle pill - fal | kie
+ * For models with both providers, shows a segmented toggle.
+ * For single-provider models, shows a static badge.
+ */
+function ProviderToggle({
+  model,
+  onSwitch,
+  switching,
+}: {
+  model: ModelEntry;
+  onSwitch: (modelId: string, newProvider: string) => void;
+  switching: boolean;
+}) {
+  if (!model.has_fallback) {
+    // Single provider - just show it
+    return (
+      <span
+        className={cn(
+          "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold",
+          model.active_provider === "fal"
+            ? "bg-blue-500/15 text-blue-400"
+            : "bg-purple-500/15 text-purple-400"
+        )}
+      >
+        {model.active_provider || "none"}
+      </span>
+    );
+  }
+
+  // Multi-provider - segmented toggle
   return (
-    <span
-      className={cn(
-        "inline-flex rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase transition",
-        provider === "fal"
-          ? active
-            ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30"
-            : "bg-blue-500/10 text-blue-400/50"
-          : active
-            ? "bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30"
-            : "bg-purple-500/10 text-purple-400/50"
-      )}
-    >
-      {provider}
-    </span>
+    <div className="inline-flex items-center rounded-full border border-border bg-surface p-0.5">
+      {model.providers.map((p) => {
+        const isActive = p === model.active_provider;
+        return (
+          <button
+            key={p}
+            onClick={() => {
+              if (!isActive && !switching) onSwitch(model.model_id, p);
+            }}
+            disabled={switching}
+            className={cn(
+              "rounded-full px-3 py-1 text-[11px] font-semibold transition",
+              isActive
+                ? p === "fal"
+                  ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30"
+                  : "bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30"
+                : "text-muted hover:text-foreground",
+              switching && "opacity-50 cursor-wait"
+            )}
+          >
+            {switching && isActive ? <Spinner size="xs" className="inline" /> : p}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -63,14 +116,29 @@ export function ProvidersTab() {
     fetchProviders();
   }, [fetchProviders]);
 
+  // Optimistic switch
   const switchProvider = async (modelId: string, newProvider: string) => {
     setSwitching(modelId);
+
+    // Optimistic update
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        models: prev.models.map((m) =>
+          m.model_id === modelId ? { ...m, active_provider: newProvider } : m
+        ),
+      };
+    });
+
     try {
-      await fetch("/api/admin/providers", {
+      const res = await fetch("/api/admin/providers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "switch_provider", model_id: modelId, new_provider: newProvider }),
       });
+      if (!res.ok) fetchProviders(); // revert on failure
+    } catch {
       fetchProviders();
     } finally {
       setSwitching(null);
@@ -104,165 +172,100 @@ export function ProvidersTab() {
   }
 
   const { providers, models } = data;
-  const multiProviderModels = models.filter((m) => m.has_fallback);
+
+  // Group models by category
+  const byCategory = new Map<string, ModelEntry[]>();
+  models.forEach((m) => {
+    const cat = CATEGORY_MAP[m.capability] || "Other";
+    const list = byCategory.get(cat) || [];
+    list.push(m);
+    byCategory.set(cat, list);
+  });
+
+  const sortedCategories = Array.from(byCategory.entries()).sort(
+    (a, b) => (CATEGORY_ORDER.indexOf(a[0]) ?? 99) - (CATEGORY_ORDER.indexOf(b[0]) ?? 99)
+  );
+
+  // Stats
+  const totalModels = models.length;
+  const withFallback = models.filter((m) => m.has_fallback).length;
 
   return (
     <div className="space-y-6">
-      {/* Provider summary cards */}
-      <div className="grid grid-cols-2 gap-3">
-        {providers.map((p) => (
-          <Card key={p.name} className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ProviderBadge provider={p.name} active />
-              <div>
-                <p className="text-sm font-medium text-foreground">{p.name}</p>
-                <p className="text-[11px] text-muted">
-                  {p.active_models} active / {p.total_rows} total rows
-                </p>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* Summary + bulk actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {providers.map((p) => (
+            <span key={p.name} className="text-xs text-muted">
+              <span
+                className={cn(
+                  "mr-1 inline-block h-2 w-2 rounded-full",
+                  p.name === "fal" ? "bg-blue-400" : "bg-purple-400"
+                )}
+              />
+              {p.name}: {p.active_models} active
+            </span>
+          ))}
+          <span className="text-xs text-muted">
+            {withFallback}/{totalModels} have fallback
+          </span>
+        </div>
 
-      {/* Bulk actions */}
-      {providers.length >= 2 && (
-        <Card>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
-            Bulk Actions
-          </h3>
-          <div className="flex flex-wrap gap-2">
+        {providers.length >= 2 && (
+          <div className="flex items-center gap-2">
             {providers.map((from) =>
               providers
                 .filter((to) => to.name !== from.name)
                 .map((to) => (
                   <Button
                     key={`${from.name}-${to.name}`}
-                    variant="secondary"
+                    variant="ghost"
                     size="xs"
                     onClick={() => bulkSwitch(from.name, to.name)}
                     disabled={switching === "bulk"}
                   >
-                    {switching === "bulk" ? (
-                      <Spinner size="xs" />
-                    ) : (
-                      `Switch all ${from.name} to ${to.name}`
-                    )}
+                    {switching === "bulk" ? <Spinner size="xs" /> : `All to ${to.name}`}
                   </Button>
                 ))
             )}
           </div>
-          <p className="mt-2 text-[10px] text-muted">
-            Only switches models that have rows for both providers.
-          </p>
-        </Card>
-      )}
-
-      {/* Multi-provider models */}
-      <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-          Models with Multiple Providers ({multiProviderModels.length})
-        </h3>
-        {multiProviderModels.length === 0 ? (
-          <p className="py-4 text-center text-xs text-muted">No models have multiple providers configured.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-surface">
-                  <th className="px-3 py-2 text-left font-medium text-muted">Model</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted">Capability</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted">Providers</th>
-                  <th className="px-3 py-2 text-right font-medium text-muted">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {multiProviderModels.map((m) => (
-                  <tr key={m.model_id} className="border-b border-border last:border-0">
-                    <td className="px-3 py-2">
-                      <span className="font-medium text-foreground">{m.model_name}</span>
-                      <br />
-                      <span className="text-[10px] text-muted">{m.model_id}</span>
-                    </td>
-                    <td className="px-3 py-2 text-muted">{m.capability}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1.5">
-                        {m.providers.map((p) => (
-                          <ProviderBadge
-                            key={p}
-                            provider={p}
-                            active={p === m.active_provider}
-                          />
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {m.providers
-                        .filter((p) => p !== m.active_provider)
-                        .map((p) => (
-                          <Button
-                            key={p}
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => switchProvider(m.model_id, p)}
-                            disabled={switching === m.model_id}
-                          >
-                            {switching === m.model_id ? (
-                              <Spinner size="xs" />
-                            ) : (
-                              `Switch to ${p}`
-                            )}
-                          </Button>
-                        ))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </div>
 
-      {/* All models list */}
-      <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-          All Models ({models.length})
-        </h3>
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border bg-surface">
-                <th className="px-3 py-2 text-left font-medium text-muted">Model</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">Capability</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">Active Provider</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">Fallback</th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.map((m) => (
-                <tr key={m.model_id} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2 font-medium text-foreground">{m.model_name}</td>
-                  <td className="px-3 py-2 text-muted">{m.capability}</td>
-                  <td className="px-3 py-2">
-                    {m.active_provider ? (
-                      <ProviderBadge provider={m.active_provider} active />
-                    ) : (
-                      <span className="text-muted">none</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {m.has_fallback ? (
-                      <span className="text-accent-text text-[10px] font-medium">Yes</span>
-                    ) : (
-                      <span className="text-muted text-[10px]">No</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Models by category */}
+      {sortedCategories.map(([category, categoryModels]) => (
+        <Card key={category} className="overflow-hidden p-0">
+          <div className="px-4 py-2.5 border-b border-border">
+            <span className="text-sm font-semibold text-foreground">{category}</span>
+            <span className="ml-2 text-[11px] text-muted">{categoryModels.length} models</span>
+          </div>
+
+          <div className="divide-y divide-border">
+            {categoryModels.map((m) => (
+              <div
+                key={m.model_id}
+                className="flex items-center justify-between px-4 py-2.5 transition hover:bg-surface-hover"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-medium text-foreground">{m.model_name}</span>
+                  <span className="ml-2 text-[10px] text-muted">{m.model_id}</span>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  {!m.has_fallback && (
+                    <span className="text-[10px] text-muted">no fallback</span>
+                  )}
+                  <ProviderToggle
+                    model={m}
+                    onSwitch={switchProvider}
+                    switching={switching === m.model_id}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
