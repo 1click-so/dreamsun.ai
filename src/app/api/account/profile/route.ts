@@ -13,7 +13,7 @@ export async function GET() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "subscription_tier, subscription_status, stripe_customer_id, subscription_ends_at, credits_topup_expires_at, avatar_url, username"
+      "subscription_tier, subscription_status, stripe_customer_id, subscription_ends_at, credits_topup_expires_at, avatar_url, username, is_admin"
     )
     .eq("id", user.id)
     .single();
@@ -29,6 +29,7 @@ export async function GET() {
     subscription_ends_at: profile?.subscription_ends_at || null,
     credits_topup_expires_at: profile?.credits_topup_expires_at || null,
     has_billing: !!profile?.stripe_customer_id,
+    is_admin: !!profile?.is_admin,
   });
 }
 

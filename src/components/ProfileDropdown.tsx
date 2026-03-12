@@ -61,6 +61,7 @@ export function ProfileDropdown() {
   const [email, setEmail] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useTheme();
   const { total: credits, subscription, topup, tier, loading: creditsLoading } = useCredits();
@@ -78,6 +79,7 @@ export function ProfileDropdown() {
       .then((data) => {
         if (data.avatar_url) setAvatarUrl(data.avatar_url);
         if (data.display_name) setDisplayName(data.display_name);
+        if (data.is_admin) setIsAdmin(true);
       })
       .catch(() => {});
   }, []);
@@ -209,6 +211,20 @@ export function ProfileDropdown() {
             </svg>
             Account Settings
           </Link>
+
+          {/* Admin */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-accent-text transition hover:bg-surface-hover"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M8 1.5l1.5 3 3.5.5-2.5 2.5.5 3.5L8 9.5 4.5 11l.5-3.5L2.5 5l3.5-.5L8 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              </svg>
+              Admin
+            </Link>
+          )}
 
           {/* Theme toggle */}
           <button
