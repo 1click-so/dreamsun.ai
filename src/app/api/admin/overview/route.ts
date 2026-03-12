@@ -159,33 +159,29 @@ export async function GET(req: NextRequest) {
     byModel[g.model_id].api_cost += apiCost;
   });
 
-  // 5. Provider balances
-  let falBalance: number | null = null;
-  let falBalanceRaw: unknown = null;
+  // 5. Provider usage & spending (fal.ai Usage API)
+  let falSpending: { total: number; period: string } | null = null;
   try {
-    // Try fal.ai billing endpoints
-    const endpoints = [
-      "https://rest.fal.ai/billing/balance",
-      "https://rest.fal.run/billing/balance",
-      "https://fal.run/billing/balance",
-    ];
-    for (const endpoint of endpoints) {
-      try {
-        const res = await fetch(endpoint, {
-          headers: { Authorization: `Key ${process.env.FAL_KEY}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          falBalanceRaw = data;
-          falBalance = data.balance ?? data.amount ?? data.credits ?? null;
-          if (falBalance !== null) break;
-        }
-      } catch {
-        // try next endpoint
+    // fal.ai Usage API - get spending for the selected period
+    const usageStart = dateFilter || new Date(Date.now() - 30 * 86400000).toISOString();
+    const usageEnd = new Date().toISOString();
+    const usageUrl = `https://api.fal.ai/v1/models/usage?start=${encodeURIComponent(usageStart)}&end=${encodeURIComponent(usageEnd)}&expand=summary&timeframe=day`;
+    const res = await fetch(usageUrl, {
+      headers: { Authorization: `Key ${process.env.FAL_KEY}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      // summary contains aggregated cost across all models
+      if (data.summary && Array.isArray(data.summary)) {
+        const totalCost = data.summary.reduce((sum: number, s: { cost?: number }) => sum + (s.cost || 0), 0);
+        falSpending = { total: totalCost, period: `${usageStart.split("T")[0]} to ${usageEnd.split("T")[0]}` };
+      } else if (data.time_series && Array.isArray(data.time_series)) {
+        const totalCost = data.time_series.reduce((sum: number, t: { cost?: number }) => sum + (t.cost || 0), 0);
+        falSpending = { total: totalCost, period: `${usageStart.split("T")[0]} to ${usageEnd.split("T")[0]}` };
       }
     }
   } catch {
-    // fal balance unavailable
+    // fal usage unavailable
   }
 
   // 6. User count
@@ -211,9 +207,8 @@ export async function GET(req: NextRequest) {
       by_provider: byProvider,
       by_model: byModel,
     },
-    provider_balances: {
-      fal: falBalance,
-      fal_raw: falBalanceRaw,
+    provider_spending: {
+      fal: falSpending,
       kie: null,
     },
     period,

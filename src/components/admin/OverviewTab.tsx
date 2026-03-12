@@ -29,9 +29,9 @@ interface OverviewData {
     by_provider: Record<string, BreakdownEntry>;
     by_model: Record<string, BreakdownEntry>;
   };
-  provider_balances: {
-    fal: number | null;
-    kie: number | null;
+  provider_spending: {
+    fal: { total: number; period: string } | null;
+    kie: null;
   };
   period: string;
 }
@@ -117,29 +117,32 @@ export function OverviewTab() {
     return <p className="py-10 text-center text-sm text-muted">Failed to load overview data.</p>;
   }
 
-  const { stats, breakdown, provider_balances } = data;
+  const { stats, breakdown, provider_spending } = data;
 
   return (
     <div className="space-y-6">
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="Stripe Revenue" value={`$${stats.stripe_revenue_usd}`} sub="from payments" />
-        <StatCard label="API Costs" value={`$${stats.total_api_cost_usd}`} sub={`${period === "all" ? "all time" : `last ${period}`}`} />
+        <StatCard label="API Costs (est.)" value={`$${stats.total_api_cost_usd}`} sub={`${period === "all" ? "all time" : `last ${period}`}`} />
         <StatCard label="Credits Spent" value={stats.total_credits_spent.toLocaleString()} sub={`${stats.total_refunded.toLocaleString()} refunded (excl. admin)`} />
         <StatCard label="Generations" value={stats.total_generations.toLocaleString()} sub={`${period === "all" ? "all time" : `last ${period}`}`} />
         <StatCard label="Users" value={stats.total_users.toLocaleString()} sub="registered accounts" />
       </div>
 
-      {/* Provider balances */}
+      {/* Provider spending */}
       <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Provider Balances</h3>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Provider Spending (from API)</h3>
         <div className="grid grid-cols-2 gap-3">
           <Card className="flex items-center justify-between">
             <div>
               <span className="text-sm font-medium text-foreground">fal.ai</span>
+              {provider_spending.fal && (
+                <p className="text-[10px] text-muted">{provider_spending.fal.period}</p>
+              )}
             </div>
-            <span className={cn("text-sm font-bold", provider_balances.fal !== null ? "text-accent-text" : "text-muted")}>
-              {provider_balances.fal !== null ? `$${provider_balances.fal.toFixed(2)}` : "N/A"}
+            <span className={cn("text-sm font-bold", provider_spending.fal !== null ? "text-accent-text" : "text-muted")}>
+              {provider_spending.fal !== null ? `$${provider_spending.fal.total.toFixed(2)}` : "N/A"}
             </span>
           </Card>
           <Card className="flex items-center justify-between">
