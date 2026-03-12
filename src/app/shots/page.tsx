@@ -2319,62 +2319,51 @@ export function ShotListEditor({
       </div>{/* end sticky header wrapper */}
 
       {/* Shots Banner */}
-      <div className="relative mx-3 mt-6 mb-4 overflow-hidden rounded-2xl border border-accent/[0.12] md:mx-6">
-        {/* Glow blobs - asymmetric, organic feel */}
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-8 top-1/2 h-36 w-36 -translate-y-1/2 rounded-full bg-accent/[0.10] blur-[50px]" />
-          <div className="absolute right-16 -top-8 h-28 w-44 rounded-full bg-accent/[0.06] blur-[45px]" />
-          <div className="absolute left-1/3 -bottom-6 h-20 w-36 rounded-full bg-accent/[0.04] blur-[35px]" />
-        </div>
+      <div className="relative mx-3 mt-8 mb-6 overflow-hidden rounded-2xl md:mx-6" style={{ background: "linear-gradient(135deg, rgba(161,252,223,0.07) 0%, rgba(161,252,223,0.02) 40%, transparent 60%, rgba(161,252,223,0.05) 100%)" }}>
+        {/* Large background glow */}
+        <div className="pointer-events-none absolute -left-20 -top-20 h-60 w-60 rounded-full bg-accent/[0.08] blur-[80px]" />
+        <div className="pointer-events-none absolute -right-10 -bottom-16 h-48 w-48 rounded-full bg-accent/[0.05] blur-[60px]" />
 
-        {/* Top edge glow line */}
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+        {/* Accent bar left edge */}
+        <div className="absolute inset-y-0 left-0 w-1 rounded-full bg-accent/40" />
 
         {/* Content */}
-        <div className="relative flex items-center gap-5 px-6 py-5 md:px-8">
-          {/* Glowing icon */}
+        <div className="relative flex items-center gap-6 py-7 pl-8 pr-6 md:pl-10 md:pr-8">
+          {/* Icon with strong glow */}
           <div className="relative flex-shrink-0">
-            <div className="absolute -inset-1 rounded-xl bg-accent/15 blur-lg" />
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-accent/[0.08] ring-1 ring-accent/20">
-              <Film size={22} className="text-accent" />
+            <div className="absolute -inset-3 rounded-2xl bg-accent/20 blur-xl" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 ring-1 ring-accent/25">
+              <Film size={26} className="text-accent" />
             </div>
           </div>
 
-          {/* Title */}
-          <h2 className="font-display text-xl font-bold uppercase tracking-[0.25em] text-foreground md:text-2xl">
-            Shots
-          </h2>
-
-          <div className="flex-1" />
-
-          {/* Stats */}
-          {shots.length > 0 && (
-            <div className="flex items-center gap-3">
-              {/* Shot count */}
-              <div className="flex items-center gap-2 rounded-full border border-accent/15 bg-accent/[0.06] px-4 py-1.5">
-                <span className="text-base font-bold tabular-nums text-accent">{shots.length}</span>
-                <span className="text-[11px] text-muted">shot{shots.length !== 1 ? "s" : ""}</span>
-              </div>
-
-              {/* Total generated counts */}
-              <div className="hidden items-center gap-2 md:flex">
+          {/* Title + stats inline */}
+          <div className="flex flex-col gap-1.5">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-[0.3em] text-foreground md:text-3xl">
+              Shots
+            </h2>
+            {shots.length > 0 && (
+              <p className="text-sm text-muted">
+                <span className="font-semibold tabular-nums text-accent">{shots.length}</span>
+                <span> shot{shots.length !== 1 ? "s" : ""}</span>
                 {totalImages > 0 && (
-                  <div className="rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[11px] font-medium tabular-nums text-muted">
-                    {totalImages} image{totalImages !== 1 ? "s" : ""}
-                  </div>
+                  <>
+                    <span className="mx-2 text-border">·</span>
+                    <span className="font-semibold tabular-nums text-accent">{totalImages}</span>
+                    <span> image{totalImages !== 1 ? "s" : ""}</span>
+                  </>
                 )}
                 {totalVideos > 0 && (
-                  <div className="rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[11px] font-medium tabular-nums text-muted">
-                    {totalVideos} video{totalVideos !== 1 ? "s" : ""}
-                  </div>
+                  <>
+                    <span className="mx-2 text-border">·</span>
+                    <span className="font-semibold tabular-nums text-accent">{totalVideos}</span>
+                    <span> video{totalVideos !== 1 ? "s" : ""}</span>
+                  </>
                 )}
-              </div>
-            </div>
-          )}
+              </p>
+            )}
+          </div>
         </div>
-
-        {/* Bottom edge glow line */}
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent/15 to-transparent" />
       </div>
       <div className={viewMode === "storyboard" ? "relative px-3 pb-[50vh] md:px-6" : "px-3 pb-[50vh] md:px-6"}>
         {shots.length === 0 ? (
