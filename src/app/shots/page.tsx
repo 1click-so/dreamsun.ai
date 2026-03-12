@@ -2350,7 +2350,7 @@ export function ShotListEditor({
             <div className="relative mr-6 flex-shrink-0">
               {/* Crosshair ring */}
               <div className="flex h-[52px] w-[52px] items-center justify-center rounded-lg border border-accent/20">
-                <Film size={24} className="text-accent" style={{ animation: "shots-glow-pulse 3s ease-in-out infinite" }} />
+                <Film size={24} className="text-accent" />
               </div>
               {/* Corner marks - viewfinder style */}
               <div className="absolute -left-1 -top-1 h-2 w-2 border-l border-t border-accent/30" />
@@ -2386,13 +2386,6 @@ export function ShotListEditor({
               )}
             </div>
 
-            <div className="flex-1" />
-
-            {/* Right: Scene indicator dot */}
-            <div className="hidden items-center gap-2 md:flex">
-              <div className="h-2 w-2 rounded-full bg-accent/60" style={{ animation: "shots-glow-pulse 3s ease-in-out infinite", boxShadow: "0 0 8px rgba(161,252,223,0.3)" }} />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-muted/40">Live</span>
-            </div>
           </div>
 
           {/* Film sprocket strip - bottom */}

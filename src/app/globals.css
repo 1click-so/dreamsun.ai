@@ -195,11 +195,6 @@ textarea:focus {
   100% { transform: translateX(100%); }
 }
 
-@keyframes shots-glow-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
 /* ================================================================
    GENERATING STATE — subtle pulsing border
    ================================================================ */
