@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (genError) {
-      console.error("[animate-shot] DB insert error:", genError);
+      console.error("[api/videos] DB insert error:", genError);
     }
     generationId = genRow?.id ?? null;
 
@@ -267,12 +267,12 @@ export async function POST(req: NextRequest) {
       const falEndpoint = resolveVideoEndpoint(model, resolution);
       const webhookBase = getWebhookBaseUrl();
       const falWebhookUrl = webhookBase ? `${webhookBase.trim()}/api/webhooks/fal-completion` : undefined;
-      console.log(`[animate-shot] endpoint=${falEndpoint} input=`, JSON.stringify(input, null, 2));
+      console.log(`[api/videos] endpoint=${falEndpoint} input=`, JSON.stringify(input, null, 2));
       const { request_id: falRequestId } = await fal.queue.submit(falEndpoint, {
         input,
         webhookUrl: falWebhookUrl,
       });
-      console.log(`[animate-shot] Queued on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
+      console.log(`[api/videos] Queued on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
       return { requestId: falRequestId, endpoint: falEndpoint };
     };
 
@@ -341,10 +341,10 @@ export async function POST(req: NextRequest) {
         requestId = taskId;
         endpoint = kieModel;
         usedProvider = "kie";
-        console.log(`[animate-shot] Queued on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
+        console.log(`[api/videos] Queued on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
       } catch (kieError) {
         // Kie.ai failed - fall back to fal.ai transparently
-        console.warn(`[animate-shot] Kie.ai submit failed, falling back to fal.ai:`, kieError);
+        console.warn(`[api/videos] Kie.ai submit failed, falling back to fal.ai:`, kieError);
         const falResult = await submitToFal();
         requestId = falResult.requestId;
         endpoint = falResult.endpoint;
@@ -385,7 +385,7 @@ export async function POST(req: NextRequest) {
         .eq("id", generationId);
     }
 
-    console.log(`[animate-shot] Pending generation saved: id=${generationId}`);
+    console.log(`[api/videos] Pending generation saved: id=${generationId}`);
 
     // Return immediately — client will poll /api/generation-poll
     return NextResponse.json({

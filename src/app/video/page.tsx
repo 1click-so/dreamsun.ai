@@ -797,7 +797,7 @@ export default function VideoPage() {
       }
 
       // Submit to queue — returns immediately
-      const res = await fetch("/api/animate-shot", {
+      const res = await fetch("/api/videos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

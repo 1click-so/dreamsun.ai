@@ -1260,7 +1260,7 @@ export function ShotListEditor({
         sentRefs: body.referenceImageUrls ? (body.referenceImageUrls as string[]).length : 0,
       });
 
-      const res = await fetch("/api/generate", {
+      const res = await fetch("/api/images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1373,7 +1373,7 @@ export function ShotListEditor({
 
       console.log(`[Shot #${shot.number} EDIT] Model: ${model.id}`, { sourceImageUrl, editPrompt });
 
-      const res = await fetch("/api/generate", {
+      const res = await fetch("/api/images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1448,7 +1448,7 @@ export function ShotListEditor({
   };
 
   // --- Single Shot Animation (reusable) ---
-  // Uses /api/animate-shot (queue-based) — refresh-safe, server persists to Supabase.
+  // Uses /api/videos (queue-based) — refresh-safe, server persists to Supabase.
   const animateSingleShot = async (shot: Shot) => {
     const shotVideoModelId = shot.settings.video.modelId ?? selectedVideoModel.id;
     const model = VIDEO_MODELS.find((m) => m.id === shotVideoModelId) ?? selectedVideoModel;
@@ -1475,7 +1475,7 @@ export function ShotListEditor({
     const useGenerateAudio = shot.settings.video.generateAudio ?? generateAudio;
 
     try {
-      // Build request body for /api/animate-shot
+      // Build request body for /api/videos
       const rawVideoPrompt = shot.videoPrompt || "";
       const fullVideoPrompt = videoPromptPrefix ? `${videoPromptPrefix.trim()} ${rawVideoPrompt}` : rawVideoPrompt;
       const body: Record<string, unknown> = {
@@ -1495,7 +1495,7 @@ export function ShotListEditor({
       if (shot.videoNegativePrompt) body.negativePrompt = shot.videoNegativePrompt;
 
       // Submit to queue via API (handles credits, fal queue submit, Supabase persistence)
-      const res = await fetch("/api/animate-shot", {
+      const res = await fetch("/api/videos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

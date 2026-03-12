@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (genError) {
-      console.error("[generate] DB insert error:", genError);
+      console.error("[api/images] DB insert error:", genError);
     }
     generationId = genRow?.id ?? null;
 
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
       requestId = taskId;
       endpoint = kieModel;
 
-      console.log(`[generate] Queued image on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
+      console.log(`[api/images] Queued image on Kie.ai: taskId=${taskId}, webhook=${kieCallbackUrl || "none"}`);
     } else {
       // ── fal.ai path - queue submit instead of subscribe ────────
       input.enable_safety_checker = safetyChecker === true;
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
       const webhookBase = getWebhookBaseUrl();
       const falWebhookUrl = webhookBase ? `${webhookBase}/api/webhooks/fal-completion` : undefined;
 
-      console.log(`[generate] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
+      console.log(`[api/images] endpoint=${endpoint} input=`, JSON.stringify(input, null, 2));
 
       const { request_id: falRequestId } = await fal.queue.submit(endpoint, {
         input,
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
       });
       requestId = falRequestId;
 
-      console.log(`[generate] Queued image on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
+      console.log(`[api/images] Queued image on fal.ai: request_id=${falRequestId}, webhook=${falWebhookUrl || "none"}`);
     }
 
     // Update generation row with request_id and final settings
@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
         .eq("id", generationId);
     }
 
-    console.log(`[generate] Pending image generation saved: id=${generationId}`);
+    console.log(`[api/images] Pending image generation saved: id=${generationId}`);
 
     // Return immediately - client will poll /api/generation-poll
     return NextResponse.json({

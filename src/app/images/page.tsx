@@ -963,7 +963,7 @@ export default function GeneratePage() {
           reqBody.negativePrompt = negativePrompt.trim();
         }
 
-        const res = await fetch("/api/generate", {
+        const res = await fetch("/api/images", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(reqBody),
