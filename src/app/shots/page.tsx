@@ -2318,17 +2318,67 @@ export function ShotListEditor({
       </div>
       </div>{/* end sticky header wrapper */}
 
-      {/* Shots Section */}
-      <div className="mx-6 mt-6 mb-4 flex items-center gap-4">
-        <div className="h-px flex-1 bg-border" />
-        <h2 className="flex items-center gap-2.5 text-lg font-bold uppercase tracking-widest text-foreground">
-          <Film size={18} className="text-accent" />
-          Shots
-          <span className="text-xs font-normal normal-case tracking-normal text-muted">
-            {shots.length > 0 ? `${shots.length} shot${shots.length !== 1 ? "s" : ""}` : ""}
-          </span>
-        </h2>
-        <div className="h-px flex-1 bg-border" />
+      {/* Shots Banner */}
+      <div className="relative mx-3 mt-6 mb-4 overflow-hidden rounded-2xl border border-accent/[0.12] md:mx-6">
+        {/* Glow blobs - asymmetric, organic feel */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-8 top-1/2 h-36 w-36 -translate-y-1/2 rounded-full bg-accent/[0.10] blur-[50px]" />
+          <div className="absolute right-16 -top-8 h-28 w-44 rounded-full bg-accent/[0.06] blur-[45px]" />
+          <div className="absolute left-1/3 -bottom-6 h-20 w-36 rounded-full bg-accent/[0.04] blur-[35px]" />
+        </div>
+
+        {/* Top edge glow line */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+
+        {/* Content */}
+        <div className="relative flex items-center gap-5 px-6 py-5 md:px-8">
+          {/* Glowing icon */}
+          <div className="relative flex-shrink-0">
+            <div className="absolute -inset-1 rounded-xl bg-accent/15 blur-lg" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-accent/[0.08] ring-1 ring-accent/20">
+              <Film size={22} className="text-accent" />
+            </div>
+          </div>
+
+          {/* Title */}
+          <h2 className="text-xl font-bold uppercase tracking-[0.25em] text-foreground md:text-2xl">
+            Shots
+          </h2>
+
+          <div className="flex-1" />
+
+          {/* Stats */}
+          {shots.length > 0 && (
+            <div className="flex items-center gap-3">
+              {/* Shot count */}
+              <div className="flex items-center gap-2 rounded-full border border-accent/15 bg-accent/[0.06] px-4 py-1.5">
+                <span className="text-base font-bold tabular-nums text-accent">{shots.length}</span>
+                <span className="text-[11px] text-muted">shot{shots.length !== 1 ? "s" : ""}</span>
+              </div>
+
+              {/* Progress pills - images & videos */}
+              <div className="hidden items-center gap-2 md:flex">
+                <div className={`rounded-full px-3 py-1.5 text-[11px] font-medium tabular-nums ${
+                  imagesCompleted === shots.length && shots.length > 0
+                    ? "bg-accent/10 text-accent"
+                    : "bg-foreground/[0.04] text-muted"
+                }`}>
+                  {imagesCompleted}/{shots.length} img
+                </div>
+                <div className={`rounded-full px-3 py-1.5 text-[11px] font-medium tabular-nums ${
+                  videosCompleted === shots.length && shots.length > 0
+                    ? "bg-accent/10 text-accent"
+                    : "bg-foreground/[0.04] text-muted"
+                }`}>
+                  {videosCompleted}/{shots.length} vid
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom edge glow line */}
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent/15 to-transparent" />
       </div>
       <div className={viewMode === "storyboard" ? "relative px-3 pb-[50vh] md:px-6" : "px-3 pb-[50vh] md:px-6"}>
         {shots.length === 0 ? (
