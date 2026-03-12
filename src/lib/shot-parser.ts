@@ -6,13 +6,19 @@ export interface ParsedShot {
 }
 
 /**
- * Parse shot list text format:
+ * Parse shot list text format. Accepts many variations:
  *
- * SHOT 1 — Title
- * IMAGE: prompt text (may be multi-line)
- * VIDEO: prompt text (may be multi-line)
+ *   SHOT 1 — Title          SHOT 1A — Title
+ *   IMAGE: prompt            IMAGE PROMPT
+ *   VIDEO: prompt            VIDEO PROMPT
+ *                             prompt on next line...
  *
- * Returns array of parsed shots.
+ * Field markers accepted (case-insensitive):
+ *   IMAGE: / IMAGE PROMPT / IMAGE PROMPT: / IMAGE
+ *   VIDEO: / VIDEO PROMPT / VIDEO PROMPT: / VIDEO
+ *   MOTION: / MOTION PROMPT / MOTION PROMPT: / MOTION
+ *
+ * Prompt text can be on the same line or start on the next line.
  */
 export function parseShotList(text: string): ParsedShot[] {
   const shots: ParsedShot[] = [];
@@ -24,10 +30,9 @@ export function parseShotList(text: string): ParsedShot[] {
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
-    // Match SHOT header: "SHOT 1 — Title" or "SHOT 1 - Title"
+    // Match SHOT header: "SHOT 1 — Title" or "SHOT 1A - Title"
     const shotMatch = line.match(/^SHOT\s+(\d+[a-zA-Z]?)\s*[—\-–]\s*(.+)$/i);
     if (shotMatch) {
-      // Save previous shot
       if (currentShot?.number != null) {
         shots.push(finalizeShot(currentShot));
       }
@@ -43,33 +48,34 @@ export function parseShotList(text: string): ParsedShot[] {
 
     if (!currentShot) continue;
 
-    // Match IMAGE: prefix
-    const imageMatch = line.match(/^IMAGE:\s*(.*)/i);
+    // Match IMAGE field: "IMAGE:", "IMAGE PROMPT", "IMAGE PROMPT:", "IMAGE"
+    const imageMatch = line.match(/^IMAGE(?:\s+PROMPT)?(?::\s*(.*)|\s*$)/i);
     if (imageMatch) {
       currentField = "image";
-      currentShot.imagePrompt = imageMatch[1];
+      const inline = (imageMatch[1] ?? "").trim();
+      if (inline) currentShot.imagePrompt = inline;
       continue;
     }
 
-    // Match VIDEO: prefix
-    const videoMatch = line.match(/^VIDEO:\s*(.*)/i);
+    // Match VIDEO / MOTION field: "VIDEO:", "VIDEO PROMPT", "MOTION:", etc.
+    const videoMatch = line.match(/^(?:VIDEO|MOTION)(?:\s+PROMPT)?(?::\s*(.*)|\s*$)/i);
     if (videoMatch) {
       currentField = "video";
-      currentShot.videoPrompt = videoMatch[1];
+      const inline = (videoMatch[1] ?? "").trim();
+      if (inline) currentShot.videoPrompt = inline;
       continue;
     }
 
     // Continuation line — append to current field
     if (currentField && line) {
       if (currentField === "image") {
-        currentShot.imagePrompt = (currentShot.imagePrompt || "") + " " + line;
+        currentShot.imagePrompt = (currentShot.imagePrompt || "") + (currentShot.imagePrompt ? " " : "") + line;
       } else {
-        currentShot.videoPrompt = (currentShot.videoPrompt || "") + " " + line;
+        currentShot.videoPrompt = (currentShot.videoPrompt || "") + (currentShot.videoPrompt ? " " : "") + line;
       }
     }
   }
 
-  // Don't forget the last shot
   if (currentShot?.number != null) {
     shots.push(finalizeShot(currentShot));
   }
