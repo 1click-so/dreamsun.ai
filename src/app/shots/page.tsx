@@ -1260,25 +1260,14 @@ export function ShotListEditor({
         sentRefs: body.referenceImageUrls ? (body.referenceImageUrls as string[]).length : 0,
       });
 
-      const res = await fetch("/api/generate-shot", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
 
-      // Handle non-JSON responses (e.g. Next.js 500 plain text)
-      const text = await res.text();
-      let data: Record<string, unknown>;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        updateShot(shot.id, {
-          imageStatus: "error",
-          error: `Server error (${res.status}): ${text.slice(0, 200)}`,
-        });
-        return;
-      }
+      const data = await res.json();
 
       if (!res.ok) {
         if (res.status === 402) {
@@ -1294,49 +1283,45 @@ export function ShotListEditor({
       trackShotGenerated(model.id);
       invalidateCredits();
 
-      // All generated image URLs (first is primary, rest are alternatives)
-      const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
+      const generationId = data.generationId as string;
+      const IMG_POLL_INTERVAL = 3000;
 
-      setShots((prev) =>
-        prev.map((s) => {
-          if (s.id !== shot.id) return s;
-          const prevGenerations = s.imageHistory ?? [];
-          // All new images go to generations (newest batch first), then previous generations
-          return {
-            ...s,
-            imageStatus: "done" as ShotStatus,
-            imageUrl: allUrls[0],
-            localImagePath: (data.localPath as string | null) ?? null,
-            videoStatus: "pending" as ShotStatus,
-            videoUrl: null,
-            localVideoPath: null,
-            error: null,
-            imageHistory: [...allUrls, ...prevGenerations],
-          };
-        })
-      );
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (controller.signal.aborted) {
+          updateShot(shot.id, { imageStatus: "pending", error: "Cancelled" });
+          return;
+        }
+        await new Promise((r) => setTimeout(r, IMG_POLL_INTERVAL));
 
-      // Persist images to Supabase (fire-and-forget)
-      for (const url of allUrls) {
-        fetch("/api/persist-generation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "image",
-            url,
-            prompt: shot.imagePrompt,
-            modelId: model.id,
-            modelName: model.name,
-            requestId: data.requestId,
-            width: data.width,
-            height: data.height,
-            aspectRatio: shotAR,
-            resolution: imageResolution,
-            settings: { ...shot.settings.image, modelId: model.id },
-            referenceImageUrls: allRefs.length > 0 ? allRefs : null,
-            shotNumber: shot.number,
-          }),
-        }).catch((err) => console.error("[persist] Shot image failed:", err));
+        const pollRes = await fetch(`/api/generation-poll?id=${generationId}`, { signal: controller.signal });
+        const pollData = await pollRes.json();
+
+        if (pollData.status === "completed" && pollData.url) {
+          setShots((prev) =>
+            prev.map((s) => {
+              if (s.id !== shot.id) return s;
+              const prevGenerations = s.imageHistory ?? [];
+              return {
+                ...s,
+                imageStatus: "done" as ShotStatus,
+                imageUrl: pollData.url as string,
+                localImagePath: null,
+                videoStatus: "pending" as ShotStatus,
+                videoUrl: null,
+                localVideoPath: null,
+                error: null,
+                imageHistory: [pollData.url as string, ...prevGenerations],
+              };
+            })
+          );
+          return;
+        }
+
+        if (pollData.status === "failed") {
+          updateShot(shot.id, { imageStatus: "error", error: pollData.error || "Generation failed" });
+          return;
+        }
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -1388,24 +1373,14 @@ export function ShotListEditor({
 
       console.log(`[Shot #${shot.number} EDIT] Model: ${model.id}`, { sourceImageUrl, editPrompt });
 
-      const res = await fetch("/api/generate-shot", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
 
-      const text = await res.text();
-      let data: Record<string, unknown>;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        updateShot(shotId, {
-          imageStatus: "error",
-          error: `Server error (${res.status}): ${text.slice(0, 200)}`,
-        });
-        return;
-      }
+      const data = await res.json();
 
       if (!res.ok) {
         if (res.status === 402) {
@@ -1421,22 +1396,43 @@ export function ShotListEditor({
       trackShotGenerated(model.id);
       invalidateCredits();
 
-      const allUrls: string[] = (data.allImageUrls as string[] | undefined) ?? [data.imageUrl as string];
+      const generationId = data.generationId as string;
+      const IMG_POLL_INTERVAL = 3000;
 
-      setShots((prev) =>
-        prev.map((s) => {
-          if (s.id !== shotId) return s;
-          const prevGenerations = s.imageHistory ?? [];
-          return {
-            ...s,
-            imageStatus: "done" as ShotStatus,
-            imageUrl: allUrls[0],
-            localImagePath: (data.localPath as string | null) ?? null,
-            error: null,
-            imageHistory: [...allUrls, ...prevGenerations],
-          };
-        })
-      );
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (controller.signal.aborted) {
+          updateShot(shotId, { imageStatus: "pending", error: "Cancelled" });
+          return;
+        }
+        await new Promise((r) => setTimeout(r, IMG_POLL_INTERVAL));
+
+        const pollRes = await fetch(`/api/generation-poll?id=${generationId}`, { signal: controller.signal });
+        const pollData = await pollRes.json();
+
+        if (pollData.status === "completed" && pollData.url) {
+          setShots((prev) =>
+            prev.map((s) => {
+              if (s.id !== shotId) return s;
+              const prevGenerations = s.imageHistory ?? [];
+              return {
+                ...s,
+                imageStatus: "done" as ShotStatus,
+                imageUrl: pollData.url as string,
+                localImagePath: null,
+                error: null,
+                imageHistory: [pollData.url as string, ...prevGenerations],
+              };
+            })
+          );
+          return;
+        }
+
+        if (pollData.status === "failed") {
+          updateShot(shotId, { imageStatus: "error", error: pollData.error || "Edit failed" });
+          return;
+        }
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         updateShot(shotId, { imageStatus: "pending", error: "Cancelled" });
