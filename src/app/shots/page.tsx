@@ -2341,7 +2341,7 @@ export function ShotListEditor({
           </div>
 
           {/* Title */}
-          <h2 className="text-xl font-bold uppercase tracking-[0.25em] text-foreground md:text-2xl">
+          <h2 className="font-display text-xl font-bold uppercase tracking-[0.25em] text-foreground md:text-2xl">
             Shots
           </h2>
 
@@ -2356,22 +2356,18 @@ export function ShotListEditor({
                 <span className="text-[11px] text-muted">shot{shots.length !== 1 ? "s" : ""}</span>
               </div>
 
-              {/* Progress pills - images & videos */}
+              {/* Total generated counts */}
               <div className="hidden items-center gap-2 md:flex">
-                <div className={`rounded-full px-3 py-1.5 text-[11px] font-medium tabular-nums ${
-                  imagesCompleted === shots.length && shots.length > 0
-                    ? "bg-accent/10 text-accent"
-                    : "bg-foreground/[0.04] text-muted"
-                }`}>
-                  {imagesCompleted}/{shots.length} img
-                </div>
-                <div className={`rounded-full px-3 py-1.5 text-[11px] font-medium tabular-nums ${
-                  videosCompleted === shots.length && shots.length > 0
-                    ? "bg-accent/10 text-accent"
-                    : "bg-foreground/[0.04] text-muted"
-                }`}>
-                  {videosCompleted}/{shots.length} vid
-                </div>
+                {totalImages > 0 && (
+                  <div className="rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[11px] font-medium tabular-nums text-muted">
+                    {totalImages} image{totalImages !== 1 ? "s" : ""}
+                  </div>
+                )}
+                {totalVideos > 0 && (
+                  <div className="rounded-full bg-foreground/[0.04] px-3 py-1.5 text-[11px] font-medium tabular-nums text-muted">
+                    {totalVideos} video{totalVideos !== 1 ? "s" : ""}
+                  </div>
+                )}
               </div>
             </div>
           )}
