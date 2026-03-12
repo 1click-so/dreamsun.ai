@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Button, Card, Input, Toggle, Spinner } from "@/components/ui";
+import { Button, Card, Input, Spinner, Toggle } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 interface PricingRow {
@@ -12,7 +12,6 @@ interface PricingRow {
   api_provider: string;
   api_cost_usd: number | null;
   base_price_credits: number;
-  effective_credits: number;
   discount_pct: number;
   margin_usd: number | null;
   margin_pct: number | null;
@@ -27,7 +26,6 @@ interface PricingRow {
 interface EditState {
   base_price_credits?: number;
   discount_pct?: number;
-  is_active?: boolean;
   is_promo?: boolean;
   promo_label?: string | null;
 }
@@ -87,11 +85,17 @@ function capabilityLabel(cap: string): string {
 function PricingRowEditor({
   row,
   onSave,
+  onMakePrimary,
   saving,
+  switchingProvider,
+  hasSiblings,
 }: {
   row: PricingRow;
   onSave: (id: string, updates: EditState) => void;
+  onMakePrimary: (modelId: string, provider: string) => void;
   saving: boolean;
+  switchingProvider: boolean;
+  hasSiblings: boolean;
 }) {
   const [edits, setEdits] = useState<EditState>({});
   const hasChanges = Object.keys(edits).length > 0;
@@ -99,30 +103,58 @@ function PricingRowEditor({
   const current = {
     base_price_credits: edits.base_price_credits ?? row.base_price_credits,
     discount_pct: edits.discount_pct ?? row.discount_pct,
-    is_active: edits.is_active ?? row.is_active,
     is_promo: edits.is_promo ?? row.is_promo,
     promo_label: edits.promo_label ?? row.promo_label,
   };
 
-  const effectivePreview = current.base_price_credits * (1 - current.discount_pct / 100);
+  // Live margin calculation: (credits * $0.01 - api_cost) / (credits * $0.01) * 100
+  const revenueUsd = current.base_price_credits * 0.01;
+  const apiCost = row.api_cost_usd ?? 0;
+  const liveMarginPct = revenueUsd > 0 ? ((revenueUsd - apiCost) / revenueUsd) * 100 : null;
 
   return (
     <tr
       className={cn(
         "border-b border-border last:border-0 transition",
-        !current.is_active && "opacity-40"
+        !row.is_active && "opacity-50"
       )}
     >
+      {/* Provider */}
       <td className="px-3 py-2">
         <ProviderBadge provider={row.api_provider} />
       </td>
+
+      {/* Role: Primary or Fallback */}
+      <td className="px-3 py-2">
+        {row.is_active ? (
+          <span className="inline-flex rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent-text">
+            Primary
+          </span>
+        ) : hasSiblings ? (
+          <button
+            onClick={() => onMakePrimary(row.model_id, row.api_provider)}
+            disabled={switchingProvider}
+            className="inline-flex rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted transition hover:border-accent/40 hover:text-foreground"
+          >
+            {switchingProvider ? <Spinner size="xs" /> : "Fallback"}
+          </button>
+        ) : (
+          <span className="text-[10px] text-muted">-</span>
+        )}
+      </td>
+
+      {/* Resolution / Audio */}
       <td className="px-3 py-2 text-xs text-muted">
         {row.resolution || "-"}
         {row.audio_tier ? ` / ${row.audio_tier}` : ""}
       </td>
+
+      {/* API Cost */}
       <td className="px-3 py-2 text-right text-xs text-muted">
         {row.api_cost_usd !== null ? `$${row.api_cost_usd.toFixed(4)}` : "-"}
       </td>
+
+      {/* Credits (editable) */}
       <td className="px-3 py-2">
         <Input
           type="number"
@@ -135,6 +167,8 @@ function PricingRowEditor({
           step={1}
         />
       </td>
+
+      {/* Discount */}
       <td className="px-3 py-2">
         <Input
           type="number"
@@ -148,19 +182,13 @@ function PricingRowEditor({
           step={1}
         />
       </td>
-      <td className="px-3 py-2 text-right text-xs font-medium text-foreground">
-        {effectivePreview.toFixed(0)}
-      </td>
+
+      {/* Margin (live) */}
       <td className="px-3 py-2 text-right">
-        <MarginBadge pct={row.margin_pct} />
+        <MarginBadge pct={liveMarginPct} />
       </td>
-      <td className="px-3 py-2">
-        <Toggle
-          checked={current.is_active}
-          onChange={(v) => setEdits((prev) => ({ ...prev, is_active: v }))}
-          size="sm"
-        />
-      </td>
+
+      {/* Promo */}
       <td className="px-3 py-2">
         <div className="flex items-center gap-1">
           <Toggle
@@ -181,6 +209,8 @@ function PricingRowEditor({
           )}
         </div>
       </td>
+
+      {/* Save */}
       <td className="px-3 py-2">
         {hasChanges && (
           <Button
@@ -203,6 +233,7 @@ export function PricingTab() {
   const [rows, setRows] = useState<PricingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [switchingModel, setSwitchingModel] = useState<string | null>(null);
   const [expandedCaps, setExpandedCaps] = useState<Set<string>>(new Set());
 
   const fetchPricing = useCallback(() => {
@@ -218,22 +249,18 @@ export function PricingTab() {
     fetchPricing();
   }, [fetchPricing]);
 
-  // Optimistic save - update local state immediately, no re-fetch
+  // Optimistic save for pricing fields
   const handleSave = async (id: string, updates: EditState) => {
     setSaving(id);
 
-    // Apply changes to local state immediately
     setRows((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
         const updated = { ...r };
         if (updates.base_price_credits !== undefined) updated.base_price_credits = updates.base_price_credits;
         if (updates.discount_pct !== undefined) updated.discount_pct = updates.discount_pct;
-        if (updates.is_active !== undefined) updated.is_active = updates.is_active;
         if (updates.is_promo !== undefined) updated.is_promo = updates.is_promo;
         if (updates.promo_label !== undefined) updated.promo_label = updates.promo_label;
-        // Recalculate effective_credits locally
-        updated.effective_credits = updated.base_price_credits * (1 - updated.discount_pct / 100);
         return updated;
       })
     );
@@ -244,14 +271,37 @@ export function PricingTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...updates }),
       });
-      if (!res.ok) {
-        // Revert on failure by re-fetching
-        fetchPricing();
-      }
+      if (!res.ok) fetchPricing();
     } catch {
       fetchPricing();
     } finally {
       setSaving(null);
+    }
+  };
+
+  // Switch primary provider for a model (optimistic)
+  const handleMakePrimary = async (modelId: string, newProvider: string) => {
+    setSwitchingModel(modelId);
+
+    // Optimistic: flip is_active for this model's rows
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.model_id !== modelId) return r;
+        return { ...r, is_active: r.api_provider === newProvider };
+      })
+    );
+
+    try {
+      const res = await fetch("/api/admin/providers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "switch_provider", model_id: modelId, new_provider: newProvider }),
+      });
+      if (!res.ok) fetchPricing();
+    } catch {
+      fetchPricing();
+    } finally {
+      setSwitchingModel(null);
     }
   };
 
@@ -332,48 +382,62 @@ export function PricingTab() {
 
             {isExpanded && (
               <div className="border-t border-border">
-                {Array.from(models.entries()).map(([modelId, modelRows]) => (
-                  <div key={modelId} className="border-b border-border last:border-0">
-                    <div className="flex items-center gap-2 bg-surface/50 px-4 py-2">
-                      <span className="text-xs font-semibold text-foreground">
-                        {modelRows[0].model_name}
-                      </span>
-                      <span className="rounded-sm bg-surface px-1.5 py-0.5 text-[10px] text-muted">
-                        {capabilityLabel(modelRows[0].capability)}
-                      </span>
-                      <span className="text-[10px] text-muted">{modelId}</span>
-                    </div>
+                {Array.from(models.entries()).map(([modelId, modelRows]) => {
+                  // Sort: primary rows first, then fallbacks
+                  const sorted = [...modelRows].sort((a, b) => (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0));
+                  // Check if this model has multiple providers
+                  const providers = new Set(modelRows.map((r) => r.api_provider));
+                  const hasSiblings = providers.size > 1;
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-surface/30">
-                            <th className="px-3 py-1.5 text-left font-medium text-muted">Provider</th>
-                            <th className="px-3 py-1.5 text-left font-medium text-muted">Resolution</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-muted">API Cost</th>
-                            <th className="px-3 py-1.5 text-left font-medium text-muted">Credits</th>
-                            <th className="px-3 py-1.5 text-left font-medium text-muted">Discount</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-muted">Effective</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-muted">Margin</th>
-                            <th className="px-3 py-1.5 text-left font-medium text-muted">Active</th>
-                            <th className="px-3 py-1.5 text-left font-medium text-muted">Promo</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-muted"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {modelRows.map((row) => (
-                            <PricingRowEditor
-                              key={row.id}
-                              row={row}
-                              onSave={handleSave}
-                              saving={saving === row.id}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
+                  return (
+                    <div key={modelId} className="border-b border-border last:border-0">
+                      <div className="flex items-center gap-2 bg-surface/50 px-4 py-2">
+                        <span className="text-xs font-semibold text-foreground">
+                          {modelRows[0].model_name}
+                        </span>
+                        <span className="rounded-sm bg-surface px-1.5 py-0.5 text-[10px] text-muted">
+                          {capabilityLabel(modelRows[0].capability)}
+                        </span>
+                        {hasSiblings && (
+                          <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent-text">
+                            fallback ready
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-surface/30">
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Provider</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Role</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Resolution</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-muted">API Cost</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Credits</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Discount</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-muted">Margin</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted">Promo</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-muted"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sorted.map((row) => (
+                              <PricingRowEditor
+                                key={row.id}
+                                row={row}
+                                onSave={handleSave}
+                                onMakePrimary={handleMakePrimary}
+                                saving={saving === row.id}
+                                switchingProvider={switchingModel === row.model_id}
+                                hasSiblings={hasSiblings}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>

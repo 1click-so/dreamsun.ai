@@ -5,16 +5,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { OverviewTab } from "@/components/admin/OverviewTab";
 import { PricingTab } from "@/components/admin/PricingTab";
-import { ProvidersTab } from "@/components/admin/ProvidersTab";
 import { Spinner } from "@/components/ui";
 import { createClient } from "@/lib/supabase-browser";
 
-type Tab = "overview" | "pricing" | "providers";
+type Tab = "overview" | "pricing";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "pricing", label: "Pricing" },
-  { id: "providers", label: "Providers" },
+  { id: "pricing", label: "Models & Pricing" },
 ];
 
 function AdminContent() {
@@ -73,7 +71,7 @@ function AdminContent() {
         {/* Header */}
         <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
         <p className="mt-1 text-sm text-muted">
-          Pricing, providers, and financial overview.
+          Models, pricing, and financial overview.
         </p>
 
         {/* Tabs */}
@@ -98,7 +96,6 @@ function AdminContent() {
         {/* Tab content */}
         {tab === "overview" && <OverviewTab />}
         {tab === "pricing" && <PricingTab />}
-        {tab === "providers" && <ProvidersTab />}
       </div>
     </div>
   );
