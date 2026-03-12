@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, getAdminClient } from "@/lib/admin-guard";
 
+// Estimate megapixels from resolution string (e.g. "1080p", "4k", "720p")
+function estimateMegapixels(resolution: string | null): number {
+  if (!resolution) return 1;
+  const r = resolution.toLowerCase();
+  if (r.includes("4k") || r.includes("2160")) return 8.3;
+  if (r.includes("1440")) return 3.7;
+  if (r.includes("1080")) return 2.1;
+  if (r.includes("720")) return 0.9;
+  if (r.includes("480")) return 0.3;
+  return 1;
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
@@ -33,11 +45,10 @@ export async function GET(req: NextRequest) {
     .in("type", ["purchase", "grant", "bonus", "signup_bonus", "promo", "referral"]);
 
   // Credits spent (exclude admin users)
-  let txOutQuery = admin
+  const { data: txOut } = await admin
     .from("credit_transactions")
     .select("amount, user_id")
     .eq("type", "deduction");
-  const { data: txOut } = await txOutQuery;
 
   const { data: txRefund } = await admin
     .from("credit_transactions")
@@ -73,9 +84,10 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. Generations with cost breakdown (period-filtered)
+  // Include duration/num_images for accurate API cost calculation
   let genQuery = admin
     .from("generations")
-    .select("model_id, type, cost_estimate, created_at");
+    .select("model_id, type, cost_estimate, created_at, duration, num_images, resolution");
   if (dateFilter) {
     genQuery = genQuery.gte("created_at", dateFilter);
   }
@@ -86,8 +98,8 @@ export async function GET(req: NextRequest) {
     .from("model_pricing")
     .select("model_id, model_name, api_cost_usd, capability, api_provider, pricing_unit, base_price_credits, is_active");
 
-  // Build pricing map: model_id -> pricing info
-  const pricingMap = new Map<string, { api_cost_usd: number; capability: string; api_provider: string; model_name: string }>();
+  // Build pricing map: model_id -> pricing info (include pricing_unit for proper cost calc)
+  const pricingMap = new Map<string, { api_cost_usd: number; capability: string; api_provider: string; model_name: string; pricing_unit: string }>();
   pricing?.forEach((p) => {
     if (p.is_active) {
       pricingMap.set(p.model_id, {
@@ -95,11 +107,13 @@ export async function GET(req: NextRequest) {
         capability: p.capability || "unknown",
         api_provider: p.api_provider || "unknown",
         model_name: p.model_name || p.model_id,
+        pricing_unit: p.pricing_unit || "per_generation",
       });
     }
   });
 
   // 4. Breakdown by capability, provider, model
+  // Calculate ACTUAL API cost per generation based on pricing_unit
   const byCapability: Record<string, { count: number; credits: number; api_cost: number }> = {};
   const byProvider: Record<string, { count: number; credits: number; api_cost: number }> = {};
   const byModel: Record<string, { count: number; credits: number; api_cost: number; name: string }> = {};
@@ -110,7 +124,21 @@ export async function GET(req: NextRequest) {
     const provider = info?.api_provider || "unknown";
     const modelName = info?.model_name || g.model_id;
     const credits = g.cost_estimate || 0;
-    const apiCost = info?.api_cost_usd || 0;
+
+    // Calculate actual API cost based on pricing unit
+    const unitCost = info?.api_cost_usd || 0;
+    const pricingUnit = info?.pricing_unit || "per_generation";
+    let apiCost = unitCost;
+    if (pricingUnit === "per_second") {
+      apiCost = unitCost * (g.duration || 5);
+    } else if (pricingUnit === "per_megapixel") {
+      // Estimate megapixels from resolution string or default
+      const mp = estimateMegapixels(g.resolution);
+      apiCost = unitCost * mp;
+    } else {
+      // per_generation: flat cost * num_images
+      apiCost = unitCost * (g.num_images || 1);
+    }
 
     // By capability
     if (!byCapability[capability]) byCapability[capability] = { count: 0, credits: 0, api_cost: 0 };
@@ -133,13 +161,28 @@ export async function GET(req: NextRequest) {
 
   // 5. Provider balances
   let falBalance: number | null = null;
+  let falBalanceRaw: unknown = null;
   try {
-    const res = await fetch("https://rest.fal.ai/billing/balance", {
-      headers: { Authorization: `Key ${process.env.FAL_KEY}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      falBalance = data.balance ?? data.amount ?? null;
+    // Try fal.ai billing endpoints
+    const endpoints = [
+      "https://rest.fal.ai/billing/balance",
+      "https://rest.fal.run/billing/balance",
+      "https://fal.run/billing/balance",
+    ];
+    for (const endpoint of endpoints) {
+      try {
+        const res = await fetch(endpoint, {
+          headers: { Authorization: `Key ${process.env.FAL_KEY}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          falBalanceRaw = data;
+          falBalance = data.balance ?? data.amount ?? data.credits ?? null;
+          if (falBalance !== null) break;
+        }
+      } catch {
+        // try next endpoint
+      }
     }
   } catch {
     // fal balance unavailable
@@ -170,7 +213,8 @@ export async function GET(req: NextRequest) {
     },
     provider_balances: {
       fal: falBalance,
-      kie: null, // no known balance API
+      fal_raw: falBalanceRaw,
+      kie: null,
     },
     period,
   });
