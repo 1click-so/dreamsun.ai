@@ -30,15 +30,15 @@ export function parseShotList(text: string): ParsedShot[] {
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
-    // Match SHOT header: "SHOT 1 — Title" or "SHOT 1A - Title"
-    const shotMatch = line.match(/^SHOT\s+(\d+[a-zA-Z]?)\s*[—\-–]\s*(.+)$/i);
+    // Match SHOT header: "SHOT 1 — Title", "SHOT 1A - Title", or just "SHOT 1A"
+    const shotMatch = line.match(/^SHOT\s+(\d+[a-zA-Z]?)\s*(?:[—\-–]\s*(.+))?$/i);
     if (shotMatch) {
       if (currentShot?.number != null) {
         shots.push(finalizeShot(currentShot));
       }
       currentShot = {
         number: shotMatch[1],
-        title: shotMatch[2].trim(),
+        title: (shotMatch[2] ?? "").trim(),
         imagePrompt: "",
         videoPrompt: "",
       };
