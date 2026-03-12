@@ -2319,49 +2319,87 @@ export function ShotListEditor({
       </div>{/* end sticky header wrapper */}
 
       {/* Shots Banner */}
-      <div className="relative mx-3 mt-8 mb-6 overflow-hidden rounded-2xl md:mx-6" style={{ background: "linear-gradient(135deg, rgba(161,252,223,0.07) 0%, rgba(161,252,223,0.02) 40%, transparent 60%, rgba(161,252,223,0.05) 100%)" }}>
-        {/* Large background glow */}
-        <div className="pointer-events-none absolute -left-20 -top-20 h-60 w-60 rounded-full bg-accent/[0.08] blur-[80px]" />
-        <div className="pointer-events-none absolute -right-10 -bottom-16 h-48 w-48 rounded-full bg-accent/[0.05] blur-[60px]" />
+      <div className="relative mx-3 mt-8 mb-6 md:mx-6">
+        <div className="relative overflow-hidden rounded-xl border border-white/[0.06]" style={{ background: "linear-gradient(180deg, #0f1210 0%, #0a0a0a 100%)" }}>
 
-        {/* Accent bar left edge */}
-        <div className="absolute inset-y-0 left-0 w-1 rounded-full bg-accent/40" />
+          {/* Film sprocket strip - top */}
+          <div className="flex h-[6px] items-center justify-between px-3">
+            {Array.from({ length: 32 }).map((_, i) => (
+              <div key={`t${i}`} className="h-[3px] w-[6px] rounded-[1px] bg-accent/[0.12]" />
+            ))}
+          </div>
 
-        {/* Content */}
-        <div className="relative flex items-center gap-6 py-7 pl-8 pr-6 md:pl-10 md:pr-8">
-          {/* Icon with strong glow */}
-          <div className="relative flex-shrink-0">
-            <div className="absolute -inset-3 rounded-2xl bg-accent/20 blur-xl" />
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 ring-1 ring-accent/25">
-              <Film size={26} className="text-accent" />
+          {/* Horizontal scan line - slow sweep across */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div
+              className="absolute top-1/2 h-px w-1/3 -translate-y-1/2"
+              style={{
+                background: "linear-gradient(90deg, transparent, rgba(161,252,223,0.15), transparent)",
+                animation: "shots-scan 6s linear infinite",
+              }}
+            />
+          </div>
+
+          {/* Accent glow - concentrated behind the title area */}
+          <div className="pointer-events-none absolute left-24 top-1/2 h-32 w-64 -translate-y-1/2 rounded-full bg-accent/[0.04] blur-[60px]" />
+
+          {/* Main content area */}
+          <div className="relative flex items-center px-6 py-6 md:px-8">
+
+            {/* Left: Film icon as viewfinder */}
+            <div className="relative mr-6 flex-shrink-0">
+              {/* Crosshair ring */}
+              <div className="flex h-[52px] w-[52px] items-center justify-center rounded-lg border border-accent/20">
+                <Film size={24} className="text-accent" style={{ animation: "shots-glow-pulse 3s ease-in-out infinite" }} />
+              </div>
+              {/* Corner marks - viewfinder style */}
+              <div className="absolute -left-1 -top-1 h-2 w-2 border-l border-t border-accent/30" />
+              <div className="absolute -right-1 -top-1 h-2 w-2 border-r border-t border-accent/30" />
+              <div className="absolute -bottom-1 -left-1 h-2 w-2 border-b border-l border-accent/30" />
+              <div className="absolute -bottom-1 -right-1 h-2 w-2 border-b border-r border-accent/30" />
+            </div>
+
+            {/* Center: Title + stats */}
+            <div>
+              <h2 className="font-display text-[28px] font-bold uppercase leading-none tracking-[0.35em] text-foreground md:text-[32px]">
+                Shots
+              </h2>
+              {shots.length > 0 && (
+                <div className="mt-2.5 flex items-center gap-0 font-mono text-[11px] tracking-wide">
+                  <span className="font-bold tabular-nums text-accent">{shots.length}</span>
+                  <span className="ml-1 uppercase text-muted/60">shot{shots.length !== 1 ? "s" : ""}</span>
+                  {totalImages > 0 && (
+                    <>
+                      <span className="mx-3 text-accent/20">|</span>
+                      <span className="font-bold tabular-nums text-accent">{totalImages}</span>
+                      <span className="ml-1 uppercase text-muted/60">image{totalImages !== 1 ? "s" : ""}</span>
+                    </>
+                  )}
+                  {totalVideos > 0 && (
+                    <>
+                      <span className="mx-3 text-accent/20">|</span>
+                      <span className="font-bold tabular-nums text-accent">{totalVideos}</span>
+                      <span className="ml-1 uppercase text-muted/60">video{totalVideos !== 1 ? "s" : ""}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1" />
+
+            {/* Right: Scene indicator dot */}
+            <div className="hidden items-center gap-2 md:flex">
+              <div className="h-2 w-2 rounded-full bg-accent/60" style={{ animation: "shots-glow-pulse 3s ease-in-out infinite", boxShadow: "0 0 8px rgba(161,252,223,0.3)" }} />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted/40">Live</span>
             </div>
           </div>
 
-          {/* Title + stats inline */}
-          <div className="flex flex-col gap-1.5">
-            <h2 className="font-display text-2xl font-bold uppercase tracking-[0.3em] text-foreground md:text-3xl">
-              Shots
-            </h2>
-            {shots.length > 0 && (
-              <p className="text-sm text-muted">
-                <span className="font-semibold tabular-nums text-accent">{shots.length}</span>
-                <span> shot{shots.length !== 1 ? "s" : ""}</span>
-                {totalImages > 0 && (
-                  <>
-                    <span className="mx-2 text-border">·</span>
-                    <span className="font-semibold tabular-nums text-accent">{totalImages}</span>
-                    <span> image{totalImages !== 1 ? "s" : ""}</span>
-                  </>
-                )}
-                {totalVideos > 0 && (
-                  <>
-                    <span className="mx-2 text-border">·</span>
-                    <span className="font-semibold tabular-nums text-accent">{totalVideos}</span>
-                    <span> video{totalVideos !== 1 ? "s" : ""}</span>
-                  </>
-                )}
-              </p>
-            )}
+          {/* Film sprocket strip - bottom */}
+          <div className="flex h-[6px] items-center justify-between px-3">
+            {Array.from({ length: 32 }).map((_, i) => (
+              <div key={`b${i}`} className="h-[3px] w-[6px] rounded-[1px] bg-accent/[0.12]" />
+            ))}
           </div>
         </div>
       </div>
