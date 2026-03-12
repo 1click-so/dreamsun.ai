@@ -31,7 +31,7 @@ interface OverviewData {
   };
   provider_spending: {
     fal: { total: number; period: string } | null;
-    kie: null;
+    kie: { balance: number } | null;
   };
   period: string;
 }
@@ -148,8 +148,11 @@ export function OverviewTab() {
           <Card className="flex items-center justify-between">
             <div>
               <span className="text-sm font-medium text-foreground">Kie.ai</span>
+              <p className="text-[10px] text-muted">credit balance</p>
             </div>
-            <span className="text-sm font-bold text-muted">Manual check</span>
+            <span className={cn("text-sm font-bold", provider_spending.kie !== null ? "text-accent-text" : "text-muted")}>
+              {provider_spending.kie !== null ? provider_spending.kie.balance.toLocaleString() : "N/A"}
+            </span>
           </Card>
         </div>
       </div>

@@ -184,6 +184,22 @@ export async function GET(req: NextRequest) {
     // fal usage unavailable
   }
 
+  // 5b. Kie.ai credit balance (GET /api/v1/chat/credit)
+  let kieBalance: number | null = null;
+  try {
+    const kieRes = await fetch("https://api.kie.ai/api/v1/chat/credit", {
+      headers: { Authorization: `Bearer ${process.env.KIE_API_KEY}` },
+    });
+    if (kieRes.ok) {
+      const kieData = await kieRes.json();
+      if (kieData.code === 200 && kieData.data !== undefined) {
+        kieBalance = kieData.data;
+      }
+    }
+  } catch {
+    // kie balance unavailable
+  }
+
   // 6. User count
   const { count: userCount } = await admin
     .from("profiles")
@@ -209,7 +225,7 @@ export async function GET(req: NextRequest) {
     },
     provider_spending: {
       fal: falSpending,
-      kie: null,
+      kie: kieBalance !== null ? { balance: kieBalance } : null,
     },
     period,
   });
