@@ -84,44 +84,57 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. Generations with cost breakdown (period-filtered)
-  // Include duration/num_images for accurate API cost calculation
+  // Include duration/num_images/settings for accurate API cost + provider attribution
   let genQuery = admin
     .from("generations")
-    .select("model_id, type, cost_estimate, created_at, duration, num_images, resolution");
+    .select("model_id, type, cost_estimate, created_at, duration, num_images, resolution, settings");
   if (dateFilter) {
     genQuery = genQuery.gte("created_at", dateFilter);
   }
   const { data: generations } = await genQuery;
 
   // 3. Model pricing lookup for API costs
+  // Key by model_id:provider so we get the correct cost per provider
   const { data: pricing } = await admin
     .from("model_pricing")
     .select("model_id, model_name, api_cost_usd, capability, api_provider, pricing_unit, base_price_credits, is_active");
 
-  // Build pricing map: model_id -> pricing info (include pricing_unit for proper cost calc)
-  const pricingMap = new Map<string, { api_cost_usd: number; capability: string; api_provider: string; model_name: string; pricing_unit: string }>();
+  interface PricingInfo { api_cost_usd: number; capability: string; api_provider: string; model_name: string; pricing_unit: string }
+  const pricingByModelProvider = new Map<string, PricingInfo>();
+  const pricingByModelActive = new Map<string, PricingInfo>();
   pricing?.forEach((p) => {
+    const info: PricingInfo = {
+      api_cost_usd: p.api_cost_usd || 0,
+      capability: p.capability || "unknown",
+      api_provider: p.api_provider || "unknown",
+      model_name: p.model_name || p.model_id,
+      pricing_unit: p.pricing_unit || "per_generation",
+    };
+    // Store by model_id:provider for exact lookup
+    pricingByModelProvider.set(`${p.model_id}:${p.api_provider}`, info);
+    // Store active as fallback
     if (p.is_active) {
-      pricingMap.set(p.model_id, {
-        api_cost_usd: p.api_cost_usd || 0,
-        capability: p.capability || "unknown",
-        api_provider: p.api_provider || "unknown",
-        model_name: p.model_name || p.model_id,
-        pricing_unit: p.pricing_unit || "per_generation",
-      });
+      pricingByModelActive.set(p.model_id, info);
     }
   });
 
   // 4. Breakdown by capability, provider, model
-  // Calculate ACTUAL API cost per generation based on pricing_unit
+  // Use settings.apiProvider from each generation for correct provider attribution
   const byCapability: Record<string, { count: number; credits: number; api_cost: number }> = {};
   const byProvider: Record<string, { count: number; credits: number; api_cost: number }> = {};
   const byModel: Record<string, { count: number; credits: number; api_cost: number; name: string }> = {};
 
   generations?.forEach((g) => {
-    const info = pricingMap.get(g.model_id);
+    // Determine which provider was actually used for this generation
+    const settings = (g.settings || {}) as Record<string, unknown>;
+    const genProvider = (settings.apiProvider as string) || null;
+
+    // Look up pricing: first try exact model+provider, then fall back to active
+    const exactKey = genProvider ? `${g.model_id}:${genProvider}` : null;
+    const info = (exactKey && pricingByModelProvider.get(exactKey)) || pricingByModelActive.get(g.model_id);
+
     const capability = info?.capability || g.type || "unknown";
-    const provider = info?.api_provider || "unknown";
+    const provider = genProvider || info?.api_provider || "unknown";
     const modelName = info?.model_name || g.model_id;
     const credits = g.cost_estimate || 0;
 
@@ -132,7 +145,6 @@ export async function GET(req: NextRequest) {
     if (pricingUnit === "per_second") {
       apiCost = unitCost * (g.duration || 5);
     } else if (pricingUnit === "per_megapixel") {
-      // Estimate megapixels from resolution string or default
       const mp = estimateMegapixels(g.resolution);
       apiCost = unitCost * mp;
     } else {
@@ -146,7 +158,7 @@ export async function GET(req: NextRequest) {
     byCapability[capability].credits += credits;
     byCapability[capability].api_cost += apiCost;
 
-    // By provider
+    // By provider (using the ACTUAL provider from this generation)
     if (!byProvider[provider]) byProvider[provider] = { count: 0, credits: 0, api_cost: 0 };
     byProvider[provider].count++;
     byProvider[provider].credits += credits;
