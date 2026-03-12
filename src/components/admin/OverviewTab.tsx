@@ -141,8 +141,8 @@ export function OverviewTab() {
                 <p className="text-[10px] text-muted">{provider_spending.fal.period}</p>
               )}
             </div>
-            <span className={cn("text-sm font-bold", provider_spending.fal !== null ? "text-accent-text" : "text-muted")}>
-              {provider_spending.fal !== null ? `$${provider_spending.fal.total.toFixed(2)}` : "N/A"}
+            <span className={cn("text-sm font-bold", provider_spending.fal !== null && isFinite(provider_spending.fal.total) ? "text-accent-text" : "text-muted")}>
+              {provider_spending.fal !== null && isFinite(provider_spending.fal.total) ? `$${provider_spending.fal.total.toFixed(2)}` : "N/A"}
             </span>
           </Card>
           <Card className="flex items-center justify-between">

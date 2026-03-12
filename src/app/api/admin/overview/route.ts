@@ -127,14 +127,15 @@ export async function GET(req: NextRequest) {
   generations?.forEach((g) => {
     // Determine which provider was actually used for this generation
     const settings = (g.settings || {}) as Record<string, unknown>;
-    const genProvider = (settings.apiProvider as string) || null;
+    // Old generations before multi-provider don't have apiProvider - they were all fal
+    const genProvider = (settings.apiProvider as string) || "fal";
 
-    // Look up pricing: first try exact model+provider, then fall back to active
-    const exactKey = genProvider ? `${g.model_id}:${genProvider}` : null;
-    const info = (exactKey && pricingByModelProvider.get(exactKey)) || pricingByModelActive.get(g.model_id);
+    // Look up pricing: try exact model+provider, then fall back to active
+    const exactKey = `${g.model_id}:${genProvider}`;
+    const info = pricingByModelProvider.get(exactKey) || pricingByModelActive.get(g.model_id);
 
     const capability = info?.capability || g.type || "unknown";
-    const provider = genProvider || info?.api_provider || "unknown";
+    const provider = genProvider;
     const modelName = info?.model_name || g.model_id;
     const credits = g.cost_estimate || 0;
 
