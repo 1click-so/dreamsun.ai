@@ -766,17 +766,23 @@ export function ShotCard({
                 <button onClick={() => onUpdate({ imageUrl: null, imageStatus: "pending" as ShotStatus })}
                   className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white/70 hover:text-white">x</button>
               </div>
+            ) : isImageBusy ? (
+              <div
+                className="relative flex items-center justify-center rounded-md border-2 border-accent/30 overflow-hidden"
+                style={{ width: outputW, height: outputH }}>
+                <div className="absolute inset-0 skeleton-shimmer" />
+                <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
+                <button
+                  onClick={onCancelImage}
+                  className="relative z-10 rounded bg-destructive/80 px-2 py-0.5 text-[9px] font-medium text-white transition hover:bg-destructive"
+                >Cancel</button>
+              </div>
             ) : (
               <button
                 onClick={() => setMediaPicker("first")}
                 className="flex cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border transition hover:border-accent/40 hover:text-accent"
                 style={{ width: outputW, height: outputH }}>
-                {isImageBusy ? (
-                  <div className="absolute inset-0 overflow-hidden rounded-md">
-                    <div className="absolute inset-0 skeleton-shimmer" />
-                    <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-accent/[0.08] to-transparent" />
-                  </div>
-                ) : <span className="text-[8px] text-muted/70">Drop or<br/>click</span>}
+                <span className="text-[8px] text-muted/70">Drop or<br/>click</span>
               </button>
             )}
             <input id={`first-frame-${shot.id}`} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
