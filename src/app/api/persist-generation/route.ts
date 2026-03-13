@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { sanitizeErrorMessage } from "@/lib/error-sanitizer";
 
 /** Read PNG dimensions from buffer (IHDR chunk at byte 16) */
 function pngDimensions(buf: Buffer): { w: number; h: number } | null {
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("[persist] DB insert error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: sanitizeErrorMessage(error.message) }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -164,7 +165,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("[persist] Error:", error);
-    const message = error instanceof Error ? error.message : "Persist failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const rawMsg = error instanceof Error ? error.message : "Persist failed";
+    return NextResponse.json({ error: sanitizeErrorMessage(rawMsg) }, { status: 500 });
   }
 }

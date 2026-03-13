@@ -3,6 +3,7 @@ import { fal } from "@fal-ai/client";
 import { getUpscaleModelById } from "@/lib/upscale-models";
 import { createClient } from "@/lib/supabase-server";
 import { calculateCost, deductCredits, refundCredits, tryAutoTopup } from "@/lib/credits";
+import { sanitizeError } from "@/lib/error-sanitizer";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -108,20 +109,12 @@ export async function POST(req: NextRequest) {
     if (cost > 0 && userId) {
       await refundCredits(userId, cost, { modelId: creditModelId }).catch(() => {});
     }
-    console.error("Upscale error:", error);
+    console.error("Upscale error (raw):", error);
 
-    let message = "Upscale failed";
-    if (error && typeof error === "object") {
-      const err = error as Record<string, unknown>;
-      if (err.body && typeof err.body === "object") {
-        const body = err.body as Record<string, unknown>;
-        if (typeof body.detail === "string") message = body.detail;
-        else if (typeof body.message === "string") message = body.message;
-      } else if (err.message && typeof err.message === "string") {
-        message = err.message;
-      }
-    }
-
-    return NextResponse.json({ error: message }, { status: 500 });
+    const sanitized = sanitizeError(error, "Upscale failed");
+    return NextResponse.json(
+      { error: sanitized.message, category: sanitized.category, retryable: sanitized.retryable },
+      { status: sanitized.status },
+    );
   }
 }

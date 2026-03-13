@@ -27,6 +27,15 @@ import { IconBolt } from "@/components/generate/Icons";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
+/** Strip provider names from error messages (safety net). */
+const PROVIDER_RE = /fal\.ai|kie\.ai|kie\s*ai|runway|replicate|comfyui|stability\.ai/gi;
+function safeError(msg: string, fallback = "Generation failed"): string {
+  if (!msg) return fallback;
+  if (PROVIDER_RE.test(msg)) return fallback;
+  if (/status:/i.test(msg) || msg.length > 120) return fallback;
+  return msg;
+}
+
 // --- Types ---
 
 interface GenerationSettings {
@@ -976,7 +985,7 @@ export default function GeneratePage() {
             invalidateCredits();
             throw new Error(`Insufficient credits`);
           }
-          throw new Error(data.error || "Generation failed");
+          throw new Error(safeError(data.error || "Generation failed"));
         }
 
         // Track + refresh credit display
@@ -1041,8 +1050,8 @@ export default function GeneratePage() {
       } catch (err) {
         setError((prev) =>
           prev
-            ? `${prev}; ${model.name}: ${err instanceof Error ? err.message : "Failed"}`
-            : `${model.name}: ${err instanceof Error ? err.message : "Failed"}`
+            ? `${prev}; ${safeError(err instanceof Error ? err.message : "Failed")}`
+            : safeError(err instanceof Error ? err.message : "Failed")
         );
         setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slot.slotId));
       }

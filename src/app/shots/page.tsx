@@ -27,6 +27,15 @@ import Image from "next/image";
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
+/** Strip provider names from error messages on the client side (safety net). */
+const PROVIDER_RE = /fal\.ai|kie\.ai|kie\s*ai|runway|replicate|comfyui|stability\.ai/gi;
+function safeError(msg: string, fallback = "Generation failed"): string {
+  if (!msg) return fallback;
+  if (PROVIDER_RE.test(msg)) return fallback;
+  if (/status:/i.test(msg) || msg.length > 120) return fallback;
+  return msg;
+}
+
 /** Sort "1" < "1A" < "1B" < "2" < "10" < "10A" */
 function compareShotNumbers(a: string | number, b: string | number): number {
   const sa = String(a);
@@ -1292,7 +1301,7 @@ export function ShotListEditor({
         }
         updateShot(shot.id, {
           imageStatus: "error",
-          error: res.status === 402 ? "Insufficient credits" : (data.error as string) || "Generation failed",
+          error: res.status === 402 ? "Insufficient credits" : safeError((data.error as string) || "Generation failed"),
         });
         return;
       }
@@ -1335,7 +1344,7 @@ export function ShotListEditor({
         }
 
         if (pollData.status === "failed") {
-          updateShot(shot.id, { imageStatus: "error", error: pollData.error || "Generation failed" });
+          updateShot(shot.id, { imageStatus: "error", error: safeError(pollData.error || "Generation failed") });
           return;
         }
       }
@@ -1346,7 +1355,7 @@ export function ShotListEditor({
       }
       updateShot(shot.id, {
         imageStatus: "error",
-        error: err instanceof Error ? err.message : "Network error",
+        error: safeError(err instanceof Error ? err.message : "Network error"),
       });
     } finally {
       delete abortControllers.current[abortKey];
@@ -1405,7 +1414,7 @@ export function ShotListEditor({
         }
         updateShot(shotId, {
           imageStatus: "error",
-          error: res.status === 402 ? "Insufficient credits" : (data.error as string) || "Edit failed",
+          error: res.status === 402 ? "Insufficient credits" : safeError((data.error as string) || "Edit failed"),
         });
         return;
       }
@@ -1445,7 +1454,7 @@ export function ShotListEditor({
         }
 
         if (pollData.status === "failed") {
-          updateShot(shotId, { imageStatus: "error", error: pollData.error || "Edit failed" });
+          updateShot(shotId, { imageStatus: "error", error: safeError(pollData.error || "Edit failed") });
           return;
         }
       }
@@ -1456,7 +1465,7 @@ export function ShotListEditor({
       }
       updateShot(shotId, {
         imageStatus: "error",
-        error: err instanceof Error ? err.message : "Network error",
+        error: safeError(err instanceof Error ? err.message : "Network error"),
       });
     } finally {
       delete abortControllers.current[abortKey];
@@ -1526,7 +1535,7 @@ export function ShotListEditor({
           invalidateCredits();
           return;
         }
-        throw new Error(data.error || "Animation failed");
+        throw new Error(safeError(data.error || "Animation failed"));
       }
       trackShotAnimated(shotVideoModelId, shotDuration);
       invalidateCredits();
@@ -1592,7 +1601,7 @@ export function ShotListEditor({
           }
 
           if (pollData.status === "failed") {
-            updateShot(shot.id, { videoStatus: "error", error: pollData.error || "Generation failed - credits refunded" });
+            updateShot(shot.id, { videoStatus: "error", error: safeError(pollData.error || "Generation failed - credits refunded") });
             return;
           }
 
@@ -1610,7 +1619,7 @@ export function ShotListEditor({
         updateShot(shot.id, { videoStatus: "pending", error: "Cancelled" });
         return;
       }
-      const message = err instanceof Error ? err.message : "Animation failed";
+      const message = safeError(err instanceof Error ? err.message : "Animation failed");
       updateShot(shot.id, { videoStatus: "error", error: message });
     } finally {
       delete abortControllers.current[abortKey];

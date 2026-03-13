@@ -25,6 +25,15 @@ import { generationToResult, type GenerationResult, type UploadedImage } from "@
 
 fal.config({ proxyUrl: "/api/fal/proxy" });
 
+/** Strip provider names from error messages (safety net). */
+const PROVIDER_RE = /fal\.ai|kie\.ai|kie\s*ai|runway|replicate|comfyui|stability\.ai/gi;
+function safeError(msg: string, fallback = "Generation failed"): string {
+  if (!msg) return fallback;
+  if (PROVIDER_RE.test(msg)) return fallback;
+  if (/status:/i.test(msg) || msg.length > 120) return fallback;
+  return msg;
+}
+
 // --- Storage keys ---
 
 const STORAGE_KEYS: Record<string, string> = {
@@ -810,7 +819,7 @@ export default function VideoPage() {
           invalidateCredits();
           throw new Error(`Insufficient credits`);
         }
-        throw new Error(data.error || "Video generation failed");
+        throw new Error(safeError(data.error || "Video generation failed"));
       }
       trackVideoGenerated(currentModel.id, duration);
       invalidateCredits();
@@ -871,7 +880,7 @@ export default function VideoPage() {
       // Start polling in background — non-blocking
       pollGeneration(generationId, slotId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Video generation failed");
+      setError(safeError(err instanceof Error ? err.message : "Video generation failed"));
       setGeneratingSlots((prev) => prev.filter((s) => s.slotId !== slotId));
     }
   };

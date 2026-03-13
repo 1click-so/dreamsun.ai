@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-server";
 import { calculateCost, deductCredits, refundCredits, tryAutoTopup, getApiProvider } from "@/lib/credits";
 import { getKieModelId, kieCreateTask } from "@/lib/kie-ai";
 import { getWebhookBaseUrl } from "@/lib/generation-completion";
+import { sanitizeError } from "@/lib/error-sanitizer";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -256,30 +257,12 @@ export async function POST(req: NextRequest) {
     if (cost > 0 && userId) {
       await refundCredits(userId, cost, { generationId: generationId ?? undefined, modelId: creditModelId }).catch(() => {});
     }
-    console.error("Generation error:", error);
+    console.error("Generation error (raw):", error);
 
-    let message = "Generation failed";
-    let status = 500;
-
-    if (error && typeof error === "object") {
-      const err = error as Record<string, unknown>;
-      if (err.status && typeof err.status === "number") status = err.status;
-      if (err.body && typeof err.body === "object") {
-        const body = err.body as Record<string, unknown>;
-        if (typeof body.detail === "string") {
-          message = body.detail;
-        } else if (Array.isArray(body.detail)) {
-          message = body.detail
-            .map((e: Record<string, unknown>) => e.msg || JSON.stringify(e))
-            .join("; ");
-        } else if (typeof body.message === "string") {
-          message = body.message;
-        }
-      } else if (err.message && typeof err.message === "string") {
-        message = err.message;
-      }
-    }
-
-    return NextResponse.json({ error: message }, { status });
+    const sanitized = sanitizeError(error, "Generation failed");
+    return NextResponse.json(
+      { error: sanitized.message, category: sanitized.category, retryable: sanitized.retryable },
+      { status: sanitized.status },
+    );
   }
 }

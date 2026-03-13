@@ -5,6 +5,7 @@ import { refundCredits } from "@/lib/credits";
 import { kieGetTaskStatus, kieParseResultUrls } from "@/lib/kie-ai";
 import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
 import { getWebhookBaseUrl } from "@/lib/generation-completion";
+import { sanitizeErrorMessage } from "@/lib/error-sanitizer";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -52,10 +53,11 @@ export async function GET(req: NextRequest) {
     // Already marked as failed
     if (gen.url === "error") {
       const settings = gen.settings as Record<string, unknown> | null;
+      const rawError = (settings?.error_message as string) || "Generation failed";
       return NextResponse.json({
         status: "failed",
         generationId: gen.id,
-        error: (settings?.error_message as string) || "Generation failed",
+        error: sanitizeErrorMessage(rawError),
         refunded: !!settings?.refunded,
       });
     }
@@ -245,17 +247,17 @@ export async function GET(req: NextRequest) {
       if (gen.cost_estimate && gen.cost_estimate > 0) {
         await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
       }
-      const errorMsg = kieResult.failMsg || "Generation failed";
+      const rawErrorMsg = kieResult.failMsg || "Generation failed";
       await supabase.from("generations").update({
         url: "error",
-        settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+        settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: rawErrorMsg, refunded: true },
       }).eq("id", gen.id);
-      return NextResponse.json({ status: "failed", generationId: gen.id, error: errorMsg, refunded: true });
+      return NextResponse.json({ status: "failed", generationId: gen.id, error: sanitizeErrorMessage(rawErrorMsg), refunded: true });
     }
 
     // ── fal.ai polling (default) ───────────────────────────────
     if (!falEndpoint) {
-      return NextResponse.json({ error: "Missing fal.ai endpoint" }, { status: 400 });
+      return NextResponse.json({ error: "Generation failed. Please try again." }, { status: 400 });
     }
 
     const queueStatus = await fal.queue.status(falEndpoint, {
@@ -347,22 +349,23 @@ export async function GET(req: NextRequest) {
     if (gen.cost_estimate && gen.cost_estimate > 0) {
       await refundCredits(gen.user_id, gen.cost_estimate, { modelId: gen.model_id }).catch(() => {});
     }
-    const errorMsg = `Generation failed with status: ${statusStr}`;
+    const rawErrorMsg = `Generation failed with status: ${statusStr}`;
     await supabase.from("generations").update({
       url: "error",
-      settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: errorMsg, refunded: true },
+      settings: { ...(gen.settings as Record<string, unknown> || {}), error_message: rawErrorMsg, refunded: true },
     }).eq("id", gen.id);
 
     return NextResponse.json({
       status: "failed",
       generationId: gen.id,
-      error: errorMsg,
+      error: sanitizeErrorMessage(rawErrorMsg),
       refunded: true,
     });
   } catch (error) {
     console.error("[generation-poll] Error:", error);
-    const message = error instanceof Error ? error.message : "Poll failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[generation-poll] Error (raw):", error);
+    const rawMsg = error instanceof Error ? error.message : "Poll failed";
+    return NextResponse.json({ error: sanitizeErrorMessage(rawMsg) }, { status: 500 });
   }
 }
 
