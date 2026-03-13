@@ -134,26 +134,25 @@ textarea:focus {
 
 .storyboard-scroll::-webkit-scrollbar {
   height: 10px;
+  display: block !important;
 }
 .storyboard-scroll::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--color-border) 60%, transparent);
+  background: var(--color-border);
   border-radius: 999px;
   margin: 0 4px;
 }
 .storyboard-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
   border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
 }
 .storyboard-scroll::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--color-accent) 60%, transparent);
-  background-clip: padding-box;
+  background: var(--color-accent);
 }
 .storyboard-scroll {
   scrollbar-width: auto;
-  scrollbar-color: color-mix(in srgb, var(--color-accent) 35%, transparent) color-mix(in srgb, var(--color-border) 60%, transparent);
+  scrollbar-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border)) var(--color-border);
   overflow-x: scroll !important;
+  overflow-y: hidden;
 }
 
 /* Model selector scroll — hidden until scrolling */

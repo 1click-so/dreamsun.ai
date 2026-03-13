@@ -1761,6 +1761,21 @@ export function ShotListEditor({
   };
 
   // --- Auto-hide header on scroll down, show on scroll up ---
+  // --- Storyboard horizontal scroll: convert vertical wheel to horizontal ---
+  const storyboardScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = storyboardScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
   // Hide instantly on any scroll down. Show only after 600px sustained scroll up.
   const headerRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
@@ -2482,7 +2497,7 @@ export function ShotListEditor({
             ))}
           </div>
         ) : (
-          <div className="storyboard-scroll -mx-3 flex gap-3 overflow-x-scroll px-3 pb-4 pt-3" style={{ scrollSnapType: "x mandatory" }}>
+          <div ref={storyboardScrollRef} className="storyboard-scroll -mx-3 flex gap-3 overflow-x-scroll px-3 pb-4 pt-3" style={{ scrollSnapType: "x mandatory" }}>
             {sortedShots.map((shot, idx) => (
               <div key={shot.id} id={`shot-${shot.id}`}>
               <StoryboardCard
