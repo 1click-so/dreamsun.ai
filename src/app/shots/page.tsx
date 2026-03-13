@@ -1761,19 +1761,74 @@ export function ShotListEditor({
   };
 
   // --- Auto-hide header on scroll down, show on scroll up ---
-  // --- Storyboard horizontal scroll: convert vertical wheel to horizontal ---
-  const storyboardScrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = storyboardScrollRef.current;
-    if (!el) return;
+  // --- Storyboard horizontal scroll: wheel + custom scrollbar ---
+  const storyboardScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollCleanupRef = useRef<(() => void) | null>(null);
+  const [scrollThumb, setScrollThumb] = useState({ left: 0, width: 0 });
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isDraggingTrack = useRef(false);
+
+  const updateThumb = useCallback((el: HTMLDivElement) => {
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    if (scrollWidth <= clientWidth) {
+      setScrollThumb({ left: 0, width: 100 });
+      return;
+    }
+    const ratio = clientWidth / scrollWidth;
+    const thumbW = Math.max(ratio * 100, 10);
+    const thumbL = (scrollLeft / (scrollWidth - clientWidth)) * (100 - thumbW);
+    setScrollThumb({ left: thumbL, width: thumbW });
+  }, []);
+
+  const storyboardRefCallback = useCallback((node: HTMLDivElement | null) => {
+    if (scrollCleanupRef.current) {
+      scrollCleanupRef.current();
+      scrollCleanupRef.current = null;
+    }
+    storyboardScrollRef.current = node;
+    if (!node) return;
+
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
         e.preventDefault();
-        el.scrollLeft += e.deltaY;
+        node.scrollLeft += e.deltaY;
       }
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    const onScroll = () => updateThumb(node);
+
+    node.addEventListener("wheel", onWheel, { passive: false });
+    node.addEventListener("scroll", onScroll, { passive: true });
+    // Initial thumb position
+    requestAnimationFrame(() => updateThumb(node));
+
+    scrollCleanupRef.current = () => {
+      node.removeEventListener("wheel", onWheel);
+      node.removeEventListener("scroll", onScroll);
+    };
+  }, [updateThumb]);
+
+  // Track click & drag
+  const handleTrackMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = storyboardScrollRef.current;
+    const track = trackRef.current;
+    if (!el || !track) return;
+    isDraggingTrack.current = true;
+
+    const moveToX = (clientX: number) => {
+      const rect = track.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      el.scrollLeft = pct * (el.scrollWidth - el.clientWidth);
+    };
+    moveToX(e.clientX);
+
+    const onMove = (ev: MouseEvent) => moveToX(ev.clientX);
+    const onUp = () => {
+      isDraggingTrack.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }, []);
 
   // Hide instantly on any scroll down. Show only after 600px sustained scroll up.
@@ -2497,7 +2552,7 @@ export function ShotListEditor({
             ))}
           </div>
         ) : (
-          <div ref={storyboardScrollRef} className="storyboard-scroll -mx-3 flex gap-3 overflow-x-scroll px-3 pb-4 pt-3" style={{ scrollSnapType: "x mandatory" }}>
+          <div ref={storyboardRefCallback} className="storyboard-scroll -mx-3 flex gap-3 overflow-x-scroll px-3 pb-4 pt-3" style={{ scrollSnapType: "x mandatory" }}>
             {sortedShots.map((shot, idx) => (
               <div key={shot.id} id={`shot-${shot.id}`}>
               <StoryboardCard
@@ -2528,6 +2583,20 @@ export function ShotListEditor({
               />
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Custom scrollbar track - always visible */}
+        {viewMode === "storyboard" && shots.length > 0 && (
+          <div
+            ref={trackRef}
+            className="storyboard-track mt-2"
+            onMouseDown={handleTrackMouseDown}
+          >
+            <div
+              className="storyboard-track-thumb"
+              style={{ left: `${scrollThumb.left}%`, width: `${scrollThumb.width}%` }}
+            />
           </div>
         )}
       </div>

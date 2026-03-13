@@ -132,27 +132,37 @@ textarea:focus {
    SCROLLBAR
    ================================================================ */
 
+/* Hide native scrollbar — replaced by custom track below */
 .storyboard-scroll::-webkit-scrollbar {
-  height: 10px;
-  display: block !important;
-}
-.storyboard-scroll::-webkit-scrollbar-track {
-  background: var(--color-border);
-  border-radius: 999px;
-  margin: 0 4px;
-}
-.storyboard-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
-  border-radius: 999px;
-}
-.storyboard-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent);
+  display: none;
 }
 .storyboard-scroll {
-  scrollbar-width: auto;
-  scrollbar-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border)) var(--color-border);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   overflow-x: scroll !important;
   overflow-y: hidden;
+}
+
+/* Custom scrollbar track */
+.storyboard-track {
+  height: 8px;
+  background: var(--color-border);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+}
+.storyboard-track-thumb {
+  height: 100%;
+  background: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
+  border-radius: 999px;
+  position: absolute;
+  top: 0;
+  min-width: 40px;
+  transition: background 0.15s;
+}
+.storyboard-track-thumb:hover,
+.storyboard-track-thumb:active {
+  background: var(--color-accent);
 }
 
 /* Model selector scroll — hidden until scrolling */
