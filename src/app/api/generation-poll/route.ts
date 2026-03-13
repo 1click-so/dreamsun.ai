@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient } from "@/lib/supabase-server";
 import { refundCredits } from "@/lib/credits";
-import { kieGetTaskStatus, kieParseResultUrls } from "@/lib/kie-ai";
+import { kieGetTaskStatus, kieParseResultUrls, kieCreateTask, getKieModelId } from "@/lib/kie-ai";
 import { getVideoModelById, resolveVideoEndpoint } from "@/lib/video-models";
+import { getModelById } from "@/lib/models";
 import { getWebhookBaseUrl } from "@/lib/generation-completion";
 import { sanitizeErrorMessage } from "@/lib/error-sanitizer";
 
@@ -86,59 +87,102 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ status: "failed", generationId: gen.id, error: "Generation timed out. Your credits have been refunded.", refunded: true });
       }
 
-      // Try to submit now
+      // Try to submit to the original provider
+      const queuedProvider = (settings.apiProvider as string) || "fal";
       const endpoint = falEndpoint || (settings.falEndpoint as string);
-      if (!endpoint) {
-        return NextResponse.json({ status: "queued", generationId: gen.id, queueStatus: "QUEUED", retryCount });
-      }
 
       try {
-        // Rebuild input from what we stored in the generation row
-        const input: Record<string, unknown> = {};
-        if (gen.prompt) input.prompt = gen.prompt;
-        if (gen.negative_prompt) input.negative_prompt = gen.negative_prompt;
-        if (gen.aspect_ratio) input.aspect_ratio = gen.aspect_ratio;
-        if (gen.reference_image_urls) {
-          const refs = gen.reference_image_urls as string[];
-          if (refs.length > 0) input.image_url = refs[0];
-        }
-        if (gen.type === "image") {
-          input.enable_safety_checker = true;
-          input.output_format = "png";
-          input.num_images = gen.num_images || 1;
-          if (gen.resolution) {
-            const resMultiplier: Record<string, number> = { "1k": 1024, "2k": 2048, "4k": 4096 };
-            const longSide = resMultiplier[gen.resolution];
-            if (longSide && gen.aspect_ratio) {
-              const [w, h] = gen.aspect_ratio.split(":").map(Number);
-              const ratio = w / h;
-              input.image_size = {
-                width: ratio >= 1 ? longSide : Math.round(longSide * ratio),
-                height: ratio >= 1 ? Math.round(longSide / ratio) : longSide,
-              };
-            }
+        let newRequestId: string;
+        let usedProvider = queuedProvider;
+
+        if (queuedProvider === "kie") {
+          // Retry via Kie.ai
+          const kieInput: Record<string, unknown> = {};
+          if (gen.prompt) kieInput.prompt = gen.prompt;
+          if (gen.negative_prompt) kieInput.negative_prompt = gen.negative_prompt;
+          if (gen.aspect_ratio) kieInput.aspect_ratio = gen.aspect_ratio;
+          if (gen.resolution) kieInput.resolution = (gen.resolution as string).toUpperCase();
+          if (gen.reference_image_urls) {
+            const refs = gen.reference_image_urls as string[];
+            if (refs.length > 0) kieInput.image_input = refs;
           }
-        } else if (gen.type === "video") {
-          if (gen.source_image_url) input.image_url = gen.source_image_url;
-          if (gen.duration) input.duration = gen.duration;
+          if (gen.type === "image") {
+            kieInput.output_format = "png";
+          } else if (gen.type === "video") {
+            if (gen.source_image_url) kieInput.image_url = gen.source_image_url;
+            if (gen.duration) kieInput.duration = gen.duration;
+            if (gen.source_audio_url) kieInput.audio_url = gen.source_audio_url;
+          }
+
+          const kieModel = getKieModelId(gen.model_id);
+          const webhookBase = getWebhookBaseUrl();
+          const kieCallbackUrl = webhookBase ? `${webhookBase}/api/webhooks/kie-completion` : undefined;
+          newRequestId = await kieCreateTask(kieModel, kieInput, kieCallbackUrl);
+          usedProvider = "kie";
+        } else {
+          // Retry via fal.ai
+          if (!endpoint) {
+            return NextResponse.json({ status: "queued", generationId: gen.id, queueStatus: "QUEUED", retryCount });
+          }
+
+          const input: Record<string, unknown> = {};
+          if (gen.prompt) input.prompt = gen.prompt;
+          if (gen.negative_prompt) input.negative_prompt = gen.negative_prompt;
+          if (gen.aspect_ratio) input.aspect_ratio = gen.aspect_ratio;
+          if (gen.reference_image_urls) {
+            const refs = gen.reference_image_urls as string[];
+            if (refs.length > 0) input.image_url = refs[0];
+          }
+          if (gen.type === "image") {
+            input.enable_safety_checker = true;
+            input.output_format = "png";
+            input.num_images = gen.num_images || 1;
+            // Resolve pixel dimensions from resolution
+            if (gen.resolution) {
+              const resMultiplier: Record<string, number> = { "1k": 1024, "2k": 2048, "4k": 4096 };
+              const longSide = resMultiplier[gen.resolution];
+              if (longSide && gen.aspect_ratio) {
+                const [w, h] = gen.aspect_ratio.split(":").map(Number);
+                const ratio = w / h;
+                input.image_size = {
+                  width: ratio >= 1 ? longSide : Math.round(longSide * ratio),
+                  height: ratio >= 1 ? Math.round(longSide / ratio) : longSide,
+                };
+              }
+            }
+            // Add model-specific params (LoRAs, extra input, size param)
+            const imageModel = getModelById(gen.model_id);
+            if (imageModel) {
+              if (imageModel.loras?.length) input.loras = imageModel.loras;
+              if (imageModel.extraInput) Object.assign(input, imageModel.extraInput);
+              if (imageModel.sizeParam && gen.aspect_ratio) {
+                input[imageModel.sizeParam.name] = imageModel.sizeParam.mapping[gen.aspect_ratio] || gen.aspect_ratio;
+              }
+            }
+          } else if (gen.type === "video") {
+            if (gen.source_image_url) input.image_url = gen.source_image_url;
+            if (gen.duration) input.duration = gen.duration;
+            if (gen.source_audio_url) input.audio_url = gen.source_audio_url;
+          }
+
+          const webhookBase = getWebhookBaseUrl();
+          const webhookUrl = webhookBase ? `${webhookBase}/api/webhooks/fal-completion` : undefined;
+          const result = await fal.queue.submit(endpoint, { input, webhookUrl });
+          newRequestId = result.request_id;
+          usedProvider = "fal";
         }
-
-        const webhookBase = getWebhookBaseUrl();
-        const webhookUrl = webhookBase ? `${webhookBase}/api/webhooks/fal-completion` : undefined;
-
-        const { request_id: newRequestId } = await fal.queue.submit(endpoint, { input, webhookUrl });
 
         // Success - update generation with request_id and clear queued flag
         await supabase.from("generations").update({
           request_id: newRequestId,
-          settings: { ...settings, queued: false, falRequestId: newRequestId, retriedAt: new Date().toISOString() },
+          settings: { ...settings, queued: false, apiProvider: usedProvider, falRequestId: newRequestId, retriedAt: new Date().toISOString() },
         }).eq("id", gen.id);
 
-        console.log(`[generation-poll] Queued generation ${gen.id} submitted successfully: ${newRequestId}`);
+        console.log(`[generation-poll] Queued generation ${gen.id} submitted via ${usedProvider}: ${newRequestId}`);
         return NextResponse.json({ status: "processing", generationId: gen.id, queueStatus: "IN_QUEUE" });
       } catch (retryErr) {
         // Still rate limited - increment retry count and tell client to keep polling
-        console.log(`[generation-poll] Queue retry ${retryCount + 1} failed for ${gen.id}:`, retryErr);
+        console.log(`[generation-poll] Queue retry ${retryCount + 1} failed for ${gen.id} (${queuedProvider}):`, retryErr);
         await supabase.from("generations").update({
           settings: { ...settings, retryCount: retryCount + 1 },
         }).eq("id", gen.id);

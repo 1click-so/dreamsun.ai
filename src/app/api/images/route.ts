@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   let cost = 0;
   let creditModelId = "";
   let generationId: string | null = null;
+  let usedApiProvider = "fal";
 
   try {
     const supabase = await createClient();
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     creditModelId = modelId;
     cost = await calculateCost(modelId, { numImages: effectiveNumImages, resolution: imageResolution as string | undefined });
     const apiProvider = await getApiProvider(modelId, { resolution: imageResolution as string | undefined });
+    usedApiProvider = apiProvider;
 
     // Build reference URLs
     const refUrls = referenceImageUrls && Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0
@@ -255,7 +257,7 @@ export async function POST(req: NextRequest) {
         await supabase.from("generations").update({
           settings: {
             modelId: creditModelId,
-            apiProvider: "fal",
+            apiProvider: usedApiProvider,
             falEndpoint: rateLimitedModel?.endpoint,
             queued: true,
             queuedAt: new Date().toISOString(),

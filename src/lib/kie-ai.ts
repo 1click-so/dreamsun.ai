@@ -71,7 +71,12 @@ export async function kieCreateTask(
   const data = await res.json();
 
   if (data.code !== 200 || !data.data?.taskId) {
-    throw new Error(`Kie.ai createTask failed: ${data.msg || data.message || JSON.stringify(data)}`);
+    const rawMsg = data.msg || data.message || JSON.stringify(data);
+    const err = new Error(`Provider task creation failed: ${rawMsg}`);
+    // Attach status for rate limit detection
+    (err as unknown as Record<string, unknown>).providerStatus = data.code;
+    (err as unknown as Record<string, unknown>).providerMessage = rawMsg;
+    throw err;
   }
 
   return data.data.taskId;
@@ -90,7 +95,7 @@ export async function kieGetTaskStatus(taskId: string): Promise<KieTaskResult> {
   const data = await res.json();
 
   if (data.code !== 200 || !data.data) {
-    throw new Error(`Kie.ai recordInfo failed: ${data.msg || data.message || JSON.stringify(data)}`);
+    throw new Error(`Provider status check failed: ${data.msg || data.message || JSON.stringify(data)}`);
   }
 
   return data.data as KieTaskResult;
@@ -110,13 +115,13 @@ export async function kiePollUntilDone(
 
     if (result.state === "success") return result;
     if (result.state === "fail") {
-      throw new Error(`Kie.ai generation failed: ${result.failMsg || result.failCode || "unknown error"}`);
+      throw new Error(`Generation failed: ${result.failMsg || result.failCode || "unknown error"}`);
     }
 
     await new Promise((r) => setTimeout(r, intervalMs));
   }
 
-  throw new Error(`Kie.ai task ${taskId} timed out after ${maxAttempts * intervalMs / 1000}s`);
+  throw new Error(`Generation timed out after ${maxAttempts * intervalMs / 1000}s`);
 }
 
 // ── Parse Result URLs ────────────────────────────────────────────

@@ -31,6 +31,11 @@ const RATE_LIMIT_PATTERNS = [
   /overloaded/i,
   /busy/i,
   /try again/i,
+  /exceed/i,
+  /limit.*reach/i,
+  /max.*task/i,
+  /task.*limit/i,
+  /queue.*full/i,
   /429/,
   /503/,
 ];
@@ -71,7 +76,12 @@ export function extractRawError(error: unknown): { message: string; status: numb
   }
 
   const err = error as Record<string, unknown>;
-  const status = (typeof err.status === "number" ? err.status : 500);
+  let status = (typeof err.status === "number" ? err.status : 500);
+
+  // Kie.ai style: providerStatus attached to Error
+  if (typeof err.providerStatus === "number" && err.providerStatus !== 200) {
+    status = err.providerStatus >= 400 ? err.providerStatus : 429; // Kie often uses non-HTTP codes
+  }
 
   // fal.ai / Kie.ai style: { body: { detail, message } }
   if (err.body && typeof err.body === "object") {
@@ -83,6 +93,9 @@ export function extractRawError(error: unknown): { message: string; status: numb
     }
     if (typeof body.message === "string") return { message: body.message, status };
   }
+
+  // Kie.ai providerMessage (attached in kie-ai.ts)
+  if (typeof err.providerMessage === "string") return { message: err.providerMessage, status };
 
   // Standard Error object
   if (typeof err.message === "string") return { message: err.message, status };

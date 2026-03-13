@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   let cost = 0;
   let creditModelId = "";
   let generationId: string | null = null;
+  let usedApiProvider = "fal";
 
   try {
     const supabase = await createClient();
@@ -359,6 +360,8 @@ export async function POST(req: NextRequest) {
       usedProvider = "fal";
     }
 
+    usedApiProvider = usedProvider;
+
     // Update generation row with request_id and final settings
     const settings: Record<string, unknown> = {
       modelId: videoModelId,
@@ -405,7 +408,7 @@ export async function POST(req: NextRequest) {
         await supabase.from("generations").update({
           settings: {
             modelId: creditModelId,
-            apiProvider: "fal",
+            apiProvider: usedApiProvider,
             queued: true,
             queuedAt: new Date().toISOString(),
             retryCount: 0,
