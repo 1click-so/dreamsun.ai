@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase-server";
 import { calculateCost, deductCredits, refundCredits, tryAutoTopup, getApiProvider } from "@/lib/credits";
 import { getKieModelId, kieCreateTask } from "@/lib/kie-ai";
 import { getWebhookBaseUrl } from "@/lib/generation-completion";
-import { sanitizeError } from "@/lib/error-sanitizer";
+import { sanitizeError, isRateLimitError } from "@/lib/error-sanitizer";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -246,14 +246,37 @@ export async function POST(req: NextRequest) {
       status: "processing",
     });
   } catch (error: unknown) {
-    // Clean up orphaned generation row (created before queue submission)
+    // Rate limit / concurrency error - queue for retry instead of failing
+    if (isRateLimitError(error) && generationId && userId) {
+      console.log(`[api/images] Rate limited - queuing generation ${generationId} for retry`);
+      try {
+        const supabase = await createClient();
+        const rateLimitedModel = getModelById(creditModelId);
+        await supabase.from("generations").update({
+          settings: {
+            modelId: creditModelId,
+            apiProvider: "fal",
+            falEndpoint: rateLimitedModel?.endpoint,
+            queued: true,
+            queuedAt: new Date().toISOString(),
+            retryCount: 0,
+          },
+        }).eq("id", generationId);
+      } catch { /* best effort */ }
+      return NextResponse.json({
+        generationId,
+        status: "queued",
+        message: "Our servers are busy. Your generation has been queued and will start automatically.",
+      });
+    }
+
+    // Non-rate-limit error - clean up and refund
     if (generationId && userId) {
       try {
         const supabase = await createClient();
         await supabase.from("generations").delete().eq("id", generationId);
       } catch { /* cleanup best-effort */ }
     }
-    // Refund credits on failure
     if (cost > 0 && userId) {
       await refundCredits(userId, cost, { generationId: generationId ?? undefined, modelId: creditModelId }).catch(() => {});
     }
