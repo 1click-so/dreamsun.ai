@@ -128,6 +128,12 @@ function migrateShot(raw: Record<string, unknown>): Shot {
 
 // --- Scene types ---
 
+/** Serializable subset of UploadedRef (no File objects, blob URLs) */
+interface SerializedRef {
+  id: string;
+  url: string;
+}
+
 export interface SceneSettings {
   imageModelId: string;
   videoModelId: string;
@@ -142,6 +148,8 @@ export interface SceneSettings {
   promptPrefix: string;
   videoPromptPrefix: string;
   outputFolder: string;
+  /** Persisted master/character reference image URLs */
+  charRefs?: SerializedRef[];
 }
 
 export interface Scene {
@@ -235,6 +243,7 @@ function getDefaultSettings(): SceneSettings {
     promptPrefix: "",
     videoPromptPrefix: "",
     outputFolder: "",
+    charRefs: [],
   };
 }
 
@@ -725,8 +734,14 @@ export function ShotListEditor({
   // --- Localhost detection (for output folder) ---
   const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-  // --- Project-level character reference images ---
-  const [charRefs, setCharRefs] = useState<UploadedRef[]>([]);
+  // --- Project-level character reference images (restored from scene settings) ---
+  const [charRefs, setCharRefs] = useState<UploadedRef[]>(() => {
+    const saved = scene.settings.charRefs;
+    if (!Array.isArray(saved) || saved.length === 0) return [];
+    return saved
+      .filter((r) => r.url)
+      .map((r) => ({ id: r.id, preview: r.url, url: r.url, uploading: false }));
+  });
   const charRefInput = useRef<HTMLInputElement>(null);
 
   // --- Shots (initialized from scene, auto-saved back) ---
@@ -766,7 +781,8 @@ export function ShotListEditor({
     promptPrefix,
     videoPromptPrefix,
     outputFolder,
-  }), [selectedImageModel.id, selectedVideoModel.id, aspectRatio, imageResolution, numImages, safetyChecker, duration, resolution, generateAudio, cameraFixed, promptPrefix, videoPromptPrefix, outputFolder]);
+    charRefs: charRefs.filter((r) => r.url).map((r) => ({ id: r.id, url: r.url! })),
+  }), [selectedImageModel.id, selectedVideoModel.id, aspectRatio, imageResolution, numImages, safetyChecker, duration, resolution, generateAudio, cameraFixed, promptPrefix, videoPromptPrefix, outputFolder, charRefs]);
 
   // Debounced auto-save: triggers 1s after last change
   useEffect(() => {
