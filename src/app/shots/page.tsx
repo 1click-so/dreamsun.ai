@@ -2552,7 +2552,7 @@ export function ShotListEditor({
             ))}
           </div>
         ) : (
-          <div ref={storyboardRefCallback} className="storyboard-scroll -mx-3 flex gap-3 overflow-x-scroll px-3 pb-4 pt-3" style={{ scrollSnapType: "x mandatory" }}>
+          <div ref={storyboardRefCallback} className="storyboard-scroll -mx-3 flex gap-3 overflow-x-scroll px-3 pb-4 pt-3">
             {sortedShots.map((shot, idx) => (
               <div key={shot.id} id={`shot-${shot.id}`}>
               <StoryboardCard
